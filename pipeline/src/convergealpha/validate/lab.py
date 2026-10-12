@@ -432,10 +432,11 @@ def verdict(r: dict[str, Any]) -> dict[str, Any]:
 
     for per, s in app.items():
         ne, t = s.get("net_excess_annual"), s.get("t_stat")
+        # Shown halved like every backtested excess; sign and t are unchanged by the haircut.
         add(
             f"Net excess > 0 with t ≥ 2 ({per})",
             None if ne is None else bool(ne > 0 and (t or 0) >= 2),
-            "—" if ne is None else f"{ne:+.2%}/yr, t = {t:.2f}",
+            "—" if ne is None else f"{HAIRCUT * ne:+.2%}/yr (halved), t = {t:.2f}",
         )
     for per, s in (("development", dev), ("validation", val), ("holdout", ho)):
         a = s.get("app", {}).get("net_excess_annual")
@@ -453,7 +454,9 @@ def verdict(r: dict[str, Any]) -> dict[str, Any]:
     add(
         "Holdout ≥ 50% of the development result",
         None if d_ne is None or h_ne is None else bool(d_ne > 0 and h_ne >= 0.5 * d_ne),
-        "—" if d_ne is None or h_ne is None else f"{h_ne:+.2%} vs {d_ne:+.2%}",
+        "—"
+        if d_ne is None or h_ne is None
+        else f"{HAIRCUT * h_ne:+.2%} vs {HAIRCUT * d_ne:+.2%} (both halved)",
     )
     slope = (r.get("holdout", {}).get("calibration", {}).get("trade") or {}).get("slope")
     add(

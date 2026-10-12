@@ -178,6 +178,12 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         if (d / "validation.json").is_file()
         else None
     )
+    if validation and validation.get("periods"):
+        from convergealpha.validate import lab
+
+        # The verdict is a pure function of the report: recompute it so its rules and wording
+        # always match the current code, even for a bundle trained by an older version.
+        validation["verdict"] = lab.verdict(validation)
     drift = None
     if (d / "reference.parquet").is_file():
         from convergealpha.ledger import monitor as MON

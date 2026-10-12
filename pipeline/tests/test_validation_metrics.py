@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -47,3 +49,30 @@ def test_brier_and_calibration_slope() -> None:
     # Overconfident forecasts have a slope below 1.
     stretched = np.clip(0.5 + 2 * (p - 0.5), 0.01, 0.99)
     assert V.calibration_slope(stretched, y) < 0.7
+
+
+def test_verdict_shows_halved_excess_and_keeps_pass_logic() -> None:
+    from convergealpha.validate.lab import verdict
+
+    def strat(app: float, t: float, base: float) -> dict[str, Any]:
+        return {
+            "app": {"net_excess_annual": app, "t_stat": t, "max_drawdown": -0.1},
+            "baseline_momentum": {"net_excess_annual": base},
+        }
+
+    report = {
+        "periods": {
+            "development": {"strategies": strat(0.10, 2.5, 0.02)},
+            "validation": {"strategies": strat(0.08, 2.1, 0.01)},
+        },
+        "holdout": {"strategies": strat(0.06, 2.0, 0.0), "calibration": {}},
+        "overfitting": {"deflated_sharpe": 0.97, "trials": 8, "pbo": 0.1},
+        "holdout_touches": 1,
+    }
+    v = verdict(report)
+    first = v["checks"][0]
+    assert first["passed"] is True
+    assert first["value"].startswith("+5.00%/yr (halved)")
+    # The slope check has no holdout calibration -> unknown, so the label is not validated.
+    assert v["label_pass"] is False
+    assert all(c["passed"] for c in v["checks"] if c["check"].startswith("Net excess"))

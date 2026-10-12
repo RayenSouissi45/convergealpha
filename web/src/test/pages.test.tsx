@@ -13,6 +13,7 @@ import con from './fixtures/stocks/CON_.json'
 import ledger from './fixtures/ledger.json'
 import race from './fixtures/race.json'
 import scorecard from './fixtures/scorecard.json'
+import validation from './fixtures/validation.json'
 
 function healthAt(generatedAt: Date, overrides: Partial<Health> = {}): Health {
   return { ...(fixture as unknown as Health), generated_at: generatedAt.toISOString(), ...overrides }
@@ -189,6 +190,15 @@ describe('monitoring pages', () => {
     stubFetch(ALL())
     renderAt('/validation')
     expect(await screen.findByText(/No validation report yet/, {}, { timeout: 15000 })).toBeInTheDocument()
+  }, 30000)
+
+  it('validation shows a real report: verdict, failed checks and the single holdout', async () => {
+    stubFetch({ ...ALL(), 'validation.json': validation })
+    renderAt('/validation')
+    expect(await screen.findByText('5 item(s) validated', {}, { timeout: 15000 })).toBeInTheDocument()
+    expect(screen.getAllByText(/Deflated Sharpe ratio/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/evaluated once/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Ablation: drop one family at a time')).toBeInTheDocument()
   }, 30000)
 
   it('baseline race explains the live race before it has results', async () => {
