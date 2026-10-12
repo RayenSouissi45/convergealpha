@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from convergealpha.util.http import RateLimiter
-from convergealpha.util.io import row_keys, write_parquet
+from convergealpha.util.io import merge_parquet, row_keys, write_parquet
 from convergealpha.util.log import get
 
 log = get(__name__)
@@ -376,12 +376,12 @@ EVENT_KEYS: dict[str, list[str]] = {
 
 
 def store(data_dir: Path, frames: dict[str, pd.DataFrame], day: pd.Timestamp, shard: str) -> None:
-    """Snapshots are stored whole; event histories only for rows not stored before."""
+    """Snapshots are merged into the day's file; event histories only for rows not stored before."""
     base = data_dir / "snapshots" / f"{day:%Y}" / f"{day:%Y%m%d}"
     for name in ("summary", "options"):
         df = frames.get(name)
         if df is not None and not df.empty:
-            write_parquet(df, base / f"yahoo_{name}-{shard}.parquet")
+            merge_parquet(df, base / f"yahoo_{name}-{shard}.parquet")
     for name, keys in EVENT_KEYS.items():
         df = frames.get(name)
         if df is None or df.empty:
@@ -391,7 +391,10 @@ def store(data_dir: Path, frames: dict[str, pd.DataFrame], day: pd.Timestamp, sh
             df = df[~row_keys(df, keys).isin(set(row_keys(old, keys)))]
         df = df.drop_duplicates(keys)
         if not df.empty:
-            write_parquet(df, data_dir / "events" / name / f"{day:%Y%m%d}-{shard}.parquet")
+            path = data_dir / "events" / name / f"{day:%Y%m%d}-{shard}.parquet"
+            if path.exists():  # same-day re-run: add to the file, never replace it
+                df = pd.concat([pd.read_parquet(path), df], ignore_index=True)
+            write_parquet(df, path)
 
 
 def load_latest(

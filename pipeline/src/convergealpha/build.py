@@ -4,6 +4,7 @@ forecasts (later phases), and export the website JSON. It is the only writer of 
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -110,7 +111,11 @@ def load_sources(
 
 
 def ledger_step(
-    ctx: RunContext, t: pd.DataFrame, extra: dict[str, Any], as_of: pd.Timestamp
+    ctx: RunContext,
+    t: pd.DataFrame,
+    extra: dict[str, Any],
+    as_of: pd.Timestamp,
+    snap_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """Record new signals before outcomes are known, fill matured outcomes, publish the scorecard."""
     if "label" not in t:
@@ -143,7 +148,7 @@ def ledger_step(
     scope = t[t["eligible"].astype(bool) | (t["label"] == "SELL / RISK WARNING")]
     sig = LG.new_signals(scope, prev)
     sig = sig[[(tk, lab) not in already for tk, lab in sig["label"].items()]]
-    snap_path = d / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}" / "scores.parquet"
+    snap_path = snap_path or d / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}" / "scores.parquet"
     model_version = (extra.get("health") or {}).get("model_version")
     generated = ctx.now.astimezone(UTC).isoformat(timespec="seconds")
     new = (
@@ -484,16 +489,20 @@ def build(ctx: RunContext) -> int:
         el = t[t["eligible"]].sort_values("adv_dollar", ascending=False)
         cand = el.index[:400].tolist()
     write_candidates(paths.data, cand, as_of)
+    snapshot_paths: dict[str, Path] = {}
     for name, df in extra.get("snapshots", {}).items():
         from convergealpha.run import float32_snapshot
         from convergealpha.util.io import write_parquet
 
-        write_parquet(
-            float32_snapshot(df),
-            paths.data / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}" / f"{name}.parquet",
-        )
+        day_dir = paths.data / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}"
+        path = day_dir / f"{name}.parquet"
+        if path.exists():
+            # Same-day re-run: the day's first file stays as it is (ledger entries store its
+            # SHA-256 and the baseline race reads it); this run gets its own file.
+            path = day_dir / f"{name}-{ctx.now:%H%M%S}.parquet"
+        snapshot_paths[name] = write_parquet(float32_snapshot(df), path)
 
-    ledger_info = ledger_step(ctx, t, extra, as_of)
+    ledger_info = ledger_step(ctx, t, extra, as_of, snapshot_paths.get("scores"))
     usage = None
     try:
         from convergealpha.ledger import monitor as MON

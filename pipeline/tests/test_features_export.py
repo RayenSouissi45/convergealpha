@@ -121,3 +121,15 @@ def test_today_subset_keeps_every_row_a_today_list_can_show() -> None:
     assert {"T497", "T498"} <= set(sub.index)  # BUY and WATCH always kept
     assert "T499" not in sub.index or "T499" in elig.index
     assert len(sub) <= 2 + 5 * TODAY_TOP
+
+
+def test_same_day_snapshot_rerun_keeps_earlier_rows(tmp_path: Path) -> None:
+    import pandas as pd
+
+    from convergealpha.util.io import merge_parquet
+
+    path = tmp_path / "yahoo_summary-s00.parquet"
+    merge_parquet(pd.DataFrame({"ticker": ["A", "B", "C"], "v": [1, 2, 3]}), path)
+    merge_parquet(pd.DataFrame({"ticker": ["B"], "v": [20]}), path)
+    out = pd.read_parquet(path).set_index("ticker")["v"].to_dict()
+    assert out == {"A": 1, "B": 20, "C": 3}

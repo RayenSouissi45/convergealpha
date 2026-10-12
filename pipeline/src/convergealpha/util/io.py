@@ -36,6 +36,21 @@ def write_parquet(df: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def merge_parquet(df: pd.DataFrame, path: Path, key: str = "ticker") -> Path:
+    """Write a same-day snapshot without losing rows from an earlier run that day.
+
+    Rows of an existing file whose `key` is not in `df` are kept; keys present in `df` are
+    replaced by the newer rows (a re-run must not shrink the day's snapshot).
+    """
+    if path.is_file():
+        old = pd.read_parquet(path)
+        if key in old and key in df:
+            old = old[~old[key].isin(set(df[key]))]
+            if not old.empty:
+                df = pd.concat([old, df], ignore_index=True)
+    return write_parquet(df, path)
+
+
 def read_parquets(paths: Iterable[Path], columns: list[str] | None = None) -> pd.DataFrame:
     frames = [pd.read_parquet(p, columns=columns) for p in paths]
     frames = [f for f in frames if not f.empty]

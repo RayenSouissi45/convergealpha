@@ -34,7 +34,7 @@ from convergealpha.sources import sec_meta as S
 from convergealpha.sources import universe as U
 from convergealpha.util import http
 from convergealpha.util.calendar import last_completed_session
-from convergealpha.util.io import read_json, write_json, write_parquet
+from convergealpha.util.io import merge_parquet, read_json, write_json, write_parquet
 from convergealpha.util.log import get
 
 log = get(__name__)
@@ -374,7 +374,7 @@ def job_finnhub(ctx: RunContext) -> int:
     try:
         rec = FH.recommendation_trends(s, rec_list)
         if not rec.empty:
-            write_parquet(
+            merge_parquet(
                 rec,
                 ctx.paths.data
                 / "snapshots"
@@ -394,7 +394,7 @@ def job_finnhub(ctx: RunContext) -> int:
         news = FH.company_news(s, news_list, today - timedelta(days=10), today)
         if not news.empty:
             news = score_news(news, load_lexicon(ctx.paths.data))
-            write_parquet(news, ctx.paths.data / "news" / f"{today:%Y}" / f"{today:%Y%m%d}.parquet")
+            merge_parquet(news, ctx.paths.data / "news" / f"{today:%Y}" / f"{today:%Y%m%d}.parquet")
         ctx.record(
             "news",
             True,
