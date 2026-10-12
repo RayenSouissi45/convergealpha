@@ -38,3 +38,15 @@ export function useSiteJson<T>(file: string): Loadable<T> {
 
   return result?.file === file ? result.value : { state: 'loading' }
 }
+
+const WINDOWS_RESERVED = new Set([
+  'CON', 'PRN', 'AUX', 'NUL',
+  ...Array.from({ length: 9 }, (_, i) => `COM${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `LPT${i + 1}`),
+])
+
+/** Mirrors the pipeline's stock_file_stem(): Windows cannot store CON.json, so it is CON_.json. */
+export function stockFile(ticker: string): string {
+  const t = ticker.toUpperCase()
+  return `stocks/${WINDOWS_RESERVED.has(t) ? `${t}_` : t}.json`
+}

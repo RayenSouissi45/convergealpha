@@ -1,4 +1,4 @@
-import { Missing } from '../components/Missing'
+import { MarketCard } from '../components/MarketCard'
 import { Card, PageHeader, PhaseChip } from '../components/ui'
 
 const SECTIONS: { title: string; phase: number; text: string }[] = [
@@ -20,17 +20,9 @@ export default function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle="What to look at after today's close." />
-      <Card className="mb-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm">
-            <span className="text-slate-600 dark:text-zinc-400">Market regime: </span>
-            <strong>
-              <Missing reason="Needs the S&P 500 vs its 200-day average and the VIX (FRED). Connected in build phase 2." />
-            </strong>
-          </div>
-          <PhaseChip phase={2} />
-        </div>
-      </Card>
+      <div className="mb-4">
+        <MarketCard />
+      </div>
       <ul className="space-y-3">
         {SECTIONS.map((s) => (
           <li key={s.title}>

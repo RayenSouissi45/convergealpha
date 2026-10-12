@@ -109,7 +109,9 @@ def test_history_never_forgets_a_ticker() -> None:
     today = today[today["ticker"] != "TSM"]
     day2 = U.merge_history(day1, today, date(2026, 10, 2)).set_index("ticker")
     assert bool(day2.loc["TSM", "active"]) is False
-    assert day2.loc["TSM", "last_seen"] == date(2026, 10, 1)
+    assert pd.Timestamp(day2.loc["TSM", "last_seen"]).date() == date(
+        2026, 10, 2
+    )  # the day it disappeared
     assert day2.loc["AAPL", "first_seen"] == date(2026, 10, 1)
-    assert day2.loc["AAPL", "last_seen"] == date(2026, 10, 2)
+    assert pd.isna(day2.loc["AAPL", "last_seen"])  # still listed
     assert len(U.active_stocks(day2.reset_index())) == 2

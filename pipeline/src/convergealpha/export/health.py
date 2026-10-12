@@ -55,13 +55,35 @@ SOURCES: tuple[SourceSpec, ...] = (
 )
 
 
-def state_path(data_dir: Path) -> Path:
-    return data_dir / "state" / "sources.json"
+def state_path(data_dir: Path, job: str = "build") -> Path:
+    return data_dir / "state" / f"sources-{job}.json"
 
 
 def load_states(data_dir: Path) -> dict[str, dict[str, Any]]:
-    states = read_json(state_path(data_dir), {})
-    return states if isinstance(states, dict) else {}
+    """Merge the per-job state files; the most recent attempt wins for each source.
+
+    Each job writes its own file so parallel jobs never conflict in git.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    for f in sorted((data_dir / "state").glob("sources*.json")):
+        states = read_json(f, {})
+        if not isinstance(states, dict):
+            continue
+        for sid, st in states.items():
+            cur = merged.get(sid)
+            if cur is None or str(st.get("last_attempt") or "") >= str(
+                cur.get("last_attempt") or ""
+            ):
+                # Keep the last success from whichever file had it.
+                if cur and not st.get("last_success") and cur.get("last_success"):
+                    st = {
+                        **st,
+                        "last_success": cur["last_success"],
+                        "as_of": cur.get("as_of"),
+                        "records": cur.get("records"),
+                    }
+                merged[sid] = st
+    return merged
 
 
 def record(
@@ -89,8 +111,15 @@ def record(
     }
 
 
-def save_states(data_dir: Path, states: dict[str, dict[str, Any]]) -> None:
-    write_json(states, state_path(data_dir), pretty=True)
+def save_states(
+    data_dir: Path,
+    states: dict[str, dict[str, Any]],
+    job: str = "build",
+    only: set[str] | None = None,
+) -> None:
+    """Write the states this job touched (`only`) to the job's own file."""
+    out = {k: v for k, v in states.items() if only is None or k in only}
+    write_json(out, state_path(data_dir, job), pretty=True)
 
 
 def _status(

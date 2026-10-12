@@ -5,6 +5,8 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "react/incompatible-library": "off",
+    "jsx-a11y/prefer-tag-over-role": "off"
   }
 }

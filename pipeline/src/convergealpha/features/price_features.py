@@ -87,38 +87,58 @@ def snapshot(panel: Panel, as_of: pd.Timestamp | None = None, window: int = 520)
     return out
 
 
+class ChartBuilder:
+    """Chart arrays for many tickers, computed once for the whole panel."""
+
+    def __init__(self, panel: Panel, daily_sessions: int = 260, weekly_years: int = 10) -> None:
+        tail = panel.close.index[-daily_sessions:]
+        self.daily_index = tail
+        self.daily_t = [d.strftime("%Y-%m-%d") for d in tail]
+        self.o = panel.open.reindex(tail)
+        self.h = panel.high.reindex(tail)
+        self.l = panel.low.reindex(tail)
+        self.c = panel.close.reindex(tail)
+        self.v = panel.volume.reindex(tail)
+        weekly = panel.close.resample("W-FRI").last()
+        cutoff = weekly.index.max() - pd.DateOffset(years=weekly_years)
+        self.weekly = weekly[weekly.index >= cutoff]
+        self.weekly_t = [d.strftime("%Y-%m-%d") for d in self.weekly.index]
+
+    def series(self, ticker: str) -> dict[str, object]:
+        if ticker not in self.c.columns:
+            return {}
+        c = self.c[ticker].to_numpy()
+        valid = ~np.isnan(c)
+        if not valid.any():
+            return {}
+        first = int(np.argmax(valid))
+
+        def arr(df: pd.DataFrame) -> list[float | None]:
+            return [None if np.isnan(x) else _px(float(x)) for x in df[ticker].to_numpy()[first:]]
+
+        w = self.weekly[ticker].to_numpy()
+        wv = ~np.isnan(w)
+        return {
+            "daily": {
+                "t": self.daily_t[first:],
+                "o": arr(self.o),
+                "h": arr(self.h),
+                "l": arr(self.l),
+                "c": arr(self.c),
+                "v": [None if np.isnan(x) else int(x) for x in self.v[ticker].to_numpy()[first:]],
+            },
+            "weekly": {
+                "t": [t for t, ok in zip(self.weekly_t, wv, strict=True) if ok],
+                "c": [_px(float(x)) for x in w[wv]],
+            },
+        }
+
+
 def chart_series(
     panel: Panel, ticker: str, daily_sessions: int = 260, weekly_years: int = 10
 ) -> dict[str, object]:
-    """Compact columnar arrays for the stock page chart."""
-    if ticker not in panel.close.columns:
-        return {}
-    c = panel.close[ticker].dropna()
-    if c.empty:
-        return {}
-    idx = c.index[-daily_sessions:]
-
-    def arr(df: pd.DataFrame) -> list[float | None]:
-        return [None if pd.isna(v) else _px(float(v)) for v in df[ticker].reindex(idx).to_numpy()]
-
-    weekly = panel.close[ticker].dropna().resample("W-FRI").last().dropna()
-    weekly = weekly[weekly.index >= weekly.index.max() - pd.DateOffset(years=weekly_years)]
-    return {
-        "daily": {
-            "t": [d.strftime("%Y-%m-%d") for d in idx],
-            "o": arr(panel.open),
-            "h": arr(panel.high),
-            "l": arr(panel.low),
-            "c": arr(panel.close),
-            "v": [
-                None if pd.isna(v) else int(v) for v in panel.volume[ticker].reindex(idx).to_numpy()
-            ],
-        },
-        "weekly": {
-            "t": [d.strftime("%Y-%m-%d") for d in weekly.index],
-            "c": [_px(float(v)) for v in weekly.to_numpy()],
-        },
-    }
+    """Compact columnar arrays for the stock page chart (single ticker)."""
+    return ChartBuilder(panel, daily_sessions, weekly_years).series(ticker)
 
 
 def _px(v: float) -> float:

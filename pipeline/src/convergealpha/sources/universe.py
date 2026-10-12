@@ -127,8 +127,9 @@ def build_universe(nasdaq: pd.DataFrame, other: pd.DataFrame, sec: pd.DataFrame)
 
 
 def merge_history(previous: pd.DataFrame | None, today: pd.DataFrame, as_of: date) -> pd.DataFrame:
-    """Keep every ticker ever seen. Tickers missing today stay with active=False."""
-    cur = today.assign(first_seen=as_of, last_seen=as_of, active=True)
+    """Keep every ticker ever seen. `last_seen` is set only when a ticker disappears, so the
+    stored file changes only when the listing set changes (small git history)."""
+    cur = today.assign(first_seen=as_of, last_seen=pd.NaT, active=True)
     if previous is None or previous.empty:
         return cur.reset_index(drop=True)
     prev = previous.set_index("ticker")
@@ -136,6 +137,9 @@ def merge_history(previous: pd.DataFrame | None, today: pd.DataFrame, as_of: dat
     first = prev["first_seen"].reindex(cur.index)
     cur["first_seen"] = first.where(first.notna(), as_of)
     gone = prev.loc[~prev.index.isin(cur.index)].copy()
+    newly_gone = gone["active"].astype(bool)
+    gone["last_seen"] = pd.to_datetime(gone["last_seen"])
+    gone.loc[newly_gone, "last_seen"] = pd.Timestamp(as_of)
     gone["active"] = False
     out = pd.concat([cur, gone])
     return out.reset_index().sort_values("ticker").reset_index(drop=True)
@@ -153,13 +157,25 @@ def load(data_dir: Path) -> pd.DataFrame | None:
 def update(data_dir: Path, as_of: date, sec_session: object | None = None) -> pd.DataFrame:
     nasdaq, other, sec = fetch_lists(sec_session)
     today = build_universe(nasdaq, other, sec)
-    merged = merge_history(load(data_dir), today, as_of)
+    previous = load(data_dir)
+    merged = merge_history(previous, today, as_of)
     for col in ("first_seen", "last_seen"):
         merged[col] = pd.to_datetime(merged[col]).dt.date
-    write_parquet(merged, universe_path(data_dir))
+    if previous is None or not _same(previous, merged):
+        write_parquet(merged, universe_path(data_dir))
     eligible = merged[merged["active"] & merged["excluded_reason"].isna()]
     log.info("universe: %d active common stocks (%d tickers ever seen)", len(eligible), len(merged))
     return merged
+
+
+def _same(a: pd.DataFrame, b: pd.DataFrame) -> bool:
+    cols = ["ticker", "name", "exchange", "cik", "excluded_reason", "active"]
+    try:
+        x = a[cols].astype(str).sort_values("ticker").reset_index(drop=True)
+        y = b[cols].astype(str).sort_values("ticker").reset_index(drop=True)
+        return bool(x.equals(y))
+    except KeyError:
+        return False
 
 
 def active_stocks(universe: pd.DataFrame) -> pd.DataFrame:

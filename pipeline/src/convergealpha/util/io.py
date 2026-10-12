@@ -97,3 +97,18 @@ def read_json(path: Path, default: Any = None) -> Any:
     if not path.is_file():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def row_keys(df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    """A string key per row for de-duplication. Missing values become '' (pandas 3's string
+    dtype keeps NaN after astype(str), which would break joins)."""
+    if df.empty:
+        return pd.Series([], dtype=object, index=df.index)
+    parts = [
+        df[c].map(lambda v: "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v))
+        for c in cols
+    ]
+    out = parts[0].astype(object)
+    for p in parts[1:]:
+        out = out + "|" + p.astype(object)
+    return out

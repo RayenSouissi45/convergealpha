@@ -52,11 +52,12 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      # The test fixture is only used for this throwaway build; deploy.yml never ships it.
-      - name: Build with the test fixture
+      # Test fixtures are only used for this throwaway build; deploy.yml never ships them.
+      - name: Build with the test fixtures
         run: |
-          mkdir -p public/data
-          cp src/test/fixtures/health.json public/data/health.json
+          mkdir -p public/data/stocks
+          cp src/test/fixtures/*.json public/data/
+          cp src/test/fixtures/stocks/*.json public/data/stocks/
           npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e

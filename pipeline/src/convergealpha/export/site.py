@@ -90,3 +90,7 @@ def record_from(row: pd.Series, keys: Sequence[str]) -> dict[str, Any]:
 
 def write_market(site_dir: Path, market: Mapping[str, Any]) -> Path:
     return write_json(to_jsonable(dict(market)), site_dir / "market.json", pretty=True)
+
+
+def write_json_file(site_dir: Path, name: str, payload: Any) -> Path:
+    return write_json(to_jsonable(payload), site_dir / name)

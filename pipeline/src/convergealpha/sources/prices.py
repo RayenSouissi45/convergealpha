@@ -25,7 +25,7 @@ import pandas as pd
 
 from convergealpha.config import HISTORY_START, NEW_YORK
 from convergealpha.util.calendar import is_trading_day, last_completed_session
-from convergealpha.util.io import write_parquet
+from convergealpha.util.io import row_keys, write_parquet
 from convergealpha.util.log import get
 
 log = get(__name__)
@@ -164,14 +164,15 @@ def write_history_chunk(data_dir: Path, rows: pd.DataFrame, day: date, label: st
     return write_parquet(rows, path)
 
 
-def write_daily(data_dir: Path, rows: pd.DataFrame, day: date) -> Path | None:
+def write_daily(data_dir: Path, rows: pd.DataFrame, day: date, suffix: str = "") -> Path | None:
+    """Rows first stored on `day`. Parallel shards pass a suffix so they never write the same file."""
     if rows.empty:
         return None
-    path = daily_dir(data_dir) / f"{day:%Y}" / f"{day:%Y%m%d}.parquet"
+    path = daily_dir(data_dir) / f"{day:%Y}" / f"{day:%Y%m%d}{suffix}.parquet"
     if path.exists():  # a second run on the same day only adds rows not stored yet
         old = pd.read_parquet(path)
-        key = old["ticker"].astype(str) + "|" + old["date"].astype(str)
-        rows = rows[~(rows["ticker"] + "|" + rows["date"].astype(str)).isin(set(key))]
+        key = set(row_keys(old, ["ticker", "date"]))
+        rows = rows[~row_keys(rows, ["ticker", "date"]).isin(key)]
         if rows.empty:
             return path
         rows = pd.concat([old, rows], ignore_index=True)
@@ -277,41 +278,58 @@ def build_panel(rows: pd.DataFrame) -> Panel:
             empty,
             pd.DataFrame(columns=["ticker", "date", "ratio"]),
         )
-    rows = rows.copy()
+    rows = rows.reset_index(drop=True)
     rows["date"] = pd.to_datetime(rows["date"])
     rows["basis"] = pd.to_datetime(rows["basis"])
     # Index quotes (e.g. ^VIX) sometimes exist on NYSE holidays; keep NYSE sessions only.
-    dates = rows["date"].drop_duplicates()
-    sessions = {d for d in dates if is_trading_day(d.date())}
-    rows = rows[rows["date"].isin(sessions)]
+    uniq = rows["date"].unique()
+    sessions = pd.DatetimeIndex([d for d in uniq if is_trading_day(pd.Timestamp(d).date())])
+    rows = rows[rows["date"].isin(sessions)].reset_index(drop=True)
     events = split_events(rows)
-    f = adjustment_factors(rows, events).astype("float64")
-    for col in [*PRICE_COLS, "dividend"]:
-        rows[col] = rows[col].astype("float64") / f
-    rows["volume"] = rows["volume"].astype("float64") * f
-    # Latest download wins for duplicate (ticker, date) rows.
-    rows = rows.sort_values(["ticker", "date", "basis"]).drop_duplicates(
-        ["ticker", "date"], keep="last"
-    )
+    factor = adjustment_factors(rows, events).to_numpy(dtype="float64")
 
-    def wide(col: str, dtype: str = "float32") -> pd.DataFrame:
-        return rows.pivot(index="date", columns="ticker", values=col).sort_index().astype(dtype)
+    # Integer coordinates instead of pivots: much faster on ~15M rows.
+    d_codes, dates = pd.factorize(rows["date"], sort=True)
+    t_codes, tickers = pd.factorize(rows["ticker"], sort=True)
+    n_d, n_t = len(dates), len(tickers)
+    # Latest download wins for duplicate (ticker, date): keep the row with the greatest basis.
+    key = d_codes.astype("int64") * n_t + t_codes
+    order = np.lexsort((rows["basis"].to_numpy(), key))
+    key_sorted = key[order]
+    last = np.r_[key_sorted[1:] != key_sorted[:-1], True]
+    keep = order[last]
+    di, ti = d_codes[keep], t_codes[keep]
+    f = factor[keep]
 
-    close = wide("close", "float64")
-    dividend = wide("dividend", "float64").reindex_like(close)
+    def mat(values: np.ndarray, dtype: str, scale: str | None) -> pd.DataFrame:
+        v = values[keep].astype("float64")
+        if scale == "div":
+            v = v / f
+        elif scale == "mul":
+            v = v * f
+        out = np.full((n_d, n_t), np.nan, dtype="float64")
+        out[di, ti] = v
+        return pd.DataFrame(
+            out.astype(dtype),
+            index=pd.DatetimeIndex(dates, name="date"),
+            columns=pd.Index(tickers, name="ticker"),
+        )
+
+    close = mat(rows["close"].to_numpy(), "float64", "div")
+    dividend = mat(rows["dividend"].to_numpy(), "float64", "div")
     # Total return vs the last known close, so a day missing for one ticker doesn't drop its move.
     prev = close.ffill().shift(1)
     ret = ((close + dividend.fillna(0.0)) / prev - 1.0).where(close.notna() & prev.notna())
     # Starts at 1.0 on each ticker's first day (leading returns are NaN -> 0).
     tr = (1.0 + ret.fillna(0.0)).cumprod().where(close.notna())
     return Panel(
-        open=wide("open").reindex_like(close),
-        high=wide("high").reindex_like(close),
-        low=wide("low").reindex_like(close),
+        open=mat(rows["open"].to_numpy(), "float32", "div"),
+        high=mat(rows["high"].to_numpy(), "float32", "div"),
+        low=mat(rows["low"].to_numpy(), "float32", "div"),
         close=close.astype("float32"),
-        volume=wide("volume", "float64").reindex_like(close),
+        volume=mat(rows["volume"].to_numpy(), "float64", "mul"),
         dividend=dividend.astype("float32"),
-        tr=tr.astype("float64"),
+        tr=tr,
         split_events=events,
     )
 
@@ -385,6 +403,7 @@ def update(
     tickers: Sequence[str],
     now: datetime,
     lookback_days: int = 14,
+    suffix: str = "",
 ) -> UpdateReport:
     """Download what is new since the last run and store it append-only."""
     today = now.astimezone(NEW_YORK).date()
@@ -401,13 +420,15 @@ def update(
         lv = panel.last_valid()
         last_dates = fresh["ticker"].map(lv["last_date"])
         new = fresh[(fresh["date"] > last_dates) & ~fresh["ticker"].isin(repaired)]
-        write_daily(data_dir, new, today)
+        write_daily(data_dir, new, today, suffix)
         new_rows += len(new)
         got |= set(fresh["ticker"].unique())
     to_full = full + repaired
     if to_full:
         hist = finalize_rows(download(to_full, HISTORY_START), now)
-        write_history_chunk(data_dir, hist, today, "repair" if repaired and not full else "new")
+        write_history_chunk(
+            data_dir, hist, today, ("repair" if repaired and not full else "new") + suffix
+        )
         new_rows += len(hist)
         got |= set(hist["ticker"].unique())
     # Tickers with no bar in the lookback window (halted, delisted, or Yahoo has no data).

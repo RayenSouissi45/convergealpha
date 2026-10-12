@@ -9,10 +9,14 @@ import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from convergealpha.config import Paths, load_dotenv
 from convergealpha.export import health as H
 from convergealpha.util import log as logutil
+
+if TYPE_CHECKING:
+    from convergealpha.run import RunContext as RunContextT
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -29,12 +33,51 @@ def _cmd_health(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_daily(args: argparse.Namespace) -> int:
-    from convergealpha.run import RunContext, run_daily
+def _ctx(args: argparse.Namespace, paths: Paths | None = None) -> RunContextT:
+    from convergealpha.run import RunContext
 
-    tickers = [t.strip().upper() for t in args.tickers.split(",")] if args.tickers else None
-    ctx = RunContext(paths=_paths(args), now=datetime.now(UTC), tickers_override=tickers)
-    return run_daily(ctx)
+    tickers = (
+        [t.strip().upper() for t in args.tickers.split(",")]
+        if getattr(args, "tickers", None)
+        else None
+    )
+    return RunContext(paths=paths or _paths(args), now=datetime.now(UTC), tickers_override=tickers)
+
+
+def _cmd_daily(args: argparse.Namespace) -> int:
+    from convergealpha.run import run_daily
+
+    return run_daily(_ctx(args))
+
+
+def _cmd_prepare(args: argparse.Namespace) -> int:
+    from convergealpha.run import job_prepare
+
+    return job_prepare(_ctx(args))
+
+
+def _cmd_fetch(args: argparse.Namespace) -> int:
+    from convergealpha.run import job_fetch
+
+    return job_fetch(_ctx(args), args.shard, args.shards, with_yahoo=not args.no_yahoo)
+
+
+def _cmd_finnhub(args: argparse.Namespace) -> int:
+    from convergealpha.run import job_finnhub
+
+    return job_finnhub(_ctx(args))
+
+
+def _cmd_build(args: argparse.Namespace) -> int:
+    from convergealpha.run import job_build
+
+    return job_build(_ctx(args))
+
+
+def _cmd_bootstrap(args: argparse.Namespace) -> int:
+    from convergealpha.run import job_bootstrap
+
+    return job_bootstrap(_ctx(args), args.what)
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:
@@ -52,14 +95,13 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
 
 def _cmd_universe(args: argparse.Namespace) -> int:
-    from convergealpha.run import RunContext, step_universe
+    from convergealpha.run import step_universe
 
-    paths = _paths(args)
-    paths.ensure()
-    ctx = RunContext(paths=paths, now=datetime.now(UTC))
-    ctx.states = H.load_states(paths.data)
+    ctx = _ctx(args)
+    ctx.job = "universe"
+    ctx.load()
     step_universe(ctx)
-    H.save_states(paths.data, ctx.states)
+    ctx.save()
     return 0
 
 
@@ -84,10 +126,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         p.add_argument("--out", default=out_default, help="output directory for site JSON")
         p.add_argument("--cache", default=None, help="scratch directory (rebuildable)")
 
-    p = sub.add_parser("daily", help="run every implemented daily step and export site JSON")
+    def tick(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--tickers", default=None, help="comma-separated subset (testing)")
+
+    for name, func, help_text in (
+        ("daily", _cmd_daily, "run every job in one process (local runs)"),
+        ("prepare", _cmd_prepare, "universe, SEC filings, insiders, fundamentals, FRED, FINRA"),
+        ("finnhub", _cmd_finnhub, "earnings calendar, recommendation trends, news"),
+        ("build", _cmd_build, "compute everything and export the website JSON"),
+    ):
+        p = sub.add_parser(name, help=help_text)
+        common(p)
+        tick(p)
+        p.set_defaults(func=func)
+
+    p = sub.add_parser("fetch", help="prices + Yahoo analyst data for one shard of the universe")
     common(p)
-    p.add_argument("--tickers", default=None, help="comma-separated subset (testing)")
-    p.set_defaults(func=_cmd_daily)
+    tick(p)
+    p.add_argument("--shard", type=int, default=0)
+    p.add_argument("--shards", type=int, default=1)
+    p.add_argument("--no-yahoo", action="store_true")
+    p.set_defaults(func=_cmd_fetch)
+
+    p = sub.add_parser("bootstrap", help="one-time history loads: sec | fundamentals | finra")
+    common(p)
+    tick(p)
+    p.add_argument("what", choices=["sec", "fundamentals", "finra"])
+    p.set_defaults(func=_cmd_bootstrap)
 
     p = sub.add_parser("demo", help="30-ticker end-to-end run into web/public/data")
     common(p, None, None)

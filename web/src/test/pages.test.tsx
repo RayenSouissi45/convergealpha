@@ -1,27 +1,43 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetScreenerCache } from '../lib/screener'
 import { AppRoutes } from '../routes'
 import type { Health } from '../types'
 import fixture from './fixtures/health.json'
+import market from './fixtures/market.json'
+import screener from './fixtures/screener.json'
+import aapl from './fixtures/stocks/AAPL.json'
+import con from './fixtures/stocks/CON_.json'
 
 function healthAt(generatedAt: Date, overrides: Partial<Health> = {}): Health {
-  return { ...(fixture as Health), generated_at: generatedAt.toISOString(), ...overrides }
+  return { ...(fixture as unknown as Health), generated_at: generatedAt.toISOString(), ...overrides }
 }
 
-function stubFetch(response: { status: number; body?: unknown }) {
-  const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-    response.body === undefined
-      ? new Response('Not found', { status: response.status, headers: { 'content-type': 'text/html' } })
-      : new Response(JSON.stringify(response.body), {
-          status: response.status,
-          headers: { 'content-type': 'application/json' },
-        }),
-  )
+/** Serves fixture files by URL like the static host does; unknown files are 404. */
+function stubFetch(files: Record<string, unknown>) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    const name = Object.keys(files).find((f) => url.endsWith(`data/${f}`))
+    if (!name || files[name] === undefined) {
+      return new Response('Not found', { status: 404, headers: { 'content-type': 'text/html' } })
+    }
+    return new Response(JSON.stringify(files[name]), { status: 200, headers: { 'content-type': 'application/json' } })
+  })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
+
+const ALL = () => ({
+  'health.json': healthAt(new Date()),
+  'screener.json': screener,
+  'market.json': market,
+  'stocks/AAPL.json': aapl,
+  'stocks/CON_.json': con,
+})
+
+beforeEach(() => resetScreenerCache())
 
 function renderAt(path: string) {
   return render(
@@ -48,7 +64,7 @@ const PAGES: [string, string][] = [
 
 describe.each(PAGES)('page %s', (path, heading) => {
   it('renders its heading and the research-mode banner', async () => {
-    stubFetch({ status: 200, body: healthAt(new Date()) })
+    stubFetch(ALL())
     renderAt(path)
     expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
     const banner = screen.getByRole('complementary', { name: 'Research mode' })
@@ -58,11 +74,10 @@ describe.each(PAGES)('page %s', (path, heading) => {
 
 describe('health page', () => {
   it('shows the pipeline report from health.json', async () => {
-    const fetchMock = stubFetch({ status: 200, body: healthAt(new Date()) })
+    const fetchMock = stubFetch({ 'health.json': healthAt(new Date()) })
     renderAt('/health')
-    expect(await screen.findByText(/0 of 12 data sources connected/)).toBeInTheDocument()
-    expect(screen.getByText('Daily prices')).toBeInTheDocument()
-    expect(screen.getAllByText(/Not connected yet · phase 1/).length).toBeGreaterThan(0)
+    expect(await screen.findByText(/data sources live/)).toBeInTheDocument()
+    expect(screen.getByText('Daily prices (Yahoo Finance)')).toBeInTheDocument()
     expect(screen.getByText('SEC_USER_AGENT')).toBeInTheDocument()
     // health.json is fetched once and shared by the whole app.
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -70,22 +85,21 @@ describe('health page', () => {
   })
 
   it('says plainly when the pipeline has not run yet', async () => {
-    stubFetch({ status: 404 })
+    stubFetch({})
     renderAt('/health')
     expect(await screen.findByText(/has not published a health report yet/)).toBeInTheDocument()
     expect(screen.getByText('No data yet')).toBeInTheDocument()
   })
 
   it('warns when data is stale', async () => {
-    stubFetch({ status: 200, body: healthAt(new Date(Date.now() - 5 * 86400 * 1000)) })
+    stubFetch({ 'health.json': healthAt(new Date(Date.now() - 5 * 86400 * 1000)) })
     renderAt('/')
     expect(await screen.findByText('Data may be out of date.')).toBeInTheDocument()
   })
 
   it('shows the kill-switch banner when active', async () => {
     stubFetch({
-      status: 200,
-      body: healthAt(new Date(), {
+      'health.json': healthAt(new Date(), {
         kill_switch: { implemented: true, active: true, reasons: ['Drawdown −15%'] },
       }),
     })
@@ -98,13 +112,59 @@ describe('health page', () => {
 
 describe('missing values', () => {
   it('explain themselves when tapped', async () => {
-    stubFetch({ status: 200, body: healthAt(new Date()) })
+    stubFetch(ALL())
     renderAt('/')
-    const dash = await screen.findByRole('button', { name: /Not available: Needs the S&P 500/ })
+    const dash = await screen.findByRole('button', { name: /Not available: The regime also needs/ })
     expect(dash).toHaveTextContent('—')
     await userEvent.click(dash)
-    expect(screen.getByRole('tooltip')).toHaveTextContent(/Connected in build phase 2/)
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/connected in build phase 2/)
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+})
+
+describe('screener', () => {
+  it('lists every stock from screener.json and searches by ticker or name', async () => {
+    stubFetch(ALL())
+    renderAt('/screener')
+    expect(await screen.findByText(/30 US stocks/)).toBeInTheDocument()
+    expect(screen.getByText('30 shown')).toBeInTheDocument()
+    await userEvent.type(screen.getByRole('searchbox', { name: /search/i }), 'apple')
+    expect(await screen.findByText('1 shown')).toBeInTheDocument()
+  })
+
+  it('shows presets that need later phases as disabled with an explanation', async () => {
+    stubFetch(ALL())
+    renderAt('/screener')
+    expect(await screen.findByRole('button', { name: /Most likely to rise: arrives in phase 3/ })).toBeInTheDocument()
+  })
+
+  it('says plainly when no stock list exists yet', async () => {
+    stubFetch({ 'health.json': healthAt(new Date()) })
+    renderAt('/screener')
+    expect(await screen.findByText(/has not been published yet/)).toBeInTheDocument()
+  })
+})
+
+describe('stock page', () => {
+  it('shows real stats and freshness for a stock', async () => {
+    stubFetch(ALL())
+    renderAt('/stock/AAPL')
+    expect(await screen.findByText('Eligible for signals')).toBeInTheDocument()
+    expect(screen.getByText(/Apple Inc/)).toBeInTheDocument()
+    expect(screen.getByText('Daily prices (Yahoo Finance via yfinance)')).toBeInTheDocument()
+    expect(screen.getByText('Returns (dividends included)')).toBeInTheDocument()
+  })
+
+  it('loads Windows-reserved tickers from their safe file name', async () => {
+    stubFetch(ALL())
+    renderAt('/stock/CON')
+    expect(await screen.findByText(/Concentra/)).toBeInTheDocument()
+  })
+
+  it('explains an unknown ticker instead of inventing data', async () => {
+    stubFetch(ALL())
+    renderAt('/stock/NOPE')
+    expect(await screen.findByText(/No data for NOPE/)).toBeInTheDocument()
   })
 })
