@@ -297,13 +297,22 @@ def record_coverage(ctx: RunContext, t: pd.DataFrame, src: E.Sources) -> None:
         detail="Yahoo holders (top-holder position changes); 13F processing not built",
     )
     if "roic" in t:
+        # Any of the five F6 ratios (banks and insurers have no gross profit, for example).
+        ratios = [
+            c for c in ("roic", "gp_assets", "accruals", "fcf_yield", "debt_ebitda") if c in t
+        ]
+        has = t[ratios].notna().any(axis=1)
+        share = float(has.mean()) if n else 0.0
+        elig = t["eligible"].eq(True) if "eligible" in t else has.astype(bool)
+        share_el = float(has[elig].mean()) if elig.any() else 0.0
         ctx.record(
             "fundamentals",
-            cov("gp_assets") > 0.3,
+            share > 0.3,
             as_of=as_of,
-            records=int(t["gp_assets"].notna().sum()),
-            coverage=round(cov("gp_assets"), 4),
-            detail=f"Point-in-time ratios for {cov('gp_assets'):.0%} of stocks",
+            records=int(has.sum()),
+            coverage=round(share, 4),
+            detail=f"Point-in-time quality ratios (US-GAAP XBRL) for {share:.0%} of stocks, "
+            f"{share_el:.0%} of eligible ones",
         )
     ctx.record(
         "insiders",
