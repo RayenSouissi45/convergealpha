@@ -154,3 +154,11 @@ def test_p_up_fallback_positive_drift_rises_with_horizon() -> None:
     short = stats.p_up_fallback(0.15, 0.25, 5)
     long = stats.p_up_fallback(0.15, 0.25, 126)
     assert 0.5 < short < long < 1.0
+
+
+def test_robust_scores_sparse_signal_still_ranks() -> None:
+    # Most stocks have no insider buying (0): MAD is 0, so the standard deviation is used.
+    values = [0.0] * 20 + [2.0, 5.0]
+    scores = stats.robust_sector_scores(values, ["A"] * 22)
+    assert scores[0] == pytest.approx(50.0)  # the median (no buying) is neutral
+    assert 50 < scores[20] < scores[21]

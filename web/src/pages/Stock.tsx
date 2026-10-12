@@ -2,10 +2,42 @@ import { lazy, Suspense } from 'react'
 import { Link, useParams } from 'react-router'
 import { Missing } from '../components/Missing'
 import { Tip } from '../components/Tip'
+import {
+  AnalystsCard,
+  EarningsCard,
+  EstimatesCard,
+  FilingsCard,
+  FundamentalsCard,
+  InsidersCard,
+  NewsCard,
+  NotAvailable,
+  OptionsCard,
+  OwnershipCard,
+  type AnalystsSection,
+  type EarningsSection,
+  type EstimatesSection,
+  type FilingItem,
+  type FundamentalsSection,
+  type InsidersSection,
+  type NewsSection,
+  type OptionsSection,
+  type OwnershipSection,
+} from '../components/stock/sections'
+import {
+  DecisionCard,
+  FamiliesCard,
+  ForecastCard,
+  PlanCard,
+  type DecisionSection,
+  type FamiliesSection,
+  type ForecastSection,
+  type PlanSection,
+} from '../components/stock/decision'
+import { PatternsCard, type PatternsSection } from '../components/stock/patterns'
 import { Badge, Card, PageHeader, Planned, Row } from '../components/ui'
 import { renderCell } from '../lib/cells'
 import { stockFile, useSiteJson } from '../lib/data'
-import { formatAge, formatDay, formatPct, formatPrice, signClass } from '../lib/format'
+import { formatAge, formatDay, formatMoney, formatPct, formatPrice, signClass } from '../lib/format'
 import type { Cell, StockFile } from '../types'
 
 const PriceChart = lazy(() => import('../components/PriceChart'))
@@ -47,8 +79,9 @@ const GROUPS: [string, StatDef[]][] = [
     ],
   ],
   [
-    'Liquidity',
+    'Size and liquidity',
     [
+      ['market_cap', 'Market cap', 'Shares outstanding (latest SEC filing) × price.'],
       ['adv_dollar', 'Avg daily $ volume', 'Average daily traded value over 21 days. Signals need at least $10M.'],
       ['adv_shares', 'Avg daily shares', 'Average daily share volume over 21 days.'],
       ['history_days', 'Days of history', 'Number of trading days of price history stored.'],
@@ -56,12 +89,13 @@ const GROUPS: [string, StatDef[]][] = [
   ],
 ]
 
-const KIND_OVERRIDE: Record<string, string> = { sma50: 'price', sma200: 'price', high_52w: 'price', low_52w: 'price', atr14: 'price', adv_shares: 'num', history_days: 'num', ret_6m: 'pct', vol_252: 'pctAbs', gap_stress_pct: 'pctAbs', max_dd_1y: 'pct' }
+const KIND_OVERRIDE: Record<string, string> = { market_cap: 'money', sma50: 'price', sma200: 'price', high_52w: 'price', low_52w: 'price', atr14: 'price', adv_shares: 'num', history_days: 'num', ret_6m: 'pct', vol_252: 'pctAbs', gap_stress_pct: 'pctAbs', max_dd_1y: 'pct' }
 
 function StatValue({ k, v }: { k: string; v: Cell }) {
   if (v === null || v === undefined) return <Missing reason="Not enough price history for this value yet." />
   const kind = KIND_OVERRIDE[k]
   if (kind === 'price' && typeof v === 'number') return <>{formatPrice(v)}</>
+  if (kind === 'money' && typeof v === 'number') return <>{formatMoney(v)}</>
   if (kind === 'num' && typeof v === 'number') return <>{Math.round(v).toLocaleString('en-US')}</>
   if (kind === 'pct' && typeof v === 'number') return <span className={signClass(v)}>{formatPct(v)}</span>
   if (kind === 'pctAbs' && typeof v === 'number') return <>{(v * 100).toFixed(1)}%</>
@@ -77,13 +111,31 @@ function eligibilityReason(stats: Record<string, Cell>): string | null {
 }
 
 const PLANNED: [string, number, string][] = [
-  ['Label and why', 3, 'The decision label with a one-sentence reason and the numbers behind it.'],
-  ['Forecast panel', 3, 'Chance of being higher and of beating the S&P 500 at 1 week, 1 month, 3 months and 6 months, with ranges.'],
-  ['Position plan', 3, 'Planned exit level, gap stress, shares for your capital.'],
-  ['Evidence families', 3, 'The six evidence scores, their agreement and independence.'],
-  ['Similar past setups', 4, 'How the most similar historical setups turned out.'],
   ['Event patterns', 4, 'How this stock reacted to past events, after a luck test.'],
 ]
+
+function sections(s: StockFile) {
+  const out = []
+  const analysts = s.analysts as AnalystsSection | null | undefined
+  out.push(analysts ? <AnalystsCard key="a" a={analysts} /> : <NotAvailable key="a" title="Analysts" reason="No analyst data for this stock yet (snapshot rotation refreshes every stock at least weekly)." />)
+  const est = s.estimates as EstimatesSection | null | undefined
+  out.push(est ? <EstimatesCard key="e" e={est} /> : <NotAvailable key="e" title="EPS estimates and revisions" reason="No analyst estimates for this stock." />)
+  const earn = s.earnings as EarningsSection | null | undefined
+  out.push(earn ? <EarningsCard key="r" e={earn} /> : <NotAvailable key="r" title="Earnings" reason="No earnings dates recorded for this stock yet." />)
+  const ins = s.insiders as InsidersSection | null | undefined
+  out.push(ins ? <InsidersCard key="i" s={ins} /> : <NotAvailable key="i" title="Insider trades" reason="No SEC company identifier or no insider data for this stock." />)
+  const own = s.ownership as OwnershipSection | null | undefined
+  if (own) out.push(<OwnershipCard key="o" o={own} />)
+  const opt = s.options as OptionsSection | null | undefined
+  out.push(opt ? <OptionsCard key="p" o={opt} /> : <NotAvailable key="p" title="Options-implied move" reason="Options are fetched daily for the top ~400 candidates and your holdings only." />)
+  const fund = s.fundamentals as FundamentalsSection | null | undefined
+  out.push(fund ? <FundamentalsCard key="f" f={fund} /> : <NotAvailable key="f" title="Fundamentals" reason="No US GAAP XBRL filings for this company (foreign filers using IFRS are not parsed yet)." />)
+  const news = s.news as NewsSection | null | undefined
+  out.push(news ? <NewsCard key="n" n={news} /> : <NotAvailable key="n" title="News" reason="News is fetched daily for the top ~150 candidates and your holdings only." />)
+  const fil = s.filings as FilingItem[] | undefined
+  if (fil && fil.length) out.push(<FilingsCard key="s" f={fil} />)
+  return out
+}
 
 export default function Stock() {
   const ticker = decodeURIComponent(useParams().ticker ?? '').toUpperCase()
@@ -123,7 +175,7 @@ export default function Stock() {
             <span className="text-base font-normal text-slate-600 dark:text-zinc-400">{s.name}</span>
           </span>
         }
-        subtitle={`${s.exchange}${s.is_adr ? ' · ADR' : ''} · prices as of ${formatDay(s.as_of)}`}
+        subtitle={`${s.exchange}${s.is_adr ? ' · ADR' : ''}${s.sector ? ` · ${String(s.sector)}` : ''}${s.industry ? ` · ${String(s.industry)}` : ''} · prices as of ${formatDay(s.as_of)}`}
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <span className="text-3xl font-semibold tabular-nums">{price !== null ? formatPrice(price) : '—'}</span>
@@ -138,6 +190,9 @@ export default function Stock() {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
+        {s.decision ? <DecisionCard d={s.decision as DecisionSection} /> : null}
+        {s.forecast ? <ForecastCard f={s.forecast as ForecastSection} /> : null}
+        {s.families ? <FamiliesCard f={s.families as FamiliesSection} /> : null}
         <Card title="Price" className="lg:col-span-2">
           {s.chart?.daily || s.chart?.weekly ? (
             <Suspense fallback={<div className="h-72 sm:h-96" aria-busy="true" />}>
@@ -171,7 +226,10 @@ export default function Stock() {
             </dl>
           </Card>
         ))}
-        {PLANNED.map(([title, phase, text]) => (
+        {s.plan ? <PlanCard p={s.plan as PlanSection} ticker={s.ticker} label={(s.decision as DecisionSection | undefined)?.label ?? 'NO TRADE'} sector={typeof s.sector === 'string' ? s.sector : null} /> : null}
+        {sections(s)}
+        {s.patterns ? <PatternsCard p={s.patterns as PatternsSection} /> : null}
+        {!s.patterns && PLANNED.map(([title, phase, text]) => (
           <Planned key={title} title={title} phase={phase}>
             <p>{text}</p>
           </Planned>

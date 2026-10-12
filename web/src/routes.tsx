@@ -6,12 +6,14 @@ import About from './pages/About'
 import Health from './pages/Health'
 import More from './pages/More'
 import NotFound from './pages/NotFound'
-import { BaselineRace, Compare, Portfolio, Scorecard, Validation } from './pages/Placeholders'
+import { BaselineRace, Scorecard, Validation } from './pages/Placeholders'
 import Today from './pages/Today'
 
 // Heavy pages (table, charts) load on demand to keep the first page fast on phones.
 const Screener = lazy(() => import('./pages/Screener'))
 const Stock = lazy(() => import('./pages/Stock'))
+const Portfolio = lazy(() => import('./pages/Portfolio'))
+const Compare = lazy(() => import('./pages/Compare'))
 
 const wait = (el: React.ReactNode) => <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>{el}</Suspense>
 
@@ -24,8 +26,8 @@ export function AppRoutes() {
           <Route index element={<Today />} />
           <Route path="screener" element={wait(<Screener />)} />
           <Route path="stock/:ticker" element={wait(<Stock />)} />
-          <Route path="compare" element={<Compare />} />
-          <Route path="portfolio" element={<Portfolio />} />
+          <Route path="compare" element={wait(<Compare />)} />
+          <Route path="portfolio" element={wait(<Portfolio />)} />
           <Route path="scorecard" element={<Scorecard />} />
           <Route path="baseline-race" element={<BaselineRace />} />
           <Route path="validation" element={<Validation />} />

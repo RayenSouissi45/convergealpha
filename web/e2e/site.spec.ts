@@ -52,6 +52,11 @@ test('phone bottom navigation reaches every page', async ({ page, isMobile }) =>
 
 test('missing values explain themselves on tap', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'tap behaviour')
+  // Serve a market file without a regime so the "—" placeholder is on the page.
+  await page.route('**/data/market.json', async (route) => {
+    const res = await route.fetch()
+    await route.fulfill({ json: { ...(await res.json()), regime: null } })
+  })
   await page.goto('#/')
   await page.getByRole('button', { name: /Not available: The regime also needs/ }).tap()
   await expect(page.getByRole('tooltip')).toContainText('connected in build phase 2')

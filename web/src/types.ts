@@ -10,6 +10,8 @@ export interface HealthSource {
   last_success: string | null
   as_of: string | null
   records: number | null
+  coverage?: number | null
+  optional?: boolean
   detail: string
   needs_secret: string | null
 }
@@ -108,5 +110,6 @@ export interface MarketFile {
     reasons: string[]
     [key: string]: unknown
   }
+  macro?: Record<string, { label: string; value: number; date: string; change_3m: number }>
   [key: string]: unknown
 }

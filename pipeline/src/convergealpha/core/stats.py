@@ -24,9 +24,13 @@ def norm_cdf(z: float) -> float:
 
 
 def _robust_center_scale(x: NDArray[np.float64]) -> tuple[float, float]:
+    """Median and 1.4826·MAD. For sparse signals (mostly one value, e.g. insider buying is 0 for
+    most stocks) the MAD is 0, so the standard deviation is used instead."""
     median = float(np.median(x))
-    mad = float(np.median(np.abs(x - median)))
-    return median, MAD_TO_SIGMA * mad
+    scale = MAD_TO_SIGMA * float(np.median(np.abs(x - median)))
+    if scale == 0.0 and x.size > 1:
+        scale = float(np.std(x))
+    return median, scale
 
 
 def robust_sector_scores(
@@ -41,8 +45,9 @@ def robust_sector_scores(
     2. Robust z inside the sector: (x - median_sector) / (1.4826 * MAD_sector), clipped to [-3, 3].
     3. score = 100 * Φ(z).
 
-    Missing values (NaN) stay NaN. A sector with fewer than MIN_SECTOR_COUNT values or zero MAD
-    falls back to the universe median/MAD; if that MAD is also zero, z = 0 (score 50).
+    Missing values (NaN) stay NaN. Zero MAD falls back to the standard deviation; a sector with
+    fewer than MIN_SECTOR_COUNT values or zero spread uses the universe center/scale; if that is
+    also zero, z = 0 (score 50).
     """
     x = np.asarray(values, dtype=np.float64)
     groups = np.asarray(sectors, dtype=object)

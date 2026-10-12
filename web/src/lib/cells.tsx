@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Missing } from '../components/Missing'
+import { LabelBadge } from '../components/stock/decision'
 import type { Cell } from '../types'
 import { COLUMN_BY_KEY, type ColumnKind } from './columns'
 import { formatDay, formatMoney, formatNum, formatPct, formatPctAbs, formatPrice, signClass } from './format'
@@ -38,6 +39,7 @@ export function renderCell(key: string, v: Cell, missingReason?: string): ReactN
   if (v === null || v === undefined) {
     return <Missing reason={missingReason ?? `No value yet for this stock (${col?.label ?? key}).`} />
   }
+  if (kind === 'label' && typeof v === 'string') return <LabelBadge label={v} />
   const text = cellText(kind, v)
   if (kind === 'pct' && typeof v === 'number') return <span className={signClass(v)}>{text}</span>
   return text

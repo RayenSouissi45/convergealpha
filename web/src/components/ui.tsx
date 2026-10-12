@@ -22,7 +22,7 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 ${className}`}
+      className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 ${className}`}
     >
       {(title || aside) && (
         <div className="mb-3 flex items-start justify-between gap-3">

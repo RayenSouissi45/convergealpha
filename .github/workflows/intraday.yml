@@ -1,0 +1,63 @@
+name: intraday
+
+# Every ~2 hours during US market hours: risk/event check for BUY/WATCH candidates and holdings
+# (prices, SEC live filings, news). Labels are only decided after the close; this only warns.
+on:
+  schedule:
+    - cron: '15 14,16,18,20 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intraday
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/pyproject.toml
+      - run: pip install ./pipeline
+      - name: Get the latest daily site data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow daily.yml --status success             --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then echo "::notice::No daily run yet"; exit 1; fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name site-data --dir site-data
+      - run: python -m convergealpha intraday --out site-data
+        env:
+          HOLDINGS: ${{ vars.HOLDINGS }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site-data-intraday
+          path: site-data
+          retention-days: 2
+
+  deploy:
+    needs: check
+    uses: ./.github/workflows/deploy.yml
+    with:
+      data_artifact: site-data-intraday
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+      deployments: write
+    secrets: inherit

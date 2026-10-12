@@ -54,6 +54,8 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'is_adr', label: 'ADR', group: 'Stock', kind: 'bool', help: 'American Depositary Receipt (a foreign company traded in the US).', phase: 1, width: 64 },
 
   { key: 'label', label: 'Label', group: 'Decision', kind: 'label', help: 'The decision label (STRONG BUY — TOP CONVICTION, BUY, WATCH, NO TRADE, SELL / RISK WARNING). Always check the numbers behind it on the stock page.', phase: 3, defaultVisible: true, width: 130 },
+  { key: 'tier', label: 'Tier', group: 'Decision', kind: 'num', help: 'Tier 1 = full size (p̂ ≥ 60% and N_eff ≥ 3); tier 2 = half size.', phase: 3, width: 64 },
+  { key: 'block_reason', label: 'Blocking event', group: 'Decision', kind: 'text', help: 'The first blocking event (earnings soon, offering, merger, lock-up, restatement, investigation...). Blocks new BUY labels.', phase: 3, width: 200 },
   { key: 'ev', label: 'EV', group: 'Decision', kind: 'pct', help: 'Expected value of the 60-day trade after costs: p·average win − (1−p)·average loss − costs. RESEARCH MODE.', phase: 3, width: 84 },
   { key: 'gain_per_month', label: 'Gain / month', group: 'Decision', kind: 'pct', help: 'Expected gain per month (median 6-month forecast ÷ 6). RESEARCH MODE.', phase: 3, defaultVisible: true, width: 100 },
   { key: 'speed', label: 'Speed', group: 'Decision', kind: 'num', help: 'Expected gain per month divided by volatility per month. Higher = more expected gain per unit of risk, per month.', phase: 3, width: 76 },
@@ -80,6 +82,7 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'target_upside', label: 'Target upside', group: 'Analysts', kind: 'pct', help: 'Mean analyst price target ÷ price − 1. Analysts are often too optimistic.', phase: 2, defaultVisible: true, width: 108 },
   { key: 'rev60', label: 'EPS rev. 60d', group: 'Analysts', kind: 'pct', help: 'Change in this fiscal year’s EPS estimate over the last 60 days.', phase: 2, width: 100 },
 
+  { key: 'insider_buy_7d', label: 'Insider buys 7d', group: 'Ownership', kind: 'money', help: 'Opportunistic insider purchases filed in the last 7 days.', phase: 3, width: 116 },
   { key: 'insider_net_90d', label: 'Insider buys 90d', group: 'Ownership', kind: 'money', help: 'Dollar value of opportunistic open-market insider purchases in the last 90 days (routine and 10b5-1 plan trades excluded).', phase: 2, width: 120 },
   { key: 'short_pct_float', label: 'Short % float', group: 'Ownership', kind: 'pctAbs', help: 'Shares sold short as a share of the float (FINRA / exchange data, twice monthly).', phase: 2, width: 104 },
   { key: 'days_to_cover', label: 'Days to cover', group: 'Ownership', kind: 'num', help: 'Short interest ÷ average daily volume.', phase: 2, width: 100 },
@@ -104,6 +107,7 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'eligible', label: 'Eligible', group: 'Size & liquidity', kind: 'bool', help: 'Price ≥ $5, average daily traded value ≥ $10M and priced on the last session. Only eligible stocks can get BUY labels.', phase: 1, width: 80 },
 
   { key: 'next_earnings', label: 'Next earnings', group: 'Events', kind: 'date', help: 'Next expected earnings report date.', phase: 2, width: 110 },
+  { key: 'days_to_earnings', label: 'Days to earnings', group: 'Events', kind: 'num', help: 'Trading days until the next report. 0–5 blocks new entries.', phase: 2, width: 110 },
 
   { key: 'last_date', label: 'Data as of', group: 'Data', kind: 'date', help: 'Date of the last price used.', phase: 1, width: 96 },
 ]

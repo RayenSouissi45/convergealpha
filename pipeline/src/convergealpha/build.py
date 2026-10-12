@@ -30,15 +30,15 @@ if TYPE_CHECKING:
 log = get(__name__)
 
 SCREENER_FIELDS: tuple[str, ...] = (
-    "ticker", "name", "exchange", "sector", "industry", "is_adr", "eligible",
-    "label", "ev", "gain_per_month", "speed",
-    "p_up_1w", "p_up_1m", "p_up_3m", "p_up_6m", "p_beat_6m", "med_6m", "p90_6m",
+    "ticker", "name", "exchange", "sector", "industry", "is_adr", "cik", "eligible",
+    "label", "tier", "blocked", "block_reason", "ev", "p_hat", "gain_per_month", "speed",
+    "p_up_1w", "p_up_1m", "p_up_3m", "p_up_6m", "p_beat_1m", "p_beat_6m", "med_6m", "p10_6m", "p90_6m",
     "f1", "f2", "f3", "f4", "f5", "f6", "n_eff", "disagreement",
     "consensus", "n_analysts", "target_upside", "rev60",
-    "insider_net_90d", "short_pct_float", "days_to_cover", "iv_30d",
+    "insider_net_90d", "insider_buy_7d", "short_pct_float", "days_to_cover", "iv_30d",
     "price", "change_1d", "ret_1w", "ret_1m", "ret_3m", "ret_ytd", "ret_1y",
     "vol_63", "atr_pct", "trend_up", "dist_52w_high", "market_cap", "adv_dollar",
-    "next_earnings", "last_date",
+    "next_earnings", "days_to_earnings", "cluster", "last_date",
 )  # fmt: skip
 
 STAT_KEYS: tuple[str, ...] = (

@@ -94,11 +94,13 @@ function Sources({ data }: { data: HealthData }) {
                 <span className="text-sm font-medium">{s.name}</span>
                 <Badge tone={status.tone}>{status.text(s)}</Badge>
               </div>
+              {s.detail && s.status !== 'not_implemented' && <div className="mt-0.5 text-xs text-slate-600 dark:text-zinc-300">{s.detail}</div>}
               <div className="mt-0.5 text-xs text-slate-500 dark:text-zinc-400">
                 Last success:{' '}
                 {s.last_success ? formatAge(s.last_success) : <Missing reason={s.detail} />}
                 {' · '}Data as of: {s.as_of ? formatDateTime(s.as_of) : <Missing reason={s.detail} />}
-                {s.records !== null && ` · ${s.records.toLocaleString()} records`}
+                {s.records !== null && ` · ${s.records.toLocaleString('en-US')} records`}
+                {s.coverage != null && ` · coverage ${Math.round(s.coverage * 100)}%`}
               </div>
             </li>
           )

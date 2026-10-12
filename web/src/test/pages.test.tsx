@@ -112,7 +112,7 @@ describe('health page', () => {
 
 describe('missing values', () => {
   it('explain themselves when tapped', async () => {
-    stubFetch(ALL())
+    stubFetch({ ...ALL(), 'market.json': { ...market, regime: null } })
     renderAt('/')
     const dash = await screen.findByRole('button', { name: /Not available: The regime also needs/ })
     expect(dash).toHaveTextContent('—')
@@ -133,10 +133,13 @@ describe('screener', () => {
     expect(await screen.findByText('1 shown')).toBeInTheDocument()
   })
 
-  it('shows presets that need later phases as disabled with an explanation', async () => {
+  it('applies a preset (filters + sort) when tapped', async () => {
     stubFetch(ALL())
     renderAt('/screener')
-    expect(await screen.findByRole('button', { name: /Most likely to rise: arrives in phase 3/ })).toBeInTheDocument()
+    const preset = await screen.findByRole('button', { name: 'Most likely to rise' })
+    await userEvent.click(preset)
+    expect(preset).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(/preset: Most likely to rise/)).toBeInTheDocument()
   })
 
   it('says plainly when no stock list exists yet', async () => {
@@ -159,7 +162,7 @@ describe('stock page', () => {
   it('loads Windows-reserved tickers from their safe file name', async () => {
     stubFetch(ALL())
     renderAt('/stock/CON')
-    expect(await screen.findByText(/Concentra/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: /CON.*Concentra/ })).toBeInTheDocument()
   })
 
   it('explains an unknown ticker instead of inventing data', async () => {

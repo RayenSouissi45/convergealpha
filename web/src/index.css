@@ -21,3 +21,23 @@ body {
 :focus-visible {
   @apply outline-2 outline-offset-2 outline-teal-600 dark:outline-teal-400;
 }
+
+/* Chart roles (dataviz reference palette): series 1 blue, recessive grid, text tokens. */
+:root {
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+  --viz-grid: #e5e7eb;
+  --viz-axis: #52514e;
+  --viz-ref: #9ca3af;
+  --viz-good: #008300;
+  --viz-bad: #e34948;
+}
+.dark {
+  --viz-series-1: #3987e5;
+  --viz-series-2: #d95926;
+  --viz-grid: #2e2e2c;
+  --viz-axis: #c3c2b7;
+  --viz-ref: #6b7280;
+  --viz-good: #2f9e44;
+  --viz-bad: #e66767;
+}

@@ -94,6 +94,13 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return code
 
 
+def _cmd_intraday(args: argparse.Namespace) -> int:
+    from convergealpha.intraday import run
+
+    run(Path(args.out), datetime.now(UTC), dict(os.environ))
+    return 0
+
+
 def _cmd_universe(args: argparse.Namespace) -> int:
     from convergealpha.run import step_universe
 
@@ -163,6 +170,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--shard", type=int, required=True)
     p.add_argument("--shards", type=int, required=True)
     p.set_defaults(func=_cmd_backfill)
+
+    p = sub.add_parser(
+        "intraday", help="risk/event check for candidates and holdings (adds intraday.json)"
+    )
+    common(p)
+    p.set_defaults(func=_cmd_intraday)
 
     p = sub.add_parser("universe", help="refresh the stock universe only")
     common(p)

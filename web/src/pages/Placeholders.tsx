@@ -1,31 +1,5 @@
 import { PageHeader, Planned } from '../components/ui'
 
-export function Compare() {
-  return (
-    <>
-      <PageHeader title="Compare" subtitle="2–4 stocks side by side." />
-      <Planned title="Side-by-side view" phase={3}>
-        <p>Forecasts, evidence families, position plans and risk for up to four stocks in columns.</p>
-      </Planned>
-    </>
-  )
-}
-
-export function Portfolio() {
-  return (
-    <>
-      <PageHeader title="My portfolio" subtitle="Stored only in this browser. Nothing is uploaded." />
-      <Planned title="Holdings and exit signals" phase={3}>
-        <p>
-          Type your holdings, entry prices and sizes to get HOLD / ROTATE / SELL labels, open risk,
-          sector and correlation exposure, and the drawdown throttle. Export and import as a JSON
-          file.
-        </p>
-      </Planned>
-    </>
-  )
-}
-
 export function Scorecard() {
   return (
     <>

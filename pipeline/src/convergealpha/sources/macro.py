@@ -84,7 +84,8 @@ def load_fred(data_dir: Path) -> pd.DataFrame:
 # --------------------------------------------------------------------------- FINRA short interest
 
 FINRA_URL = "https://cdn.finra.org/equity/otcmarket/biweekly/shrt{ymd}.csv"
-_MARKETS = {"NNM", "NYSE", "AMEX", "NAS", "NCM", "NGM", "NGS", "NMS"}
+# NNM = Nasdaq Global, SC = Nasdaq Capital Market, AMEX = NYSE American.
+_MARKETS = {"NNM", "NYSE", "AMEX", "SC", "NAS", "NCM", "NGM", "NGS", "NMS"}
 
 
 def settlement_dates(start: date, end: date) -> list[date]:
@@ -119,7 +120,12 @@ def update_short_interest(data_dir: Path, today: date, since: date) -> list[date
     for d in settlement_dates(since, today):
         if d.strftime("%Y%m%d") in have or published(d) > today + timedelta(days=3):
             continue
-        r = http.get(s, FINRA_URL.format(ymd=d.strftime("%Y%m%d")), ok_404=True, timeout=120)
+        try:
+            r = http.get(s, FINRA_URL.format(ymd=d.strftime("%Y%m%d")), ok_404=True, timeout=120)
+        except http.HttpError as e:
+            if "HTTP 403" in str(e):  # the CDN answers 403 for files that do not exist
+                continue
+            raise
         if r is None:
             continue
         df = pd.read_csv(io.StringIO(r.text), sep="|", dtype={"symbolCode": str})

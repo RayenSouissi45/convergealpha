@@ -50,6 +50,13 @@ export function MarketCard() {
         <Row label={<Tip content="CBOE Volatility Index: the market's expected volatility for the next 30 days. Above 25 is elevated, above 30 is stress.">VIX</Tip>}>
           {vix?.price ? formatNum(vix.price) : '—'}
         </Row>
+        {m.macro?.BAMLH0A0HYM2 && (
+          <Row label={<Tip content="Extra yield investors demand to hold junk bonds (FRED: BAMLH0A0HYM2). A rise of more than 1 point in 3 months puts the market in Caution.">High-yield credit spread</Tip>}>
+            {m.macro.BAMLH0A0HYM2.value.toFixed(2)} pts{' '}
+            <span className={`text-xs ${signClass(-m.macro.BAMLH0A0HYM2.change_3m)}`}>({m.macro.BAMLH0A0HYM2.change_3m >= 0 ? '+' : '−'}{Math.abs(m.macro.BAMLH0A0HYM2.change_3m).toFixed(2)} in 3m)</span>
+          </Row>
+        )}
+        {m.macro?.T10Y2Y && <Row label={<Tip content="10-year minus 2-year Treasury yield (FRED). Negative = inverted curve.">Yield curve (10y − 2y)</Tip>}>{m.macro.T10Y2Y.value.toFixed(2)} pts</Row>}
         {m.breadth && (
           <>
             <Row label="Stocks up on the day">{formatPctAbs(m.breadth.advancing_pct, 0)}</Row>

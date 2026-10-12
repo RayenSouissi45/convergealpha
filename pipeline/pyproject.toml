@@ -46,7 +46,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
 # Formulas in docstrings use the spec's notation (σ, ρ, −, ×) on purpose.
 # Line length is left to `ruff format`; long strings and URLs stay readable on one line.
-ignore = ["RUF001", "RUF002", "RUF003", "E501", "N812"]
+ignore = ["RUF001", "RUF002", "RUF003", "E501", "N812", "N806"]
 
 [tool.mypy]
 python_version = "3.12"
