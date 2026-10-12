@@ -4,7 +4,7 @@ Last updated: 2026-10-12
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| 0 Setup | Repo, CI, SETUP.md, empty site deployed | Built and tested locally; **waiting for GitHub login to deploy** |
+| 0 Setup | Repo, CI, SETUP.md, empty site deployed | **Live.** First scheduled run pending (Mon 2026-10-12, 22:30 UTC) |
 | 1 Universe + prices + screener | ≥ 5,000 stocks, daily prices, screener, stock page | Not started |
 | 2 Evidence data | Analysts, estimates, earnings, insiders, fundamentals, short interest, options, regime, news | Not started |
 | 3 Families + labels | F1–F7, labels, position plan, Today page | Not started |
@@ -13,7 +13,8 @@ Last updated: 2026-10-12
 | 6 Ledger + monitoring | Hash-chained ledger, scorecard, kill switch, Telegram | Not started |
 | 7 Polish | PWA, Lighthouse ≥ 90, docs | Not started |
 
-Live URL: not deployed yet (see "Waiting on you").
+Live URL: **https://rayensouissi45.github.io/convergealpha/**
+Repository: https://github.com/RayenSouissi45/convergealpha (public, GitHub Pages from Actions)
 
 ## Phase 0: what works
 
@@ -48,13 +49,12 @@ Live URL: not deployed yet (see "Waiting on you").
 - `deploy.yml`: builds and publishes to GitHub Pages (default) or Cloudflare Pages
   (`DEPLOY_TARGET=cloudflare`). Website-only pushes redeploy using the latest daily data.
 
-## Waiting on you
+## Deployment check (2026-10-12)
 
-1. **Log in the GitHub CLI** (SETUP.md section 1).
-2. **Public or private repo** (SETUP.md section 2; public is recommended).
-
-Then Claude Code creates the repo, enables Pages, pushes, runs the first daily job and gives you
-the URL.
+- `ci`, `deploy` (on push) and `daily` (started by hand) all succeeded on GitHub.
+- The live site returns 200. On a phone-sized browser the Health page loads in about 1.5 s with
+  no console errors and shows the daily run's real `health.json`.
+- Not yet verified: a run started **by the schedule** (first one due 2026-10-12 22:30 UTC).
 
 ## Decisions needed before phase 1
 
