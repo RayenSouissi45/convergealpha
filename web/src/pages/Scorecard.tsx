@@ -128,7 +128,7 @@ export default function Scorecard() {
                   .slice(0, 1)
                   .map(([h, v]) => (
                     <Suspense key={h} fallback={<div className="h-56" />}>
-                      <h4 className="mt-3 text-sm font-semibold">Reliability, {h}: predicted chance of going up vs what happened</h4>
+                      <h3 className="mt-3 text-sm font-semibold">Reliability, {h}: predicted chance of going up vs what happened</h3>
                       <ReliabilityChart points={v.reliability} label={`Reliability ${h}`} />
                     </Suspense>
                   ))}

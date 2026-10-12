@@ -104,7 +104,7 @@ function Breakdown({ title, data }: { title: string; data?: Record<string, numbe
   if (!data || !Object.keys(data).length) return null
   return (
     <div>
-      <h4 className="text-xs font-semibold text-slate-600 dark:text-zinc-400">{title} (net excess / year of the app’s picks, halved)</h4>
+      <h3 className="text-xs font-semibold text-slate-600 dark:text-zinc-400">{title} (net excess / year of the app’s picks, halved)</h3>
       <ul className="mt-1 flex flex-wrap gap-1.5 text-xs">
         {Object.entries(data).map(([k, v]) => (
           <li key={k} className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-zinc-700">{k}: {formatPct(v * HAIRCUT)}</li>
