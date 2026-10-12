@@ -74,6 +74,9 @@ class TrainConfig:
     colsample: float = 0.8
     ridge_alpha: float = 10.0
     seed: int = 7
+    # Calibration bins hold at least this many held-out predictions (part of the digest, so a
+    # change counts as a new configuration for the holdout log).
+    calibration_min_bin: int = 200
     features: list[str] = field(default_factory=lambda: list(FEATURES))
 
     def digest(self) -> str:
@@ -251,19 +254,49 @@ class Calibration:
     counts: dict[str, int] = field(default_factory=dict)  # horizon -> held-out rows used
 
 
-def _iso(x: np.ndarray, y: np.ndarray) -> Any:
-    from sklearn.isotonic import IsotonicRegression
+class BinnedIsotonic:
+    """Isotonic calibration fitted on quantile bins of at least `min_bin` predictions.
 
-    return IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(x, y)
+    Plain isotonic regression gives the few most extreme scores their own steps, so a handful of
+    past outcomes can map a score to 0% or 100%. Fitting on bin averages (weighted by size) and
+    interpolating between bin centres keeps every output backed by at least `min_bin` outcomes.
+    """
+
+    def __init__(self, x: np.ndarray, y: np.ndarray, min_bin: int) -> None:
+        from sklearn.isotonic import IsotonicRegression
+
+        x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+        ok = np.isfinite(x) & np.isfinite(y)
+        x, y = x[ok], y[ok]
+        if not len(x):
+            raise ValueError("no outcomes to calibrate on")
+        groups = np.array_split(
+            np.argsort(x, kind="stable"), int(np.clip(len(x) // min_bin, 1, 100))
+        )
+        cx = np.array([x[g].mean() for g in groups])
+        cy = np.array([y[g].mean() for g in groups])
+        self.n = np.array([len(g) for g in groups])
+        self.x = cx
+        self.y = (
+            IsotonicRegression(y_min=0.0, y_max=1.0).fit(cx, cy, sample_weight=self.n).predict(cx)
+        )
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        return np.asarray(np.interp(np.asarray(x, dtype=float), self.x, self.y))
 
 
-def calibrate(oos: pd.DataFrame) -> Calibration:
+def _iso(x: np.ndarray, y: np.ndarray, min_bin: int) -> BinnedIsotonic:
+    return BinnedIsotonic(x, y, min_bin)
+
+
+def calibrate(oos: pd.DataFrame, cfg: TrainConfig | None = None) -> Calibration:
     """Fit calibration on walk-forward predictions (dev + validation years only)."""
+    mb = (cfg or TrainConfig()).calibration_min_bin
     d = oos[oos["tb_correct"].notna()]
-    correct = {"all": _iso(d["raw_correct"].to_numpy(), d["tb_correct"].to_numpy())}
+    correct = {"all": _iso(d["raw_correct"].to_numpy(), d["tb_correct"].to_numpy(), mb)}
     for reg, g in d.groupby("regime"):
         if len(g) >= 2000:
-            correct[str(reg)] = _iso(g["raw_correct"].to_numpy(), g["tb_correct"].to_numpy())
+            correct[str(reg)] = _iso(g["raw_correct"].to_numpy(), g["tb_correct"].to_numpy(), mb)
     up, beat, conf = {}, {}, {}
     conf_counts: dict[str, int] = {}
     for name in HORIZON_NAMES.values():
@@ -271,8 +304,8 @@ def calibrate(oos: pd.DataFrame) -> Calibration:
             continue
         g = oos[oos[f"up_{name}"].notna()]
         conf_counts[name] = len(g)
-        up[name] = _iso(g[f"raw_up_{name}"].to_numpy(), g[f"up_{name}"].to_numpy())
-        beat[name] = _iso(g[f"raw_beat_{name}"].to_numpy(), g[f"beat_{name}"].to_numpy())
+        up[name] = _iso(g[f"raw_up_{name}"].to_numpy(), g[f"up_{name}"].to_numpy(), mb)
+        beat[name] = _iso(g[f"raw_beat_{name}"].to_numpy(), g[f"beat_{name}"].to_numpy(), mb)
         # Split-conformal (CQR): widen [q10, q90] so 80% of held-out outcomes fall inside.
         e = np.maximum(
             g[f"q10_{name}"] - g[f"ret_{name}"], g[f"ret_{name}"] - g[f"q90_{name}"]

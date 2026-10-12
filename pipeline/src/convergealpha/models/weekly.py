@@ -101,7 +101,7 @@ def run(ctx: RunContext, out_dir: Path) -> dict[str, Any]:
     years = [y for y in [*T.DEV_YEARS, *T.VAL_YEARS] if (df["date"].dt.year == y).any()]
     oos = T.walk_forward(df[df["date"] < T.HOLDOUT[0]], years, cfg, trading)
     oos.to_parquet(out_dir / "oos_devval.parquet", index=False)
-    cal = T.calibrate(oos)
+    cal = T.calibrate(oos, cfg)
     T.fit_meta(oos, cal)
     final = T.fit_models(df, cfg, trading)
     analogs = analog_index(df)

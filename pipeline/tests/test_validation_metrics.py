@@ -76,3 +76,19 @@ def test_verdict_shows_halved_excess_and_keeps_pass_logic() -> None:
     # The slope check has no holdout calibration -> unknown, so the label is not validated.
     assert v["label_pass"] is False
     assert all(c["passed"] for c in v["checks"] if c["check"].startswith("Net excess"))
+
+
+def test_binned_isotonic_has_no_extreme_steps_from_a_few_points() -> None:
+    from convergealpha.models.train import BinnedIsotonic
+
+    rng = np.random.default_rng(0)
+    x = rng.uniform(0.3, 0.6, 5000)
+    y = (rng.uniform(size=5000) < x).astype(float)
+    # Three outliers far out with all-positive outcomes: plain isotonic maps them to 100%.
+    x = np.r_[x, 0.95, 0.96, 0.97]
+    y = np.r_[y, 1.0, 1.0, 1.0]
+    cal = BinnedIsotonic(x, y, min_bin=200)
+    p = cal.predict(np.array([0.0, 0.3, 0.45, 0.6, 0.99]))
+    assert np.all(np.diff(p) >= 0)
+    assert p.max() < 0.75 and p.min() > 0.2
+    assert cal.n.min() >= 200
