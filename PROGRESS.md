@@ -1,92 +1,177 @@
 # Progress
 
-Last updated: 2026-10-12
+Last updated: 2026-10-12 (end of the Phase 1–7 build run)
+
+- Live site: **https://rayensouissi45.github.io/convergealpha/**
+- Code: https://github.com/RayenSouissi45/convergealpha (public)
+- Data: https://github.com/RayenSouissi45/convergealpha-data (private: raw data, snapshots, ledger)
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| 0 Setup | Repo, CI, SETUP.md, empty site deployed | **Live.** First scheduled run pending (Mon 2026-10-12, 22:30 UTC) |
-| 1 Universe + prices + screener | ≥ 5,000 stocks, daily prices, screener, stock page | Not started |
-| 2 Evidence data | Analysts, estimates, earnings, insiders, fundamentals, short interest, options, regime, news | Not started |
-| 3 Families + labels | F1–F7, labels, position plan, Today page | Not started |
-| 4 Models + forecasts | L0–L3, 4-horizon forecasts, analogs, event patterns | Not started |
-| 5 Validation lab | /validation report | Not started |
-| 6 Ledger + monitoring | Hash-chained ledger, scorecard, kill switch, Telegram | Not started |
-| 7 Polish | PWA, Lighthouse ≥ 90, docs | Not started |
+| 0 Setup | Repos, CI, secrets, deploy | **Done** |
+| 1 Universe + prices + screener | 5,356 US common stocks, prices since 2010, screener, stock page | **Done** |
+| 2 Evidence data | Analysts, estimates, earnings, insiders, XBRL fundamentals, short interest, options, regime, news | **Done** (options fill from the second daily run, see below) |
+| 3 Families + labels | F1–F7, N_eff, D, R1–R12 / C1–C7, labels, position plan, Today page | **Done** |
+| 4 Models + forecasts | L0–L3, 4-horizon forecasts with conformal ranges, analogs, event patterns | **Done** (weekly training on GitHub) |
+| 5 Validation lab | /validation: walk-forward, ablation, DSR, PBO, holdout | **Done**. Result: BUY labels **not validated**; some horizon probabilities are |
+| 6 Ledger + monitoring | Hash-chained ledger, scorecard, baseline race, kill switch, drift, Telegram | **Done** (Telegram needs your bot, see questions) |
+| 7 Polish | PWA (offline, installable), Lighthouse ≥ 90, docs | **Done** except the Today page on a cold phone load (see Known limits) |
 
-Live URL: **https://rayensouissi45.github.io/convergealpha/**
-Repository: https://github.com/RayenSouissi45/convergealpha (public, GitHub Pages from Actions)
+## What works
 
-## Phase 0: what works
+**Every weekday after the close (22:30 UTC, `daily.yml`)**: universe refresh, prices for every stock,
+SEC filings and Form 4 insider trades, a rotating share of Yahoo analyst data (plus daily for
+~400 candidates, holdings and stocks near earnings), Finnhub trends, calendar and news, options
+implied volatility for candidates, FRED macro and FINRA short interest. Then families, regime,
+model forecasts, labels and position plans; the ledger records new signals and measures due
+outcomes; the site is rebuilt and deployed. About 40 minutes.
 
-**Pipeline** (`pipeline/`, Python 3.12)
-- `python -m convergealpha daily --out <dir>` runs every implemented step. In phase 0 that is
-  only `health.json`: run time, link to the GitHub run, build phase, status of each of the 12
-  planned data sources ("not connected yet"), and which API keys are set (never their values).
-- The spec's core formulas are already implemented and tested against every reference value in
-  section 13 that doesn't need market data: robust sector normalization, N_eff (1.5 / 2.5),
-  Wilson (230/400 → 52.6–62.3%), costs (0.29%), Kelly (23.1%), sizing (5 shares), planned exit,
-  gap stress, EV, fallback P(up). The 16:15 New York decision cutoff is in `config.py`.
-- 28 tests; ruff and strict mypy are clean.
+**Every 2 hours in market hours (`intraday.yml`)**: gap, exit-level and drop checks for BUY/WATCH
+stocks and your holdings, SEC live filings and negative news. It only warns; labels change after
+the close.
 
-**Website** (`web/`, React 19 + TypeScript + Vite + Tailwind)
-- All pages from section 11 exist: Today, Screener, Stock, Compare, My portfolio, Scorecard,
-  Baseline race, Validation, Health, About & method, plus a phone "More" menu.
-- Health shows the live pipeline report. The other pages say what they will show and in which
-  phase; they never show sample numbers.
-- Global RESEARCH MODE banner, "data may be out of date" banner (no update for 3.5 days), and
-  kill-switch banner (inactive until phase 6).
-- Missing values are "—" and explain why on tap (phones) or hover.
-- Mobile-first: bottom tab bar with 44 px+ tap targets, no horizontal scroll, dark/light/auto
-  theme, colours always paired with text.
-- Hash routing (`/#/health`), so the same build works on GitHub Pages and Cloudflare Pages.
-- 17 unit tests (every page renders, health states, banners, tooltip) and 24 Playwright checks at
-  phone (Pixel 7) and desktop sizes (no horizontal scroll, no console errors, nav works, tooltips
-  stay on screen). JS bundle: 92 KB gzipped.
+**Saturdays (`weekly.yml`)**: XBRL refresh, point-in-time dataset rebuild (≈ 265,000 stock-months
+since 2012), walk-forward training, calibration, analog index, event-pattern tests, validation
+lab. Publishes the model bundle for the daily builds.
 
-**Automation** (`.github/workflows/`, checked with actionlint)
-- `ci.yml`: pipeline lint + types + tests; web lint + types + tests + build + phone e2e.
-- `daily.yml`: Mon–Fri 22:30 UTC → pipeline → deploy. Also runnable by hand.
-- `deploy.yml`: builds and publishes to GitHub Pages (default) or Cloudflare Pages
-  (`DEPLOY_TARGET=cloudflare`). Website-only pushes redeploy using the latest daily data.
+**Website** (phone first): Today, Screener (5,356 rows, virtualized, presets, filters, column
+chooser), Stock page (decision card with every rule, forecasts and ranges, families, position
+plan, evidence sections, chart, analogs, patterns), Compare, My portfolio (stored in your
+browser), Scorecard, Baseline race, Validation, Health, About & method. Missing values show "—"
+and explain why. RESEARCH MODE badges stay on until something passes validation.
 
-## Deployment check (2026-10-12)
+### Checks run (2026-10-12)
 
-- `ci`, `deploy` (on push) and `daily` (started by hand) all succeeded on GitHub.
-- The live site returns 200. On a phone-sized browser the Health page loads in about 1.5 s with
-  no console errors and shows the daily run's real `health.json`.
-- Not yet verified: a run started **by the schedule** (first one due 2026-10-12 22:30 UTC).
+- GitHub: `ci`, `deploy`, `daily` (38 min, 5,356 stocks), `intraday`, `bootstrap`, `backfill`
+  and `weekly` all ran by hand and succeeded.
+- Tests: 83 pipeline tests (all section 13 reference values, leakage, ledger tamper test,
+  validation metrics, calibration), 40 web unit tests, 28 Playwright checks at phone and desktop
+  size. ruff, strict mypy, oxlint and TypeScript are clean.
+- Lighthouse on the live site, mobile, real data: Screener 96, Stock 97, Portfolio 99,
+  accessibility 100 on every page. Today scored 76 because it downloaded the whole 1 MB
+  screener; it now uses a ~10 KB `today.json` (deployed with the next daily run).
 
-## Decisions needed before phase 1
+### Validation result (first weekly run)
 
-- **Where raw data snapshots live:** a `data` branch in this repo (spec default; public if the
-  repo is public) or a private `convergealpha-data` repo (recommended if the code repo is public,
-  because some free data is licensed for personal use only). See SETUP.md section 2.
-- **`SEC_USER_AGENT` e-mail:** which contact e-mail to send to the SEC.
+GitHub weekly run 38309891938, model `m-20261012-7ef7099b4d`, 264,766 stock-months
+(2012–2026). Walk-forward AUC of the 60-day trade label: **0.517**, a weak signal. All excess
+returns below are halved (survivorship haircut).
+
+| Check | Result | |
+|---|---|---|
+| Net excess > 0 with t ≥ 2: development / validation / holdout | +1.93% (t 0.79) / −0.70% (t −0.17) / +5.58% (t 1.21) | Fail ×3 |
+| ≥ +1%/yr over the best baseline: development / validation / holdout | −10.47% / −0.70% / +5.58% | Fail, Fail, Pass |
+| Holdout ≥ 50% of development | +5.58% vs +1.93% | Pass |
+| Calibration slope 0.8–1.2 (holdout, trade label) | 0.67 | Fail |
+| Max drawdown < 25% | −30.6% | Fail |
+| Deflated Sharpe ≥ 0.95 | 0.51 (8 trials) | Fail |
+| Probability of backtest overfitting ≤ 20% | 50% | Fail |
+| Holdout evaluated only once | 2 evaluations (decision 26) | Fail |
+
+- **BUY labels: not validated** (2 of 12 checks). They keep their RESEARCH MODE badge.
+- **Validated probabilities:** chance of being higher in **1 month** and **6 months** (holdout
+  Brier score better than the holdout's own base rate, calibration slope 1.06 and 1.03). All
+  other probabilities keep a * and the research badge. The 80% ranges hold 76–81% of outcomes.
+- **Ablation:** only F4 (insiders) clearly helps in both periods; F3, F5 and F6 help in
+  2021–2023 but not in 2016–2020.
+- The momentum baseline beat the app in 2016–2020; the app beat every baseline in 2021–2023
+  and on the holdout, but not by a statistically meaningful margin.
+
+## Decisions made
+
+Hosting and storage
+1. Public code repo + GitHub Pages (your choice): free Actions minutes and hosting; no secrets or raw data in it.
+2. Private `convergealpha-data` repo written through a deploy key (`DATA_DEPLOY_KEY`): your instruction; licensed raw data stays private.
+3. Hash URLs (`/#/stock/AAPL`) and relative asset paths: the same build works on GitHub Pages and Cloudflare Pages without server rules.
+4. `robots.txt` blocks search engines: personal site. Anyone with the URL can still open it (see question 6).
+5. Model bundle passed between workflows as an Actions artifact (90 days), not committed: keeps the data repo small.
+6. Daily job split into prepare → 6 parallel price/Yahoo shards + Finnhub → build → deploy: fewer Yahoo requests per runner, ≈ 40 minutes.
+7. The weekly job re-enables the schedules: GitHub disables them after 60 days without repo activity.
+
+Data
+8. Yahoo Finance (yfinance) for prices and analyst data: the only free source covering 5,000+ US stocks with history; personal use; raw data never published.
+9. Prices stored as downloaded, with splits applied when loading: storage stays append-only when a split rewrites history.
+10. Total return built from close + dividends: Yahoo's adjusted close changes retroactively.
+11. Price history from 2010: enough warm-up for the 2016–2020 development period.
+12. Yahoo analyst data refreshed for 1/5 of stocks per day, plus daily for ~400 candidates, holdings and stocks near earnings: rate limits.
+13. Finnhub for recommendation trends, calendar and news; targets and upgrades from Yahoo: those Finnhub endpoints are premium (HTTP 403).
+14. SEC insider data sets (quarterly) + daily Form 4 XML; before 2023, 10b5-1 plans are found from footnotes: the checkbox column only exists since 2023.
+15. 424B2/424B3 prospectuses don't count as share offerings: banks file thousands of structured-note prospectuses.
+16. XBRL facts kept as first reported: restated numbers would leak the future.
+17. FINRA short interest used from settlement + 8 trading days: conservative publication date.
+18. Loughran–McDonald word lists kept only in the private repo: their licence is non-commercial research.
+19. Opinion (F1) and revisions (F2) are not model features yet: no free point-in-time history before 2026-10-12; they are used in rules and scores.
+20. Ticker files that Windows cannot store (e.g. `CON.json`) are saved as `CON_.json`: the build must also work on Windows.
+
+Models and validation
+21. Model momentum features are named `mom_*`, with a leakage test: the old names collided with label columns.
+22. Walk-forward by year, purge + 10-day embargo; development 2016–2020, validation 2021–2023, holdout 2024-01-01 → 2026-06-30: spec periods; leaves room for 6-month outcomes.
+23. Training rows at month-ends only: fewer overlapping labels, manageable compute.
+24. Calibration is isotonic on bins of ≥ 200 predictions: plain isotonic turned a handful of extreme scores into 0% or 100%.
+25. Each horizon probability can leave RESEARCH MODE on its own (beats the holdout base rate on Brier score, calibration slope 0.8–1.2); BUY labels need all checks: as specified.
+26. The holdout is evaluated once per configuration and logged. A local dry run on 2026-10-12 evaluated it once with the earlier calibration, before the change in 24. That evaluation is in the log, so the site says "evaluated 2 times": an honest record over a clean-looking one.
+27. Backtested excess returns are halved wherever shown, including the verdict: survivorship bias of free price data.
+28. The verdict is recomputed from the stored report at every daily build: rules and wording always match the current code.
+29. A failing validation lab doesn't block the weekly model bundle: the models then just stay in research mode.
+
+Website
+30. React 19, Vite, Tailwind 4, TanStack Table v8 (not v9): v9 is not stable yet.
+31. oxlint instead of ESLint: the official Vite React template moved to it.
+32. Core pages load immediately, heavy pages on demand: lazy-loading everything scored worse.
+33. `today.json` for the Today page: phones download ~10 KB instead of the 1 MB screener.
+34. Your portfolio is stored only in your browser; the optional `HOLDINGS` variable gives the pipeline tickers only: the code repo is public.
+35. Numbers and dates always use US English: this PC's locale is French.
+36. Offline mode: hashed assets cache-first, data network-first: works offline with the last data you opened, never stale when online.
+37. No AI news layer: it costs money; Loughran–McDonald + keyword tags are used instead.
+38. Telegram is optional and skipped without its secrets; Health shows "not connected".
+
+## Questions for the owner
+
+All optional. The site works without them.
+
+1. **Your holdings** (daily refresh and alerts for what you own): GitHub → repo **Settings →
+   Secrets and variables → Actions → Variables → New repository variable**, name `HOLDINGS`,
+   value e.g. `AAPL, MSFT`. Also enter them on the site's *My portfolio* page (shares and cost).
+2. **Telegram alerts**: in Telegram open **@BotFather** → `/newbot` → copy the token → send your
+   bot any message → open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy
+   `"chat":{"id": …}` → add secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
+   (Settings → Secrets and variables → Actions → New repository secret).
+3. **Ratings from Zacks / TipRanks / Seeking Alpha / Morningstar** (never scraped): in the private
+   data repo create `manual/ratings/<source>.csv` with `ticker,rating,date` (1 = best … 5 = worst).
+   Each file becomes one more F1 opinion source; ratings older than 45 days are ignored.
+4. **Danelfin**: if you get an API key, add the secret `DANELFIN_API_KEY`.
+5. **AI news extraction (paid)**: only if you want it, add `ANTHROPIC_API_KEY` and set a monthly
+   limit in the Anthropic console. The extraction layer itself is not built yet.
+6. **Privacy**: the site is public to anyone who has the URL (search engines are blocked). For a
+   login, move to Cloudflare Pages + Cloudflare Access (free): SETUP.md, "Host on Cloudflare
+   Pages" and "Put the site behind a login".
+7. **Yahoo terms**: Yahoo data is for personal use; it stays private and only derived numbers are
+   shown. Confirm you are fine with that, or name a paid source to switch to.
+8. **Data repo size**: ≈ 0.5 GB now, ≈ +0.3 GB a year. Near 1 GB, old snapshots should move to
+   Cloudflare R2 (free 10 GB, needs a Cloudflare account).
+9. **Spec PDF**: `docs/ConvergeAlpha_v3_Final_Specification.pdf` was never in the folder.
+   Everything follows the build prompt; add the PDF if you want it cross-checked.
 
 ## Known limits
 
-- No market data yet; that starts in phase 1.
-- `docs/ConvergeAlpha_v3_Final_Specification.pdf` was not in the folder, so everything follows
-  the build prompt. Add the PDF to `docs/` and it will be cross-checked.
-- `intraday.yml` and `weekly.yml` are not created yet. They are added when they have work to do
-  (weekly in phase 2, intraday in phase 3), so empty scheduled jobs don't run for nothing.
-- Not yet an offline PWA (phase 7); "Add to Home Screen" works as a shortcut.
-- `make demo` (30 tickers in < 5 minutes) arrives with phase 1. GNU make isn't installed on this
-  Windows machine; the README lists the equivalent commands.
-- Page URLs use a hash (`/#/validation` rather than `/validation`) so they work on any static
-  host without server rules.
+- **No BUY labels yet.** With the fallback estimate (before models), R7/R8 cannot pass. With
+  models, the trade probability is weak (out-of-sample AUC ≈ 0.52), so few or no stocks clear
+  p̂ ≥ 55%. That is the system saying NO TRADE honestly, not a bug.
+- **BUY labels are not validated** (see the table above). Labels keep their RESEARCH MODE badge.
+- **F1/F2 history starts now.** The models will improve once months of analyst snapshots exist.
+- **Survivorship bias**: free price history lacks most delisted stocks (hence the 50% haircut).
+- **Options** were empty in the first daily run because no candidate list existed yet; filled
+  from the next run.
+- **Lighthouse, Today page**: to be re-measured once `today.json` is live.
+- **SEC 13F** (full institutional holdings), FDA calendar and buyback history are not built
+  (no free dated source); see docs/DATA_SOURCES.md.
+- `make` isn't installed on this Windows PC; SETUP.md lists the equivalent commands.
 
-## Next: phase 1 plan
+## Next steps
 
-1. Universe: SEC `company_tickers_exchange.json` + Nasdaq Trader lists → common stocks on
-   NYSE / Nasdaq / NYSE American; ETFs, funds, warrants, units, preferreds and rights excluded;
-   every ticker ever seen kept.
-2. Prices: 10-year adjusted history backfill (split across runs to stay under ~40 minutes),
-   then daily incremental updates; split, zero-price and stale-feed checks.
-3. Features: 1w / 1m / 3m / YTD / 1y returns, volatility, ATR, 50/200-day trend, distance from
-   the 52-week high, liquidity (average daily traded value).
-4. Exports: `screener.json` (compact rows), `stocks/<TICKER>.json`, `health.json` with real
-   freshness.
-5. Website: virtualized screener (TanStack Table) that scrolls 5,000+ rows on a phone, search,
-   sorting, column chooser, liquidity greying; stock page with a `lightweight-charts` price chart.
-6. Append-only daily Parquet snapshots; `make demo`; leakage and data-quality tests.
+1. Let the schedules run; the scorecard and baseline race fill as outcomes mature (1 week to
+   6 months).
+2. After ~3 months of analyst snapshots, add F1/F2 to the model features (new configuration →
+   logged in the holdout record).
+3. If Yahoo changes its API, add a backup source for prices and analyst data (Polygon, Alpha
+   Vantage or FMP; their keys are listed on the Health page, the connectors are not built).

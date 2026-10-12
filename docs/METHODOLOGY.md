@@ -92,7 +92,9 @@ days − 0.2% costs > 0. Forward returns and excess returns at 5, 21, 63 and 126
   theory is clear), each ranked within the month and averaged; target = 63-day excess return
   rank.
 - **p̂**: LightGBM classifier of the triple-barrier outcome, **isotonic-calibrated per regime on
-  walk-forward predictions only**. Calibration buckets give the 95% Wilson interval (reference
+  walk-forward predictions only**. The isotonic fit uses quantile bins of at least 200 held-out
+  predictions, so no probability rests on a handful of extreme cases (plain isotonic regression
+  turned a few extreme scores into 0% or 100%). Calibration buckets give the 95% Wilson interval (reference
   test: 230/400 → 57.5%, 52.6%–62.3%) and the bucket's average win W̄ and loss L̄.
 - **Horizon forecasts**: calibrated classifiers for "up" and "beat the S&P 500" at 1w/1m/3m/6m;
   LightGBM quantile models (10/25/50/90%) widened by **split-conformal** amounts so the 80% range
@@ -171,7 +173,9 @@ time; kept only if removing it costs ≥ 0.5%/yr in both development and validat
 net excess > 0 with t ≥ 2 in all three periods, ≥ +1%/yr over the best baseline (after the
 haircut), holdout ≥ 50% of development, calibration slope 0.8–1.2, max drawdown < 25%,
 DSR ≥ 0.95, PBO ≤ 20%. Forecast horizons leave research mode only if their holdout Brier beats
-the base rate with a calibration slope of 0.8–1.2. Revisions-only and third-party lists cannot be
+the holdout's own base rate with a calibration slope of 0.8–1.2. The holdout record also lists a
+local dry-run evaluation on 2026-10-12 made before the calibration change above, so the site
+reports the holdout as evaluated twice. Revisions-only and third-party lists cannot be
 backtested (no point-in-time history).
 
 ## 11. Ledger and monitoring
