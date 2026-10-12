@@ -128,7 +128,14 @@ def update_short_interest(data_dir: Path, today: date, since: date) -> list[date
             raise
         if r is None:
             continue
-        df = pd.read_csv(io.StringIO(r.text), sep="|", dtype={"symbolCode": str})
+        try:
+            # Issue names can contain stray quotes: parse with quoting off, strip quotes after.
+            df = pd.read_csv(io.StringIO(r.text), sep="|", dtype=str, quoting=3, on_bad_lines="skip")
+            df.columns = [c.strip('"') for c in df.columns]
+            df = df.apply(lambda col: col.str.strip('"'))
+        except Exception as e:
+            log.warning("finra %s unreadable: %s", d, e)
+            continue
         df = df[df["marketClassCode"].isin(_MARKETS)]
         out = pd.DataFrame(
             {
