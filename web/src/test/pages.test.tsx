@@ -117,6 +117,25 @@ describe('health page', () => {
   })
 })
 
+describe('today page', () => {
+  it('uses the small today.json and skips the full screener when there are no holdings', async () => {
+    localStorage.clear()
+    const fetchMock = stubFetch({ ...ALL(), 'today.json': screener })
+    renderAt('/')
+    expect(await screen.findByText('Insider buying this week')).toBeInTheDocument()
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.endsWith('data/today.json'))).toBe(true)
+    expect(urls.some((u) => u.endsWith('data/screener.json'))).toBe(false)
+  })
+
+  it('falls back to screener.json when today.json does not exist', async () => {
+    const fetchMock = stubFetch(ALL())
+    renderAt('/')
+    expect(await screen.findByText('Insider buying this week')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('data/screener.json'))).toBe(true)
+  })
+})
+
 describe('missing values', () => {
   it('explain themselves when tapped', async () => {
     stubFetch({ ...ALL(), 'market.json': { ...market, regime: null } })

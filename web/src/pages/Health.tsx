@@ -55,7 +55,14 @@ function Models({ data }: { data: HealthData }) {
     <Card title="Models and safety">
       <dl>
         <Row label="Validation">
-          {data.validated.length > 0 ? <Badge tone="good">Passed: {data.validated.join(', ')}</Badge> : <Badge tone="warn">Research mode: nothing validated yet</Badge>}
+          {data.validated.length > 0 ? (
+            <span className="flex flex-col items-end gap-1">
+              <Badge tone="good">{data.validated.length} passed</Badge>
+              <span className="text-xs font-normal">{data.validated.join(', ')}</span>
+            </span>
+          ) : (
+            <Badge tone="warn">Research mode: nothing validated yet</Badge>
+          )}
         </Row>
         <Row label="Forecast method">{data.forecast_method === 'model' ? 'Trained models (walk-forward, calibrated)' : 'Fallback estimate — not calibrated'}</Row>
         <Row label="Model version">

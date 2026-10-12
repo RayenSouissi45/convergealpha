@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { IntradayCard } from '../components/IntradayCard'
 import { MarketCard } from '../components/MarketCard'
@@ -7,8 +7,9 @@ import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
 import { holdingStatus, usePortfolio } from '../lib/portfolio'
-import { useScreener } from '../lib/screener'
-import type { ScreenerRow } from '../types'
+import { useSiteJson } from '../lib/data'
+import { toRows, useScreener } from '../lib/screener'
+import type { ScreenerFile, ScreenerRow } from '../types'
 
 const num = (r: ScreenerRow, k: string) => (typeof r[k] === 'number' ? (r[k] as number) : null)
 const isBuy = (r: ScreenerRow) => r.label === 'BUY' || r.label === 'STRONG BUY — TOP CONVICTION'
@@ -58,9 +59,16 @@ function StockList({
 const RM = 'RESEARCH MODE: not yet validated.'
 
 export default function Today() {
-  const screener = useScreener()
   const [portfolio] = usePortfolio()
-  const rows = screener.state === 'ready' ? screener.data.rows : []
+  // today.json holds only the rows these lists can show (a few KB). The full screener (~1 MB) is
+  // loaded only to check holdings, or when an older export has no today.json.
+  const todayFile = useSiteJson<ScreenerFile>('today.json')
+  const todayRows = useMemo(() => (todayFile.state === 'ready' ? toRows(todayFile.data) : null), [todayFile])
+  const needFull = portfolio.holdings.length > 0 || todayFile.state === 'missing' || todayFile.state === 'error'
+  const screener = useScreener(needFull)
+  const full = screener.state === 'ready' ? screener.data.rows : null
+  const rows = todayRows ?? full ?? []
+  const listState = todayRows ? 'ready' : needFull ? screener.state : 'loading'
   const byTicker = screener.state === 'ready' ? screener.data.byTicker : new Map<string, ScreenerRow>()
   const elig = rows.filter((r) => r.eligible === true)
   const top = (list: ScreenerRow[], key: string, n = 8, asc = false) =>
@@ -76,7 +84,7 @@ export default function Today() {
     .filter((r) => num(r, 'days_to_earnings') !== null && (num(r, 'days_to_earnings') as number) >= 0 && (num(r, 'days_to_earnings') as number) <= 5 && r.eligible === true)
     .sort((a, b) => (num(a, 'days_to_earnings') ?? 0) - (num(b, 'days_to_earnings') ?? 0) || (num(b, 'adv_dollar') ?? 0) - (num(a, 'adv_dollar') ?? 0))
     .slice(0, 10)
-  const candidates = elig.filter(isBuy)
+  const candidates = (full ?? rows).filter((r) => r.eligible === true && isBuy(r))
   const warnings = portfolio.holdings
     .map((h) => ({ h, s: holdingStatus(h, byTicker.get(h.ticker), candidates) }))
     .filter((x) => x.s.label !== 'HOLD')
@@ -89,7 +97,9 @@ export default function Today() {
         <IntradayCard />
         {portfolio.holdings.length > 0 && (
           <Card title="Warnings for my holdings" aside={<Link to="/portfolio" className="text-sm text-teal-700 underline dark:text-teal-400">Portfolio</Link>}>
-            {warnings.length === 0 ? (
+            {screener.state !== 'ready' ? (
+              <p className="text-sm text-slate-500" aria-busy={screener.state === 'loading'}>{screener.state === 'loading' ? 'Checking your holdings…' : 'Stock data is not available yet.'}</p>
+            ) : warnings.length === 0 ? (
               <p className="text-sm">All {portfolio.holdings.length} holdings: HOLD (no exit rule triggered).</p>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-zinc-800">
@@ -106,7 +116,7 @@ export default function Today() {
             )}
           </Card>
         )}
-        {screener.state === 'ready' ? (
+        {listState === 'ready' ? (
           <>
             <StockList
               title="Top Conviction"
@@ -183,7 +193,7 @@ export default function Today() {
               more="/screener?preset=earnings"
             />
           </>
-        ) : screener.state === 'loading' ? (
+        ) : listState === 'loading' ? (
           ['Top Conviction', 'Buy list (by expected value)', 'Most likely to rise (6 months)', 'Biggest upside (6 months)'].map((title) => (
             <Card key={title} title={title} className="min-h-[22rem]">
               <p className="text-sm text-slate-500" aria-busy="true">Loading…</p>

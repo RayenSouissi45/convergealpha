@@ -88,3 +88,36 @@ def test_chart_series_is_compact() -> None:
     assert isinstance(daily, dict)
     assert len(daily["t"]) == 10 and len(daily["c"]) == 10
     assert daily["t"][-1] > daily["t"][0]
+
+
+def test_today_subset_keeps_every_row_a_today_list_can_show() -> None:
+    import numpy as np
+    import pandas as pd
+
+    from convergealpha.export.site import TODAY_TOP, today_subset
+
+    n = 500
+    rng = np.random.default_rng(1)
+    t = pd.DataFrame(
+        {
+            "eligible": rng.uniform(size=n) < 0.8,
+            "label": ["NO TRADE"] * (n - 3) + ["BUY", "WATCH", "SELL / RISK WARNING"],
+            "p_up_6m": rng.uniform(size=n),
+            "p90_6m": rng.uniform(size=n),
+            "speed": rng.uniform(size=n),
+            "insider_buy_7d": np.where(rng.uniform(size=n) < 0.1, rng.uniform(1e4, 1e6, n), 0.0),
+            "days_to_earnings": rng.integers(-5, 30, n).astype(float),
+            "adv_dollar": rng.uniform(1e6, 1e9, n),
+        },
+        index=[f"T{i}" for i in range(n)],
+    )
+    t.loc[["T497", "T498"], "eligible"] = True
+    sub = today_subset(t)
+    elig = t[t["eligible"]]
+    assert set(elig["p_up_6m"].nlargest(8).index) <= set(sub.index)
+    assert set(t.loc[t["insider_buy_7d"] > 0, "insider_buy_7d"].nlargest(10).index) <= set(
+        sub.index
+    )
+    assert {"T497", "T498"} <= set(sub.index)  # BUY and WATCH always kept
+    assert "T499" not in sub.index or "T499" in elig.index
+    assert len(sub) <= 2 + 5 * TODAY_TOP

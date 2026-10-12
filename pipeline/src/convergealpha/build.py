@@ -371,6 +371,15 @@ def build(ctx: RunContext) -> int:
 
     # ---- exports
     site.write_screener(paths.site, t, SCREENER_FIELDS, as_of.strftime("%Y-%m-%d"), ctx.now)
+    site.write_screener(
+        paths.site,
+        site.today_subset(t),
+        SCREENER_FIELDS,
+        as_of.strftime("%Y-%m-%d"),
+        ctx.now,
+        name="today.json",
+    )
+    site.write_intraday_placeholder(paths.site)
     site.reset_stock_dir(paths.site)
     charts = PF.ChartBuilder(panel)
     states = ctx.states

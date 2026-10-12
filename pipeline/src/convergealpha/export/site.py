@@ -49,7 +49,12 @@ def _round(key: str, v: Any) -> Any:
 
 
 def write_screener(
-    site_dir: Path, table: pd.DataFrame, fields: Sequence[str], as_of: str, now: datetime
+    site_dir: Path,
+    table: pd.DataFrame,
+    fields: Sequence[str],
+    as_of: str,
+    now: datetime,
+    name: str = "screener.json",
 ) -> Path:
     """`table` is indexed by ticker and holds at least the requested fields."""
     present = [f for f in fields if f in table.columns or f == "ticker"]
@@ -67,7 +72,45 @@ def write_screener(
         "fields": present,
         "rows": rows,
     }
-    return write_json(payload, site_dir / "screener.json")
+    return write_json(payload, site_dir / name)
+
+
+TODAY_TOP = 20  # per list; the Today page shows at most 12
+
+
+def today_subset(t: pd.DataFrame) -> pd.DataFrame:
+    """Rows any list on the Today page can show, for today.json.
+
+    The page ranks these rows exactly as it would the full screener, and every list takes at most
+    TODAY_TOP rows, so the result is identical while phones download a few KB instead of ~1 MB.
+    """
+    idx = t.index
+    elig = (
+        t["eligible"].eq(True).fillna(False).astype(bool)
+        if "eligible" in t
+        else pd.Series(False, index=idx)
+    )
+    label = t["label"].astype("string") if "label" in t else pd.Series("", index=idx)
+    keep = elig & label.isin(["STRONG BUY — TOP CONVICTION", "BUY", "WATCH"]).fillna(False)
+
+    def num(key: str) -> pd.Series:
+        return pd.to_numeric(t[key], errors="coerce") if key in t else pd.Series(np.nan, index=idx)
+
+    for key in ("p_up_6m", "p90_6m", "speed"):
+        keep |= idx.isin(num(key)[elig].dropna().nlargest(TODAY_TOP).index)
+    ins = num("insider_buy_7d")
+    keep |= idx.isin(ins[ins > 0].nlargest(TODAY_TOP).index)
+    days = num("days_to_earnings")
+    soon = pd.DataFrame({"d": days, "adv": -num("adv_dollar").fillna(0)})[elig & days.between(0, 5)]
+    keep |= idx.isin(soon.sort_values(["d", "adv"]).head(TODAY_TOP).index)
+    return t[keep]
+
+
+def write_intraday_placeholder(site_dir: Path) -> None:
+    """The intraday check overwrites this during market hours; the page hides it when stale."""
+    path = site_dir / "intraday.json"
+    if not path.exists():
+        write_json({"generated_at": None, "checked": 0, "alerts": []}, path)
 
 
 def reset_stock_dir(site_dir: Path) -> Path:

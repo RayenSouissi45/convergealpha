@@ -5,7 +5,8 @@ import { formatAge } from '../lib/format'
 import { Badge, Card } from './ui'
 
 interface IntradayFile {
-  generated_at: string
+  /** null: no intraday check since the last daily build. */
+  generated_at: string | null
   checked: number
   alerts: { ticker: string; type: string; severity: 'high' | 'medium' | 'info'; text: string; url?: string }[]
 }
@@ -16,7 +17,7 @@ export function IntradayCard() {
   const [today] = useState(() => new Date().toDateString())
   if (res.state !== 'ready') return null
   const d = res.data
-  if (new Date(d.generated_at).toDateString() !== today) return null
+  if (!d.generated_at || new Date(d.generated_at).toDateString() !== today) return null
   return (
     <Card title="Intraday alerts" aside={<span className="text-xs text-slate-500">checked {formatAge(d.generated_at)} · {d.checked} stocks</span>}>
       {d.alerts.length === 0 ? (
