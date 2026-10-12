@@ -40,3 +40,10 @@ web/e2e/screenshots/
 
 # Local copy of the build prompt (kept out of the public repo)
 docs/BUILD_PROMPT.md
+
+# Local clone of the private data repo (RayenSouissi45/convergealpha-data)
+/data/
+
+# Demo run data and rebuildable caches
+/.demo-data/
+/.cache/

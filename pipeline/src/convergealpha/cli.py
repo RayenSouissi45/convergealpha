@@ -5,36 +5,107 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from convergealpha.export.health import write_health
+from convergealpha.config import Paths, load_dotenv
+from convergealpha.export import health as H
+from convergealpha.util import log as logutil
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _paths(args: argparse.Namespace) -> Paths:
+    return Paths.from_args(args.data, args.out, getattr(args, "cache", None))
 
 
 def _cmd_health(args: argparse.Namespace) -> int:
-    path = write_health(Path(args.out), datetime.now(UTC), os.environ)
+    paths = _paths(args)
+    states = H.load_states(paths.data) if paths.data.exists() else {}
+    path = H.write_health(paths.site, datetime.now(UTC), os.environ, states)
     print(f"wrote {path}")
     return 0
 
 
 def _cmd_daily(args: argparse.Namespace) -> int:
-    # Phase 0: the daily run only reports health. Each later phase adds its steps here,
-    # and health.json is always written last so it reflects what actually happened.
-    return _cmd_health(args)
+    from convergealpha.run import RunContext, run_daily
+
+    tickers = [t.strip().upper() for t in args.tickers.split(",")] if args.tickers else None
+    ctx = RunContext(paths=_paths(args), now=datetime.now(UTC), tickers_override=tickers)
+    return run_daily(ctx)
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """30 tickers end to end into web/public/data, in a separate data dir. Target: < 5 minutes."""
+    from convergealpha.run import DEMO_TICKERS, RunContext, run_daily
+
+    t0 = time.time()
+    paths = Paths.from_args(
+        args.data or REPO_ROOT / ".demo-data", args.out or REPO_ROOT / "web" / "public" / "data"
+    )
+    ctx = RunContext(paths=paths, now=datetime.now(UTC), tickers_override=list(DEMO_TICKERS))
+    code = run_daily(ctx)
+    print(f"demo finished in {time.time() - t0:.0f}s -> {paths.site}")
+    return code
+
+
+def _cmd_universe(args: argparse.Namespace) -> int:
+    from convergealpha.run import RunContext, step_universe
+
+    paths = _paths(args)
+    paths.ensure()
+    ctx = RunContext(paths=paths, now=datetime.now(UTC))
+    ctx.states = H.load_states(paths.data)
+    step_universe(ctx)
+    H.save_states(paths.data, ctx.states)
+    return 0
+
+
+def _cmd_backfill(args: argparse.Namespace) -> int:
+    from convergealpha.run import run_backfill
+
+    return run_backfill(_paths(args), datetime.now(UTC), args.shard, args.shards, dict(os.environ))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    load_dotenv(REPO_ROOT / ".env")
+    logutil.setup()
     parser = argparse.ArgumentParser(prog="convergealpha")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    for name, func, help_text in (
-        ("daily", _cmd_daily, "run every implemented daily step and export site JSON"),
-        ("health", _cmd_health, "write health.json only"),
-    ):
-        p = sub.add_parser(name, help=help_text)
-        p.add_argument("--out", default="site-data", help="output directory for site JSON")
-        p.set_defaults(func=func)
+    def common(
+        p: argparse.ArgumentParser,
+        data_default: str | None = "data",
+        out_default: str | None = "site-data",
+    ) -> None:
+        p.add_argument("--data", default=data_default, help="clone of the private data repo")
+        p.add_argument("--out", default=out_default, help="output directory for site JSON")
+        p.add_argument("--cache", default=None, help="scratch directory (rebuildable)")
+
+    p = sub.add_parser("daily", help="run every implemented daily step and export site JSON")
+    common(p)
+    p.add_argument("--tickers", default=None, help="comma-separated subset (testing)")
+    p.set_defaults(func=_cmd_daily)
+
+    p = sub.add_parser("demo", help="30-ticker end-to-end run into web/public/data")
+    common(p, None, None)
+    p.set_defaults(func=_cmd_demo)
+
+    p = sub.add_parser("backfill", help="download full price history for one shard of the universe")
+    common(p)
+    p.add_argument("--shard", type=int, required=True)
+    p.add_argument("--shards", type=int, required=True)
+    p.set_defaults(func=_cmd_backfill)
+
+    p = sub.add_parser("universe", help="refresh the stock universe only")
+    common(p)
+    p.set_defaults(func=_cmd_universe)
+
+    p = sub.add_parser("health", help="write health.json only")
+    common(p)
+    p.set_defaults(func=_cmd_health)
 
     args = parser.parse_args(argv)
     result: int = args.func(args)

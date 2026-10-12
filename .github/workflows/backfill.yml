@@ -1,0 +1,79 @@
+name: backfill
+
+# One-time (or repair) download of full price history since 2010 for the whole universe,
+# split into parallel shards. Each shard writes its own file to the private data repo.
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: Number of parallel shards
+        default: '12'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backfill
+  cancel-in-progress: false
+
+jobs:
+  universe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      shards: ${{ steps.matrix.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ vars.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_DEPLOY_KEY }}
+          path: data
+          fetch-depth: 1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/pyproject.toml
+      - run: pip install ./pipeline
+      - run: python -m convergealpha universe --data data
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - run: scripts/data-commit.sh data "universe refresh (backfill run ${{ github.run_id }})"
+      - id: matrix
+        run: |
+          n=${{ inputs.shards || '12' }}
+          echo "shards=$(python -c "import json; print(json.dumps(list(range($n))))")" >> "$GITHUB_OUTPUT"
+
+  prices:
+    needs: universe
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        shard: ${{ fromJson(needs.universe.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ vars.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_DEPLOY_KEY }}
+          path: data
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            reference
+            state
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/pyproject.toml
+      - run: pip install ./pipeline
+      - name: Download history for this shard
+        run: python -m convergealpha backfill --data data --shard ${{ matrix.shard }} --shards ${{ inputs.shards || '12' }}
+      # Sparse + blob-less clone: rebasing on other shards never downloads their files.
+      - name: Store in the data repo
+        run: scripts/data-commit.sh data "price history shard ${{ matrix.shard }} (run ${{ github.run_id }})" prices/history

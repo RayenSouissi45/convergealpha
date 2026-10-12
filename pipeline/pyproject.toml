@@ -10,6 +10,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "numpy>=2.0",
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "requests>=2.32",
+  "yfinance>=0.2.60",
+  "scipy>=1.13",
+  "scikit-learn>=1.5",
+  "lightgbm>=4.3",
   # IANA time zones for zoneinfo on Windows (Linux runners already have them).
   "tzdata>=2024.1",
 ]
@@ -38,9 +45,15 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
 # Formulas in docstrings use the spec's notation (σ, ρ, −, ×) on purpose.
-ignore = ["RUF001", "RUF002", "RUF003"]
+# Line length is left to `ruff format`; long strings and URLs stay readable on one line.
+ignore = ["RUF001", "RUF002", "RUF003", "E501", "N812"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 files = ["src"]
+
+# Data libraries without usable stubs are treated as untyped (Any); our own code stays strict.
+[[tool.mypy.overrides]]
+module = ["pandas.*", "yfinance.*", "sklearn.*", "lightgbm.*", "scipy.*", "pyarrow.*"]
+ignore_missing_imports = true

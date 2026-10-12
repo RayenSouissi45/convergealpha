@@ -1,11 +1,16 @@
 name: daily
 
-# Mon-Fri after the US close: run the pipeline, then publish the site with the fresh data.
+# Mon-Fri after the US close: run the pipeline against the private data repo, store the new
+# snapshots there, then publish the site with the fresh data.
 # 22:30 UTC = 18:30 New York in summer, 17:30 in winter. GitHub may start scheduled runs late.
 on:
   schedule:
     - cron: '30 22 * * 1-5'
   workflow_dispatch:
+    inputs:
+      tickers:
+        description: Optional comma-separated subset (testing only)
+        default: ''
 
 permissions:
   contents: read
@@ -17,9 +22,15 @@ concurrency:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ vars.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_DEPLOY_KEY }}
+          path: data
+          fetch-depth: 1
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -27,8 +38,13 @@ jobs:
           cache-dependency-path: pipeline/pyproject.toml
       - run: pip install ./pipeline
       - name: Run pipeline
-        run: python -m convergealpha daily --out site-data
+        run: |
+          args=()
+          if [ -n "${TICKERS}" ]; then args+=(--tickers "${TICKERS}"); fi
+          python -m convergealpha daily --data data --out site-data "${args[@]}"
         env:
+          TICKERS: ${{ inputs.tickers }}
+          HOLDINGS: ${{ vars.HOLDINGS }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
@@ -39,7 +55,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      # deploy.yml also reuses this artifact for code-only redeploys between daily runs.
+      - name: Store new data in the private data repo
+        if: ${{ !inputs.tickers }}
+        run: scripts/data-commit.sh data "daily run ${{ github.run_id }}"
+      # The site JSON is public anyway (it is the website). deploy.yml reuses it for code-only
+      # redeploys between daily runs.
       - uses: actions/upload-artifact@v7
         with:
           name: site-data
