@@ -37,3 +37,6 @@ Thumbs.db
 web/test-results/
 web/playwright-report/
 web/e2e/screenshots/
+
+# Local copy of the build prompt (kept out of the public repo)
+docs/BUILD_PROMPT.md
