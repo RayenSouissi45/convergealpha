@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Personal US stock decision dashboard: calibrated odds, upside, speed and clear labels. Not financial advice." />
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>ConvergeAlpha</title>
+    <script>
+      // Apply the saved theme before first paint so there is no light/dark flash.
+      (function () {
+        var pref = 'system'
+        try {
+          pref = localStorage.getItem('ca-theme') || 'system'
+        } catch (e) {}
+        var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>ConvergeAlpha needs JavaScript to show stock data.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

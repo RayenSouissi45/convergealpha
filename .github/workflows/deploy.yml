@@ -1,0 +1,121 @@
+name: deploy
+
+# Builds the website and publishes it to GitHub Pages (default) or Cloudflare Pages.
+# - Called by daily.yml with that run's fresh pipeline output.
+# - Runs on its own for website-only changes, reusing the latest successful daily run's output.
+# Choose the host with the repository variable DEPLOY_TARGET: `github-pages` or `cloudflare`.
+on:
+  workflow_call:
+    inputs:
+      data_artifact:
+        description: Artifact in the calling run that holds the site JSON
+        type: string
+        default: ''
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TARGET: ${{ vars.DEPLOY_TARGET || 'github-pages' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Get pipeline output from this run
+        if: inputs.data_artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.data_artifact }}
+          path: web/public/data
+
+      - name: Get pipeline output from the latest successful daily run
+        if: ${{ !inputs.data_artifact }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow daily.yml --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "::notice::No successful daily run yet; publishing the site without data."
+            exit 0
+          fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name site-data --dir web/public/data \
+            || echo "::warning::Could not get site-data from run $run_id; publishing without data."
+
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+        env:
+          VITE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+
+      - name: Upload for GitHub Pages
+        if: env.TARGET == 'github-pages'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/dist
+      - name: Upload for Cloudflare Pages
+        if: env.TARGET == 'cloudflare'
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-dist
+          path: web/dist
+          retention-days: 3
+
+  github-pages:
+    needs: build
+    if: (vars.DEPLOY_TARGET || 'github-pages') == 'github-pages'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: deploy-github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  cloudflare:
+    needs: build
+    if: vars.DEPLOY_TARGET == 'cloudflare'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: write
+    concurrency:
+      group: deploy-cloudflare
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: site-dist
+          path: dist
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT || 'convergealpha' }} --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+/* Theme follows the `dark` class set in index.html (system default, overridable). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-teal-600 dark:outline-teal-400;
+}

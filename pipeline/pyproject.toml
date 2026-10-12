@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "convergealpha"
+version = "0.1.0"
+description = "ConvergeAlpha pipeline: ingest -> features -> models -> forecasts -> JSON export."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=2.0",
+  # IANA time zones for zoneinfo on Windows (Linux runners already have them).
+  "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+convergealpha = "convergealpha.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/convergealpha"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
+# Formulas in docstrings use the spec's notation (σ, ρ, −, ×) on purpose.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
