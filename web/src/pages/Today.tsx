@@ -42,9 +42,9 @@ function StockList({
           {rows.map((r) => (
             <li key={r.ticker}>
               <Link to={`/stock/${encodeURIComponent(r.ticker)}`} className="flex min-h-12 items-center justify-between gap-3 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800">
-                <span className="min-w-0">
-                  <span className="font-semibold">{r.ticker}</span>{' '}
-                  <span className="truncate text-sm text-slate-500 dark:text-zinc-400">{String(r.name ?? '')}</span>
+                <span className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="shrink-0 font-semibold">{r.ticker}</span>
+                  <span className="min-w-0 truncate text-sm text-slate-500 dark:text-zinc-400">{String(r.name ?? '')}</span>
                 </span>
                 <span className="shrink-0 text-right text-sm tabular-nums">{metric(r)}</span>
               </Link>

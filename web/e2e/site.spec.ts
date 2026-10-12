@@ -25,7 +25,9 @@ for (const [hash, heading] of PAGES) {
     await expect(page.getByRole('complementary', { name: 'Research mode' })).toBeVisible()
 
     const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      // Compare with the device width: on phones an overflow also widens the layout viewport.
+      (w) => document.documentElement.scrollWidth - Math.min(w, document.documentElement.clientWidth),
+      page.viewportSize()!.width,
     )
     expect(overflow).toBeLessThanOrEqual(0)
     expect(errors).toEqual([])
@@ -125,4 +127,26 @@ test('6,000-row screener stays virtualized and scrolls to the end', async ({ pag
   })
   // The last of 6,000 rows (row index 6,001 counting the header) is reachable.
   await expect(table.locator('[aria-rowindex="6001"]')).toBeVisible()
+})
+
+test('long company names never widen the page', async ({ page }) => {
+  const long = 'Very Long Company Name Holdings American depositary shares, each representing sixty Class A ordinary shares'
+  for (const file of ['screener.json', 'today.json']) {
+    await page.route(`**/data/${file}`, async (route) => {
+      const res = await route.fetch()
+      if (!res.ok() || !(res.headers()['content-type'] ?? '').includes('json')) return route.fulfill({ response: res })
+      const json = (await res.json()) as { fields: string[]; rows: unknown[][] }
+      const i = json.fields.indexOf('name')
+      for (const row of json.rows) row[i] = long
+      return route.fulfill({ response: res, json })
+    })
+  }
+  const width = page.viewportSize()!.width
+  for (const hash of ['#/', '#/screener', '#/compare', '#/portfolio']) {
+    await page.goto(hash)
+    await page.waitForLoadState('networkidle')
+    // Compare with the device width: on phones an overflow also widens the layout viewport.
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect(scrollWidth, hash).toBeLessThanOrEqual(width)
+  }
 })
