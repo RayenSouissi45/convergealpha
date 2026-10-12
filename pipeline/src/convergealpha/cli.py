@@ -103,7 +103,12 @@ def _cmd_weekly(args: argparse.Namespace) -> int:
     if not args.no_validation:
         from convergealpha.validate import lab
 
-        lab.run(ctx, Path(args.models), Path(args.out))
+        # A failing lab must not block the model bundle: without validation.json nothing is
+        # marked validated, so every forecast keeps its RESEARCH MODE badge.
+        try:
+            lab.run(ctx, Path(args.models), Path(args.out))
+        except Exception:
+            logutil.get(__name__).exception("validation lab failed; models published unvalidated")
     return 0
 
 
