@@ -89,7 +89,7 @@ export interface PlanSection {
 
 
 const RESEARCH = (
-  <Tip content="No probability on this site has passed the validation lab yet. Treat it as research, not a promise." label="Research mode: not yet validated" className="no-underline">
+  <Tip content="This has not passed the validation lab yet. Treat it as research, not a promise." label="Research mode: not yet validated" className="no-underline">
     <Badge tone="warn">RESEARCH MODE — not yet validated</Badge>
   </Tip>
 )
@@ -165,8 +165,17 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
   const isValid = (k: string, kind: 'up' | 'beat') => (typeof f.validated === 'object' ? !!f.validated[k]?.[kind] : !!f.validated)
   const promise = (k: (typeof keys)[number], what: string, kind: 'up' | 'beat') =>
     `${what} after ${H_LABEL[k]} (${f.horizons?.[k].days} trading days). ${isValid(k, kind) ? 'Validated on the holdout.' : 'RESEARCH MODE: not yet validated.'} Method: ${f.method}.${n(k) ? ` Calibrated on ${n(k)!.toLocaleString('en-US')} held-out past cases.` : ' No sample size: this is a model-free estimate.'}`
+  const nValid = keys.reduce((a, k) => a + (isValid(k, 'up') ? 1 : 0) + (isValid(k, 'beat') ? 1 : 0), 0)
+  const aside =
+    nValid === 0 ? (
+      RESEARCH
+    ) : (
+      <Tip content="Probabilities without a * passed the validation lab on the holdout (better than the base rate and well calibrated). Those with a * are still research." label="Partly validated" className="no-underline">
+        <Badge tone={nValid === 2 * keys.length ? 'good' : 'warn'}>{nValid === 2 * keys.length ? 'Validated' : `Partly validated (${nValid} of ${2 * keys.length})`}</Badge>
+      </Tip>
+    )
   return (
-    <Card title="Forecast" aside={RESEARCH} className="lg:col-span-2">
+    <Card title="Forecast" aside={aside} className="lg:col-span-2">
       <p className="mb-2 text-xs text-slate-500 dark:text-zinc-400">Method: {f.method}</p>
       <WhenVisible height="h-52">
         <Suspense fallback={<div className="h-52" />}>
