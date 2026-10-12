@@ -1,90 +1,198 @@
 # Methodology
 
-This file explains how ConvergeAlpha turns data into labels and probabilities. It grows with each
-build phase; the **Status** column says what is implemented today. The reference is the build
-prompt (and `docs/ConvergeAlpha_v3_Final_Specification.pdf` once added; where they differ, the
-prompt wins).
+How ConvergeAlpha turns free data into labels, probabilities and position plans. Every formula
+below is implemented in `pipeline/src/convergealpha/` and covered by tests in `pipeline/tests/`.
+The build prompt is the reference; where this document had to choose (the spec left a detail
+open) the choice is marked **Choice**.
 
 **Honesty principle.** No tool can make a stock rise for sure. The app puts the odds in your
 favour, shows exactly what each percentage promises, and says NO TRADE when the evidence is weak.
 Every probability carries a "RESEARCH MODE — not yet validated" badge until the validation lab
-(section 9) passes for that horizon or label.
+passes for that horizon or label.
 
-## Status by section
+---
 
-| Section | Status |
-|---|---|
-| Point-in-time data rule (16:15 New York decision time) | Implemented: `config.decision_cutoff` |
-| Core formulas (normalization, Wilson, N_eff, costs, EV, Kelly, sizing, fallback P(up)) | Implemented with reference tests: `pipeline/src/convergealpha/core/stats.py` |
-| Universe, prices, returns, volatility, trend | Phase 1 |
-| Evidence data (analysts, estimates, earnings, insiders, fundamentals, short interest, options, macro, news) | Phase 2 |
-| Families F1–F7, N_eff, disagreement, regime, blocking events, labels, position plan | Phase 3 |
-| Models L0–L3, per-horizon forecasts, conformal ranges, analogs, event patterns | Phase 4 |
-| Validation lab | Phase 5 |
-| Ledger, scorecard, baseline race, kill switch, alerts | Phase 6 |
+## 1. Data timing (point-in-time)
 
-## Point-in-time rule
+- Decision time for day D: **16:15 New York**. A daily bar dated D is stored only if it was
+  downloaded after D's decision time (`util/calendar.last_completed_session`).
+- SEC data counts from its **filing date**, FINRA short interest from an estimated **publication
+  date** (settlement + 8 trading days), analyst data from the **snapshot time**, insider trades
+  from the **filing date**. Fundamentals keep only the **first-reported** value of each period
+  (no restatements) — `sources/fundamentals.first_reported`.
+- Prices are stored append-only with the download day (`basis`). Yahoo's prices are
+  split-adjusted as of that day, so a later split is applied at load time to rows downloaded
+  before it (`sources/prices.adjustment_factors`); the total-return index is rebuilt from closes
+  and dividends: r_t = (close_t + dividend_t) / close_(t−1) − 1.
+- Leakage tests (`tests/test_leakage.py`, `tests/test_prices.py`) fail the build if a model input
+  shares a name with an outcome column, if an unfinished bar could be stored, or if the holdout
+  log shows more than one evaluation.
 
-Every stored value keeps `source`, `as_of` (when it was published) and `retrieved_at`. A value can
-influence the decision for trading day D only if `as_of` is before **D at 16:15 New York time**.
-Build-time leakage tests (phase 1+) fail the build if any feature breaks this rule, or if the
-holdout period is evaluated more than once.
+## 2. Universe
 
-## Implemented formulas
+US common stocks listed on NYSE, Nasdaq and NYSE American (Nasdaq Trader directories, ETF and
+test issues removed; warrants, units, rights, preferreds, notes, funds and blank-check shells
+removed by security name; SIC 6770 shells have no sector). ADRs are kept and flagged. Every
+ticker ever seen stays in the history. **Eligible for signals** = price ≥ $5, average daily
+traded value (21 days) ≥ $10M, priced on the last session.
 
-All rates are fractions (0.0029 = 0.29%).
+## 3. Normalization
 
-### Signal normalization (section 4)
+For each raw signal across the universe on a date: winsorize at the 1st/99th percentile; robust
+z inside the sector z = (x − median_sector) / (1.4826 · MAD_sector), clipped to [−3, 3];
+score = 100 · Φ(z). A family score is the average of its signal scores, re-normalized the same
+way. **Choice:** a sector with fewer than 5 values uses the universe median/MAD; for sparse
+signals (MAD = 0, e.g. insider buying is zero for most stocks) the standard deviation is used;
+missing values stay missing.
 
-For each raw signal across the universe on one day:
+## 4. Evidence families (live)
 
-1. Winsorize at the universe 1st and 99th percentiles.
-2. Robust z within the sector: `z = (x − median_sector) / (1.4826 · MAD_sector)`, clipped to [−3, 3].
-3. `score = 100 · Φ(z)`.
+| Family | Inputs and formula | Notes |
+|---|---|---|
+| **F1 Opinion** | Platforms: Yahoo consensus (5 − mean)/4·100, Yahoo and Finnhub recommendation trends (2SB + B − S − 2SS)/total, mean-target upside, net upgrades + price-target changes over 90 days, manual CSV ratings. Credibility c = max(h − 0.47, 0.01) with h = (wins + 10)/(signals + 20); F1 = F1_raw − (a + b2·F2 + b5·F5) fitted across stocks, then normalized | No measured credibility yet → equal weights (h = 0.5) |
+| **F2 Revisions** | 0.6·z(Rev60) + 0.4·z(Breadth) (+0.2·z(next-year Rev60)), Rev60 = (EPS_FY1 now − 60 days ago)/abs(60 days ago) | **Choice:** breadth uses Yahoo's 30-day up/down counts (60-day counts are not available free) |
+| **F3 Earnings** | 0.5·z(SUE) + 0.2·z(news tone), only 1–70 trading days after the report; SUE = (actual − consensus)/stdev of the previous 8 surprises | Revenue surprise has no free source (weight renormalized) |
+| **F4 Insiders & ownership** | 0.7·z(insider value) + 0.3·z(institutional accumulation); insider value = log(1 + $bought/100,000) × 1.5 if ≥ 2 insiders bought within 30 days − 0.25·log(1 + $sold/100,000), opportunistic open-market trades filed in the last 90 days | Routine = traded in the same calendar month in each of the 3 prior years; 10b5-1 plan trades excluded |
+| **F5 Price & trend** | 0.5·z(residual momentum) + 0.25·z(industry momentum, 6 months) + 0.25·z(trend flag); residual momentum = Σ residuals of months t−12…t−2 / stdev, from a 36-month regression on market and sector returns; capped at 60 if the 1-month return is in the top 5% | Needs ≥ 1 year of history |
+| **F6 Quality & value** | mean of z(ROIC), z(gross profit/assets), −z(accruals), z(FCF yield), −z(debt/EBITDA), trailing 12 months from first-reported XBRL facts | Quarters derived from cumulative YTD facts; Q4 = year − 9 months; debt with negative EBITDA = 20 |
+| **F7 Context** | Regime, blocking events, liquidity, short interest, implied volatility, news tags | Never votes; blocks or shrinks |
 
-Implementation choices not fixed by the spec:
-- Missing values stay missing (shown as "—"); they are never imputed into a score.
-- A sector with fewer than 5 valid values, or with zero spread (MAD = 0), uses the universe-wide
-  median and MAD. If the universe spread is also zero, every score is 50.
+**Independence and agreement.** N_eff = (Σw)² / ΣΣ wᵢwⱼρᵢⱼ over bullish families (score > 50)
+(reference tests: 6 at ρ 0.6 → 1.5; 4 at ρ 0.2 → 2.5). **Choice:** until 3 years of live
+family history exist, ρ is the cross-sectional correlation of family scores across eligible
+stocks. Disagreement D = standard deviation of the available family scores.
 
-### Effective number of independent sources (section 4)
+## 5. Regime and blocking events
 
-`N_eff = (Σw)² / ΣΣ w_i w_j ρ_ij`. Reference tests: 6 equal sources at ρ = 0.6 → 1.5;
-4 at ρ = 0.2 → 2.5.
+Normal = S&P 500 above its 200-day average and VIX < 25 (and the high-yield spread not up more
+than 1 point in 3 months); Stress = below the 200-day average and VIX ≥ 30 (no new buys);
+Caution = anything else. Blocking events: earnings within 5 trading days (except entries 1–10
+days after a report); share offering (424B1/4/5/7, S-1, F-1 in 14 days, or news); merger/takeover
+(SC 14D9, SC TO-T, merger proxies in 90 days, or news); IPO lock-up expiry (≈180 days after the
+first price); auditor change (8-K 4.01); restatement (8-K 4.02); SEC/DOJ investigation, going
+concern (news keywords); late filing (NT 10-K/10-Q). **Choice:** no free FDA calendar exists, so
+FDA dates are shown as news tags only; the AI event layer runs only with an Anthropic key.
 
-### Wilson interval (section 5)
+## 6. Models (weekly)
 
-95% Wilson score interval for k successes out of n. Reference test: 230/400 = 57.5%
-(52.6%–62.3%).
+Training panel: every month-end since December 2012, eligible stocks only (≈ 2,000–2,500 per
+month). Point-in-time features: past returns (1, 3, 6, 12−1 months), residual and industry
+momentum, trend, volatility, ATR %, distance from the 52-week high, beta, size, liquidity,
+insider value, the five F6 ratios, a seasonal-random-walk earnings surprise from first-reported
+XBRL EPS, short interest (2019+), the historical family scores F3h–F6h, their disagreement and
+the regime. **F1 and F2 have no point-in-time history before live snapshots began, so they are
+not model inputs yet** (spec: zero weight until proven; displayed as information).
 
-### Trading costs and expected value (section 5)
+Labels: **triple barrier** — entry at the next session's open E, upper E + 3·ATR(14), lower
+E − 2·ATR(14), 60 trading days; a gap through a barrier exits at the open; if both barriers are
+touched the same day the loss is assumed; "correct" = exit return − S&P 500 return over the same
+days − 0.2% costs > 0. Forward returns and excess returns at 5, 21, 63 and 126 trading days.
 
-`C = spread + 2·commission + 2·impact`, with `impact = 0.5 · σ_daily · √(order / ADV)`.
-Reference test: σ 2%, order 1% of ADV, spread 0.05%, commission 0.02% → C = 0.29%.
+- **L1**: ridge on the family scores + LightGBM on all features (monotone constraints where
+  theory is clear), each ranked within the month and averaged; target = 63-day excess return
+  rank.
+- **p̂**: LightGBM classifier of the triple-barrier outcome, **isotonic-calibrated per regime on
+  walk-forward predictions only**. Calibration buckets give the 95% Wilson interval (reference
+  test: 230/400 → 57.5%, 52.6%–62.3%) and the bucket's average win W̄ and loss L̄.
+- **Horizon forecasts**: calibrated classifiers for "up" and "beat the S&P 500" at 1w/1m/3m/6m;
+  LightGBM quantile models (10/25/50/90%) widened by **split-conformal** amounts so the 80% range
+  covers 80% of held-out outcomes.
+- **L2 meta-model**: logistic regression trained only on L1's top 5% (walk-forward), predicting
+  whether that specific trade works, from L1 rank, D, number of families, regime, ATR %, days
+  since the report, liquidity, crowding (short interest), distance from the 52-week high, sector.
+- **Analogs**: the 200 most similar past setups (standardized features, at most one per stock per
+  6 months, never the stock itself); their 6-month up rate with a Wilson interval; a warning when
+  model and analogs differ by more than 8 points. Top Conviction rule C7 needs ≥ 100 such setups
+  with a Wilson lower bound ≥ 65%.
+- Walk-forward: yearly refit; each model trains only on rows whose label window plus a 10-day
+  embargo ends before the test year (purge = label horizon + 10 trading days).
 
-`EV = p̂·W̄ − (1 − p̂)·L̄ − C`, with W̄ and L̄ taken from the same calibration bucket as p̂.
+Costs: C = spread + 2·commission + 2·impact, impact = 0.5·σ_daily·√(order/ADV) (reference test
+0.29%). Spread estimated from liquidity (0.03%–0.3%), commission 0.02% per side, order $10,000
+(your own size is used in the browser). EV = p̂·W̄ − (1 − p̂)·L̄ − C.
 
-### Position sizing (section 7)
+**Fallback before models exist:** P(up) = Φ(((μ − σ²/2)·T)/(σ·√T)) with μ = risk-free +
+β·5% + a small alpha (≤ ±4%/yr from the composite family score) and σ = blend of realized and
+implied volatility; P(beat) from the alpha and tracking volatility; EV = expected 63-day excess −
+costs. Labelled "estimate — not calibrated"; labels built on it are marked provisional.
 
-- Planned exit `X = max(E − 2·ATR, 0.92·E)` — always called the *planned exit level*, never the
-  maximum loss, because prices can gap through it.
-- Gap stress `G = E · |mean of the worst 2% overnight returns over 500 days|`.
-- Risk per share `r = max(E − X, G)`.
-- Shares `= 0.75% · equity · tier / r` (tier 1 = full, tier 2 = half), capped by ¼-Kelly on the
-  Wilson lower bound (as a fraction of equity invested), 10% of equity, and 1% of ADV. Whole
-  shares, rounded down.
-- Kelly `f* = p − (1 − p)/b`. Reference tests: p 0.53, b 11/7 → 23.1%; equity $10,000, E $100,
-  X $92, G $9 → 5 shares (the ¼-Kelly cap binds).
+Speed = expected gain per month (median 6-month forecast ÷ 6) ÷ monthly volatility.
 
-### Fallback probability before models are validated (section 5)
+## 7. Labels
 
-`P(up) ≈ Φ(((μ − σ²/2)·T) / (σ·√T))`, with T in years (252 trading days), μ the expected return
-estimate and σ blended realized/implied volatility. Always labelled "estimate — not calibrated".
+BUY needs all of R1–R12: ≥ 5 of 6 families fresh; regime not Stress; L1 rank in the top 2%; ≥ 4
+families ≥ 60 and none ≤ 25; N_eff ≥ 2.5; D ≤ 22; p̂ ≥ 55% and its Wilson lower bound ≥ 52% (+3
+points in Caution); meta-model ≥ 55%; EV ≥ +1%; no blocking event; price ≥ $5, ADV ≥ $10M,
+order ≤ 1% of ADV; portfolio limits (checked in your browser). Tier 1 = p̂ ≥ 60% and N_eff ≥ 3
+(full size), else tier 2 (half). WATCH = misses exactly one of R4–R9 by a small margin
+(R4: 3 families ≥ 60 or one ≤ 25; R5 ≥ 2.2; R6 ≤ 25; R7 within 2 points; R8 ≥ 53%; R9 ≥ 0.5%).
+STRONG BUY — TOP CONVICTION = tier 1 + all families ≥ 60 with ≥ 5 at 70+, N_eff ≥ 3 and D ≤ 15,
+≥ 3 opinion sources at their top rating, opportunistic insider buying (90 days) or top-10%
+revisions, Normal regime with volatility ≤ 30% and no blocking event, and the analog rule.
+SELL / RISK WARNING (screener) = a hard risk event or 4+ families below 35 in a downtrend.
+Holdings (browser): HOLD, ROTATE (21+ trading days below the 1-month 25th-percentile forecast
+while a candidate is ≥ 1.5× faster), SELL / RISK WARNING (planned exit hit, risk event,
+evidence decay = 3 of 6 families < 50, missing data, or the 60-day time stop).
 
-## Known biases
+## 8. Position plan
 
-- **Survivorship bias.** Free sources mostly lack delisted stocks. The pipeline never deletes a
-  ticker it has seen, and every backtested excess return is **halved** before it is shown.
-- **Short opinion history.** Point-in-time analyst ratings are only available from the day
-  snapshots start. Families without history are shown as information but get model weight only
-  after enough live snapshots.
+Planned exit X = max(E − 2·ATR, 0.92·E) — always "planned exit level", never "maximum loss".
+Gap stress G = E·|mean of the worst 2% overnight returns over 500 days|; risk per share
+r = max(E − X, G). Shares = 0.75% · equity · tier / r, capped by ¼-Kelly on the Wilson lower bound
+(f* = p − (1 − p)/b; reference: p 0.53, b 11/7 → 23.1%; equity $10,000, E $100, X $92, G $9 →
+5 shares), 10% of equity and 1% of ADV. Portfolio limits: ≤ 10 positions, ≤ 25% per sector,
+≤ 20% per correlation cluster (average-linkage clusters of stocks with ρ > 0.7 over 6 months),
+open risk ≤ 6%, ≤ 3 new buys a day, drawdown throttle (−10% → half risk, −15% → no new buys).
+Exits: planned exit; break-even after +1.5 ATR; sell a third at E + 3 ATR then trail at the
+highest close − 3 ATR; evidence decay; 60-day time stop unless still a candidate. Entry: the next
+session after the first 15 minutes, limit ≤ +1% above the signal close, skip on a > 3% gap up.
+
+## 9. Event patterns
+
+Events: earnings vs the same quarter last year (XBRL SUE buckets), earnings vs consensus (Yahoo
+history), opportunistic insider clusters, dividend raises/cuts ≥ 10%, gaps ≥ 5% on ≥ 2× volume.
+Returns run from the first tradable open after the event (5 and 21 trading days) minus the
+stock's own average for that window in the same calendar years. Luck test: ≥ 20 events for the
+stock (or ≥ 200 across its 3-digit SIC peers), Benjamini–Hochberg FDR ≤ 10% across every test
+run, the same sign in both halves of history and in the 2024+ holdout. Guidance, buybacks, index
+inclusion and 8-K item history have no free dated history and are not tested.
+
+## 10. Validation lab
+
+Development = walk-forward 2016–2020, validation = 2021–2023, holdout = 2024 to mid-2026,
+**evaluated once per configuration** (logged with a hash in the private data repo; a second
+evaluation is flagged as contaminated and fails the check). Strategy: top 2% by L1, monthly,
+equal weight, 21-day excess return vs the S&P 500 net of turnover × 0.2%. Reported: net excess vs
+the S&P 500 and every baseline (momentum only, equal-weight family average, all eligible),
+hit rate with payoff and EV (60-day triple-barrier trades), Brier score vs base rate, calibration
+slope, max drawdown, turnover, by regime/sector/size, 2× costs, deflated Sharpe ratio (trials =
+all variants tried), probability of backtest overfitting (CSCV), and ablation (one family at a
+time; kept only if removing it costs ≥ 0.5%/yr in both development and validation). Pass:
+net excess > 0 with t ≥ 2 in all three periods, ≥ +1%/yr over the best baseline (after the
+haircut), holdout ≥ 50% of development, calibration slope 0.8–1.2, max drawdown < 25%,
+DSR ≥ 0.95, PBO ≤ 20%. Forecast horizons leave research mode only if their holdout Brier beats
+the base rate with a calibration slope of 0.8–1.2. Revisions-only and third-party lists cannot be
+backtested (no point-in-time history).
+
+## 11. Ledger and monitoring
+
+Every new BUY, STRONG BUY and SELL / RISK WARNING is appended to `ledger/ledger.jsonl` the day it
+appears, with the scores-snapshot path and its SHA-256, the model version, all probabilities and
+forecasts, and a SHA-256 hash chained to the previous entry. Outcomes (1w/1m/3m/6m return and
+excess vs the S&P 500) are appended later to a separate chained file; past entries are never
+edited (`tests/test_ledger.py` includes the tamper test). The scorecard compares predicted with
+realized frequencies per label and horizon. Kill switch: live drawdown −15%, rolling 12-month
+net excess < −5%, or a data-health failure → no new BUY labels, a banner and (if configured) a
+Telegram alert. Drift: population stability index of each model input vs the last two training
+years (alert > 0.25).
+
+## 12. Known biases and limits
+
+- **Survivorship bias**: free price history mostly lacks delisted stocks. Every backtested excess
+  return is **halved** before it is shown, and the "+1%/yr over the best baseline" check uses the
+  halved number.
+- **Short opinion history**: analyst snapshots start on 2026-10-12; F1 and F2 enter the models
+  only when enough live history exists.
+- Yahoo data is unofficial and can change without notice; data-quality checks (split repair,
+  zero/negative prices, stale feeds) and the Health page show coverage every day.
+- IFRS filers have no F6 (only US-GAAP XBRL is parsed).

@@ -248,6 +248,34 @@ def decide(
     counts = Counter(t.loc[elig, "label"])
     log.info("labels: %s", dict(counts))
 
+    # Kill switch (spec section 10): live drawdown, rolling 12-month excess, data health.
+    from convergealpha.ledger import monitor as MON
+
+    race_live = MON.race(ctx.paths.data, src.panel.tr)
+    data_ok = bool(
+        ctx.states.get("prices", {}).get("last_error") is None
+        and (ctx.states.get("prices", {}).get("coverage") or 0) > 0.5
+    )
+    ks = MON.kill_switch(race_live, data_ok)
+    if ks["active"]:
+        hit = t["label"].isin([R.LABEL_BUY, R.LABEL_TOP])
+        t.loc[hit, "label"] = R.LABEL_NONE
+        for tk in t.index[hit]:
+            stock_sections[str(tk)]["decision"]["label"] = R.LABEL_NONE
+            stock_sections[str(tk)]["decision"]["why"] = (
+                "No new buys: the kill switch is active (" + "; ".join(ks["reasons"]) + ")."
+            )
+        counts = Counter(t.loc[elig, "label"])
+    # Which forecast horizons passed the validation lab (from the model bundle).
+    validated = model_meta.get("validated", [])
+    for sec in stock_sections.values():
+        f = sec["forecast"]
+        f["validated"] = {
+            h: {"up": f"P(up) {h}" in validated, "beat": f"P(beat) {h}" in validated}
+            for h in HORIZON_NAMES.values()
+        }
+        sec["decision"]["research_mode"] = "BUY label (60-day trade)" not in validated
+
     cand = t[elig].sort_values("l1", ascending=False).index[:400].tolist()
     cand += t.index[t["label"].isin([R.LABEL_BUY, R.LABEL_TOP, R.LABEL_WATCH])].tolist()
     cand += t.index[elig & t["days_to_earnings"].between(-3, 7)].tolist()
@@ -274,6 +302,8 @@ def decide(
             "p10_6m",
             "price",
             "tier",
+            "ret_6m",
+            "eligible",
         ]
         + [f"p_up_{k}" for k in HORIZON_NAMES.values()]
         + [f"p_beat_{k}" for k in HORIZON_NAMES.values()]
@@ -296,9 +326,21 @@ def decide(
         "health": {
             "labels": dict(counts),
             "forecast_method": "model" if model is not None else "fallback",
+            "kill_switch": ks,
+            "validated": validated,
+            "research_mode": "BUY label (60-day trade)" not in validated,
+            "drift": model_meta.get("drift"),
             **model_meta.get("health", {}),
         },
-        "files": model_meta.get("files", {}),
+        "files": {
+            **model_meta.get("files", {}),
+            "race.json": {
+                "live": race_live,
+                "backtest": (model_meta.get("validation") or {}).get("periods"),
+                "holdout": (model_meta.get("validation") or {}).get("holdout"),
+            },
+        },
+        "kill_switch": ks,
     }
     return t, extra_out
 

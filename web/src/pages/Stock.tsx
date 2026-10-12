@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link, useParams } from 'react-router'
 import { Missing } from '../components/Missing'
+import { WhenVisible } from '../components/WhenVisible'
 import { Tip } from '../components/Tip'
 import {
   AnalystsCard,
@@ -195,9 +196,11 @@ export default function Stock() {
         {s.families ? <FamiliesCard f={s.families as FamiliesSection} /> : null}
         <Card title="Price" className="lg:col-span-2">
           {s.chart?.daily || s.chart?.weekly ? (
-            <Suspense fallback={<div className="h-72 sm:h-96" aria-busy="true" />}>
-              <PriceChart chart={s.chart} />
-            </Suspense>
+            <WhenVisible height="h-[21rem] sm:h-[27rem]">
+              <Suspense fallback={<div className="h-[21rem] sm:h-[27rem]" aria-busy="true" />}>
+                <PriceChart chart={s.chart} />
+              </Suspense>
+            </WhenVisible>
           ) : (
             <p className="text-sm text-slate-500">No chart data.</p>
           )}
@@ -227,7 +230,11 @@ export default function Stock() {
           </Card>
         ))}
         {s.plan ? <PlanCard p={s.plan as PlanSection} ticker={s.ticker} label={(s.decision as DecisionSection | undefined)?.label ?? 'NO TRADE'} sector={typeof s.sector === 'string' ? s.sector : null} /> : null}
-        {sections(s)}
+        {sections(s).map((card) => (
+          <WhenVisible key={card.key} height="h-64">
+            {card}
+          </WhenVisible>
+        ))}
         {s.patterns ? <PatternsCard p={s.patterns as PatternsSection} /> : null}
         {!s.patterns && PLANNED.map(([title, phase, text]) => (
           <Planned key={title} title={title} phase={phase}>

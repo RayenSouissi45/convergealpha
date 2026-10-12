@@ -44,6 +44,13 @@ export interface Health {
   }
   sources: HealthSource[]
   secrets: HealthSecret[]
+  labels?: Record<string, number>
+  forecast_method?: string
+  model_trained_at?: string
+  model_metrics?: Record<string, number | null>
+  ledger?: { entries: number; new_today: number; outcomes: number; verified: boolean } | null
+  drift?: { psi: Record<string, number> | null; alerts: string[] } | null
+  actions_usage?: { month: string; runs: number; wall_minutes: number; billing: string } | null
 }
 
 export type Cell = string | number | boolean | null

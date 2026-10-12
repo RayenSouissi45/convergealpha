@@ -159,7 +159,8 @@ export function Layout() {
     <div className="flex min-h-dvh flex-col">
       <Header />
       <Banners />
-      <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4">
+      {/* Full-height main keeps the footer below the fold while data loads (no layout shift). */}
+      <main id="main" className="mx-auto min-h-dvh w-full max-w-5xl flex-1 px-4 pt-4">
         <Outlet />
       </main>
       <Footer />

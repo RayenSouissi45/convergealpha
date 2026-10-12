@@ -71,6 +71,8 @@ test('screener lists stocks and opens a stock page', async ({ page }) => {
   await page.getByRole('searchbox', { name: /search/i }).fill('AAPL')
   await page.getByRole('link', { name: 'AAPL', exact: true }).click()
   await expect(page.getByRole('heading', { level: 1, name: /AAPL/ })).toBeVisible()
+  // Charts render only when scrolled into view (keeps the first load fast on phones).
+  await page.getByRole('heading', { level: 2, name: 'Price' }).scrollIntoViewIfNeeded()
   await expect(page.getByRole('img', { name: /Price chart/ })).toBeVisible()
   // The chart library draws into a canvas once it loads.
   await expect(page.locator('canvas').first()).toBeVisible()

@@ -42,8 +42,16 @@ export interface ColumnDef {
   width?: number
 }
 
-const P = (horizon: string, what: string) =>
-  `Chance the stock is ${what} after ${horizon}. RESEARCH MODE: not yet validated; until models are trained this is an uncalibrated estimate from expected return and volatility.`
+const P = (horizon: string, what: string) => `Chance the stock is ${what} after ${horizon}.`
+
+/** Validation status appended to probability tooltips (from health.json). */
+export function probabilityStatus(key: string, validated: string[], method: string | undefined): string {
+  const m = key.match(/^p_(up|beat)_(1w|1m|3m|6m)$/)
+  if (!m) return ''
+  const ok = validated.includes(`P(${m[1]}) ${m[2]}`)
+  const how = method === 'model' ? 'Calibrated walk-forward model.' : 'Fallback estimate from expected return and volatility (not calibrated).'
+  return ` ${ok ? 'Validated on the 2024–2026 holdout.' : 'RESEARCH MODE: not yet validated.'} ${how}`
+}
 
 export const COLUMNS: ColumnDef[] = [
   { key: 'ticker', label: 'Ticker', group: 'Stock', kind: 'ticker', help: 'Stock symbol.', phase: 1, defaultVisible: true, width: 84 },

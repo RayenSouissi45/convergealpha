@@ -289,7 +289,7 @@ def quarterly_flows(facts: pd.DataFrame) -> pd.DataFrame:
     10-Q income statements report 3-month values, but cash-flow statements report year-to-date
     (6 and 9 months). Facts sharing a start date are cumulative from that start, so each quarter
     is the difference between consecutive cumulative values; direct 3-month facts win when both
-    exist. Q4 comes out as annual minus nine months.
+    exist. Q4 comes out as annual minus nine months. (Vectorized: grouped shifts, no loops.)
     """
     f = first_reported(facts[facts["item"].isin(FLOW)].dropna(subset=["start"]))
     if f.empty:
@@ -299,54 +299,49 @@ def quarterly_flows(facts: pd.DataFrame) -> pd.DataFrame:
     direct = f[f["days"].between(80, 100)][["cik", "item", "end", "val", "filed"]].rename(
         columns={"filed": "known"}
     )
-    derived = []
-    cum = f[f["item"] != "eps_diluted"]  # EPS does not add up across periods
-    for (cik, item, _start), g in cum.groupby(["cik", "item", "start"], sort=False):
-        if len(g) < 2:
-            continue
-        g = g.sort_values("end")
-        ends, vals, filed, days = (
-            g["end"].to_numpy(),
-            g["val"].to_numpy(),
-            g["filed"].to_numpy(),
-            g["days"].to_numpy(),
-        )
-        for i in range(1, len(g)):
-            gap = days[i] - days[i - 1]
-            if 80 <= gap <= 100:
-                derived.append(
-                    (cik, item, ends[i], float(vals[i] - vals[i - 1]), max(filed[i], filed[i - 1]))
-                )
-    q = direct
-    if derived:
-        d = pd.DataFrame(derived, columns=["cik", "item", "end", "val", "known"])
-        d["end"] = pd.to_datetime(d["end"])
-        d["known"] = pd.to_datetime(d["known"])
-        q = pd.concat([direct.assign(_direct=0), d.assign(_direct=1)], ignore_index=True)
-        q = q.sort_values(["_direct", "known"]).drop(columns="_direct")
+    cum = f[f["item"] != "eps_diluted"].sort_values(
+        ["cik", "item", "start", "end"]
+    )  # EPS does not add up
+    g = cum.groupby(["cik", "item", "start"], sort=False)
+    prev_val, prev_days, prev_filed = g["val"].shift(1), g["days"].shift(1), g["filed"].shift(1)
+    gap = cum["days"] - prev_days
+    m = gap.between(80, 100)
+    derived = pd.DataFrame(
+        {
+            "cik": cum.loc[m, "cik"],
+            "item": cum.loc[m, "item"],
+            "end": cum.loc[m, "end"],
+            "val": (cum.loc[m, "val"] - prev_val[m]).astype("float64"),
+            "known": pd.concat([cum.loc[m, "filed"], prev_filed[m]], axis=1).max(axis=1),
+        }
+    )
+    q = pd.concat([direct.assign(_direct=0), derived.assign(_direct=1)], ignore_index=True)
+    q = q.sort_values(["_direct", "known"]).drop(columns="_direct")
     return q.drop_duplicates(["cik", "item", "end"], keep="first").reset_index(drop=True)
 
 
 def ttm(quarters: pd.DataFrame) -> pd.DataFrame:
-    """Trailing four quarters per (cik, item, end), requiring four consecutive quarters."""
-    out = []
-    for (cik, item), g in quarters.sort_values("end").groupby(["cik", "item"], sort=False):
-        ends = g["end"].to_numpy()
-        vals = g["val"].to_numpy()
-        known = g["known"].to_numpy()
-        for i in range(3, len(g)):
-            span = (ends[i] - ends[i - 3]) / np.timedelta64(1, "D")
-            if 250 <= span <= 300:
-                out.append(
-                    (
-                        cik,
-                        item,
-                        ends[i],
-                        float(vals[i - 3 : i + 1].sum()),
-                        known[i - 3 : i + 1].max(),
-                    )
-                )
-    return pd.DataFrame(out, columns=["cik", "item", "end", "val", "known"])
+    """Trailing four quarters per (cik, item, end), requiring four consecutive quarters
+    (the first and fourth quarter ends 250-300 days apart)."""
+    if quarters.empty:
+        return pd.DataFrame(columns=["cik", "item", "end", "val", "known"])
+    q = quarters.sort_values(["cik", "item", "end"]).reset_index(drop=True)
+    g = q.groupby(["cik", "item"], sort=False)
+    vals = q["val"] + g["val"].shift(1) + g["val"].shift(2) + g["val"].shift(3)
+    span = (q["end"] - g["end"].shift(3)).dt.days
+    known = pd.concat(
+        [q["known"], g["known"].shift(1), g["known"].shift(2), g["known"].shift(3)], axis=1
+    ).max(axis=1)
+    ok = span.between(250, 300) & vals.notna()
+    return pd.DataFrame(
+        {
+            "cik": q.loc[ok, "cik"],
+            "item": q.loc[ok, "item"],
+            "end": q.loc[ok, "end"],
+            "val": vals[ok].astype("float64"),
+            "known": known[ok],
+        }
+    ).reset_index(drop=True)
 
 
 def instants(facts: pd.DataFrame) -> pd.DataFrame:

@@ -105,8 +105,132 @@ def load_sources(
         news=news,
         filings=filings,
         as_of=as_of,
-        extras={"lexicon": lex.name},
+        extras={"lexicon": lex.name, "data_dir": d, "short_all": _short_history(d, stocks.index)},
     )
+
+
+def ledger_step(
+    ctx: RunContext, t: pd.DataFrame, extra: dict[str, Any], as_of: pd.Timestamp
+) -> dict[str, Any] | None:
+    """Record new signals before outcomes are known, fill matured outcomes, publish the scorecard."""
+    if "label" not in t:
+        return None
+    from datetime import UTC
+
+    from convergealpha.alerts import telegram
+    from convergealpha.config import SPY, holdings_from_env
+    from convergealpha.ledger import ledger as LG
+    from convergealpha.ledger import monitor as MON
+
+    d = ctx.paths.data
+    snaps = sorted(
+        p
+        for p in (d / "snapshots").glob("*/*/scores.parquet")
+        if p.parent.name < as_of.strftime("%Y%m%d")
+    )
+    prev = (
+        pd.read_parquet(snaps[-1], columns=["ticker", "label"])
+        .set_index("ticker")["label"]
+        .to_dict()
+        if snaps
+        else {}
+    )
+    lpath, opath = d / "ledger" / "ledger.jsonl", d / "ledger" / "outcomes.jsonl"
+    existing = LG.read(lpath)
+    already = {
+        (e["ticker"], e["label"]) for e in existing if e["date"] == as_of.strftime("%Y-%m-%d")
+    }
+    scope = t[t["eligible"].astype(bool) | (t["label"] == "SELL / RISK WARNING")]
+    sig = LG.new_signals(scope, prev)
+    sig = sig[[(tk, lab) not in already for tk, lab in sig["label"].items()]]
+    snap_path = d / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}" / "scores.parquet"
+    model_version = (extra.get("health") or {}).get("model_version")
+    generated = ctx.now.astimezone(UTC).isoformat(timespec="seconds")
+    new = (
+        LG.append(
+            lpath,
+            LG.make_entries(
+                sig,
+                as_of,
+                model_version,
+                str(snap_path.relative_to(d)).replace("\\", "/"),
+                LG.file_sha256(snap_path),
+                extra.get("stock_sections", {}),
+                prev,
+                generated,
+            ),
+        )
+        if len(sig)
+        else []
+    )
+    entries = LG.read(lpath)
+    outcomes = LG.read(opath)
+    panel_tr = ctx.extras_tr
+    if panel_tr is not None and SPY in panel_tr:
+        due = LG.due_outcomes(entries, outcomes, panel_tr, panel_tr[SPY], as_of)
+        if due:
+            LG.append(opath, due)
+            outcomes = LG.read(opath)
+    ok_l, why_l = LG.verify(lpath)
+    ok_o, why_o = LG.verify(opath)
+    backtest = None
+    val = (extra.get("files") or {}).get("validation.json")
+    if val:
+        backtest = {
+            k: v.get("strategies", {}).get("app") for k, v in (val.get("periods") or {}).items()
+        }
+        if val.get("holdout"):
+            backtest["holdout"] = val["holdout"].get("strategies", {}).get("app")
+    site.write_json_file(ctx.paths.site, "scorecard.json", MON.scorecard(outcomes, backtest))
+    by_seq: dict[int, list[dict[str, Any]]] = {}
+    for o in outcomes:
+        by_seq.setdefault(o["entry_seq"], []).append(o)
+    recent = entries[-300:]
+    site.write_json_file(
+        ctx.paths.site,
+        "ledger.json",
+        {
+            "verified": ok_l and ok_o,
+            "verify_detail": why_l if not ok_l else why_o,
+            "count": len(entries),
+            "outcomes": len(outcomes),
+            "entries": [{**e, "outcomes": by_seq.get(e["seq"], [])} for e in reversed(recent)],
+        },
+    )
+    # Phone alerts (optional).
+    holdings = set(holdings_from_env(ctx.env))
+    lines = [
+        f"New {e['label']}: {e['ticker']} at {e['price']:.2f}"
+        for e in new
+        if e["label"].startswith("STRONG BUY")
+    ]
+    lines += [
+        f"{e['ticker']} (holding): {e['label']}"
+        for e in new
+        if e["ticker"] in holdings and e["label"].startswith("SELL")
+    ]
+    ks = extra.get("kill_switch") or {}
+    if ks.get("active"):
+        lines.append("Kill switch ACTIVE: no new BUY labels. " + "; ".join(ks.get("reasons", [])))
+    telegram.send_many(lines, ctx.env)
+    log.info(
+        "ledger: %d new entries (%d total), %d outcomes, chain %s",
+        len(new),
+        len(entries),
+        len(outcomes),
+        "ok" if ok_l and ok_o else "BROKEN",
+    )
+    return {
+        "entries": len(entries),
+        "new_today": len(new),
+        "outcomes": len(outcomes),
+        "verified": ok_l and ok_o,
+    }
+
+
+def _short_history(d: Any, tickers: Any) -> pd.DataFrame:
+    s = M.load_short_interest(d)
+    return s[s["ticker"].isin(set(tickers))] if not s.empty else s
 
 
 def compute_regime(ctx: RunContext, panel: P.Panel) -> tuple[dict[str, Any] | None, pd.DataFrame]:
@@ -206,6 +330,7 @@ def build(ctx: RunContext) -> int:
         H.write_health(paths.site, ctx.now, ctx.env, ctx.states)
         return 1
     as_of = panel.close.index.max()
+    ctx.extras_tr = panel.tr
     snap = PF.snapshot(panel)
     priced = int(snap.reindex(tickers)["last_date"].eq(as_of).sum())
     coverage = priced / max(1, len(tickers))
@@ -221,6 +346,14 @@ def build(ctx: RunContext) -> int:
 
     src = load_sources(ctx, panel, snap, stocks)
     t = E.build_table(src)
+    from convergealpha.sources import plugins as PL
+
+    manual = PL.manual_ratings(ctx.paths.data, src.as_of)
+    if manual:
+        t.attrs["manual_ratings"] = manual
+        t["top_rated_sources"] = t["top_rated_sources"] + sum(
+            (s.reindex(t.index) >= 100).astype(int) for s in manual.values()
+        )
     t["eligible"] = t["eligible"].fillna(False).astype(bool)
     record_coverage(ctx, t, src)
 
@@ -342,6 +475,15 @@ def build(ctx: RunContext) -> int:
             paths.data / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}" / f"{name}.parquet",
         )
 
+    ledger_info = ledger_step(ctx, t, extra, as_of)
+    usage = None
+    try:
+        from convergealpha.ledger import monitor as MON
+
+        usage = MON.actions_usage()
+    except Exception as e:
+        log.warning("actions usage: %s", e)
+
     ctx.save()
     states_all = H.load_states(paths.data)
     H.write_health(
@@ -352,6 +494,9 @@ def build(ctx: RunContext) -> int:
         {
             "universe_count": len(stocks),
             "as_of": as_of.strftime("%Y-%m-%d"),
+            "ledger": ledger_info,
+            "actions_usage": usage,
+            "plugins": PL.status(paths.data, ctx.env),
             **extra.get("health", {}),
         },
     )

@@ -94,6 +94,19 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return code
 
 
+def _cmd_weekly(args: argparse.Namespace) -> int:
+    from convergealpha.models import weekly
+
+    ctx = _ctx(args)
+    ctx.load()
+    weekly.run(ctx, Path(args.models))
+    if not args.no_validation:
+        from convergealpha.validate import lab
+
+        lab.run(ctx, Path(args.models), Path(args.out))
+    return 0
+
+
 def _cmd_intraday(args: argparse.Namespace) -> int:
     from convergealpha.intraday import run
 
@@ -176,6 +189,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     common(p)
     p.set_defaults(func=_cmd_intraday)
+
+    p = sub.add_parser("weekly", help="rebuild the dataset, train and validate the models")
+    common(p)
+    tick(p)
+    p.add_argument("--models", default="models-out", help="where to write the model bundle")
+    p.add_argument("--no-validation", action="store_true")
+    p.set_defaults(func=_cmd_weekly)
 
     p = sub.add_parser("universe", help="refresh the stock universe only")
     common(p)

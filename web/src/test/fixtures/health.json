@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-12T20:05:21Z",
+  "generated_at": "2026-10-12T20:35:03Z",
   "pipeline_version": "0.1.0",
   "build_phase": 3,
   "status": "ok",
@@ -9,8 +9,8 @@
   "validated": [],
   "model_version": null,
   "kill_switch": {
-    "implemented": false,
-    "active": null,
+    "implemented": true,
+    "active": false,
     "reasons": []
   },
   "run": {
@@ -40,7 +40,7 @@
       "phase": 1,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 30,
       "coverage": 1.0,
@@ -66,7 +66,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 30,
       "coverage": 1.0,
@@ -79,7 +79,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 30,
       "coverage": 1.0,
@@ -105,7 +105,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 193256,
       "coverage": null,
@@ -118,7 +118,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 23,
       "coverage": 0.7667,
@@ -144,7 +144,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 30,
       "coverage": 1.0,
@@ -183,7 +183,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:05:21Z",
+      "last_success": "2026-10-12T20:35:03Z",
       "as_of": "2026-10-09",
       "records": 30,
       "coverage": 1.0,
@@ -295,5 +295,6 @@
     "NO TRADE": 24,
     "SELL / RISK WARNING": 6
   },
-  "forecast_method": "fallback"
+  "forecast_method": "fallback",
+  "drift": null
 }

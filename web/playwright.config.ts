@@ -6,7 +6,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: 'http://localhost:4173/' },
+  // Service workers are blocked so request interception in tests sees every fetch.
+  use: { baseURL: 'http://localhost:4173/', serviceWorkers: 'block' },
   projects: [
     { name: 'phone', use: { ...devices['Pixel 7'] } },
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },

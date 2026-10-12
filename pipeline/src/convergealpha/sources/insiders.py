@@ -110,6 +110,10 @@ def parse_dataset(raw: bytes) -> pd.DataFrame:
     )
     fn = _read_tsv(z, "FOOTNOTES.tsv", ["ACCESSION_NUMBER", "FOOTNOTE_TXT"])
 
+    if (
+        "AFF10B5ONE" not in sub
+    ):  # the 10b5-1 checkbox exists only since 2023; footnotes cover earlier years
+        sub["AFF10B5ONE"] = "0"
     tr = tr[tr["TRANS_CODE"].isin(["P", "S"])]
     own = own.drop_duplicates("ACCESSION_NUMBER")  # primary reporting owner only (joint filings)
     plan_acc = set(fn.loc[fn["FOOTNOTE_TXT"].str.contains(_PLAN, na=False), "ACCESSION_NUMBER"])

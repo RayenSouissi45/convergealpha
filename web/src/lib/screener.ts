@@ -32,9 +32,10 @@ async function load(): Promise<Loadable<Screener>> {
 }
 
 /** screener.json, loaded once per page view and shared by every page that needs it. */
-export function useScreener(): Loadable<Screener> {
+export function useScreener(enabled = true): Loadable<Screener> {
   const [state, setState] = useState<Loadable<Screener>>({ state: 'loading' })
   useEffect(() => {
+    if (!enabled) return
     let alive = true
     if (!cache) cache = load()
     void cache.then((v) => {
@@ -44,7 +45,7 @@ export function useScreener(): Loadable<Screener> {
     return () => {
       alive = false
     }
-  }, [])
+  }, [enabled])
   return state
 }
 

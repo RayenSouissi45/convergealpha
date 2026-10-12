@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Missing } from '../components/Missing'
-import { LabelBadge } from '../components/stock/decision'
+import { LabelBadge } from '../components/LabelBadge'
 import type { Cell } from '../types'
 import { COLUMN_BY_KEY, type ColumnKind } from './columns'
 import { formatDay, formatMoney, formatNum, formatPct, formatPctAbs, formatPrice, signClass } from './format'

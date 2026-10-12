@@ -12,7 +12,7 @@ export function MarketCard() {
   const res = useSiteJson<MarketFile>('market.json')
   if (res.state !== 'ready') {
     return (
-      <Card title="Market">
+      <Card title="Market" className="min-h-[22rem]">
         <p className="text-sm text-slate-500 dark:text-zinc-400">
           {res.state === 'loading' ? 'Loading…' : 'Market data appears after the first daily pipeline run.'}
         </p>
@@ -26,6 +26,7 @@ export function MarketCard() {
   const regime = m.regime
   return (
     <Card
+      className="min-h-[22rem]"
       title={`Market · ${formatDay(m.as_of)}`}
       aside={
         regime ? (

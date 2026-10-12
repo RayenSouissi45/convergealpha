@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { LabelBadge } from '../components/stock/decision'
+import { LabelBadge } from '../components/LabelBadge'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader, Row } from '../components/ui'
 import { formatMoney, formatPct, formatPctAbs, formatPrice, signClass } from '../lib/format'

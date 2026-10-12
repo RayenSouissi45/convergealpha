@@ -19,12 +19,16 @@ ROTATE, SELL / RISK WARNING, NO TRADE) together with the exact numbers behind it
 
 ```
 pipeline/   Python 3.12: ingest -> features -> models -> forecasts -> JSON export
+            (raw data lives in the private repo RayenSouissi45/convergealpha-data)
 web/        React + TypeScript + Vite + Tailwind, static, mobile-first
 docs/       methodology and data-source notes
 .github/workflows/
-  ci.yml       lint + tests on every push
-  daily.yml    Mon-Fri 22:30 UTC: pipeline -> deploy
-  deploy.yml   build the site and publish (GitHub Pages or Cloudflare Pages)
+  ci.yml        lint, types, unit + phone e2e tests on every push
+  daily.yml     Mon-Fri 22:30 UTC: prepare -> 6 fetch shards + finnhub -> build -> deploy
+  intraday.yml  every ~2 h in market hours: risk/event check for candidates and holdings
+  weekly.yml    Saturday: XBRL refresh, retrain walk-forward, validation lab, keep-alive
+  deploy.yml    build the site and publish (GitHub Pages or Cloudflare Pages)
+  backfill.yml / bootstrap.yml   one-time history loads
 ```
 
 ## Run it locally
@@ -34,9 +38,9 @@ Windows (PowerShell):
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
 pip install -e "pipeline[dev]"
-python -m convergealpha daily --out web/public/data
+python -m convergealpha demo        # 30 stocks, < 5 minutes, writes web/public/data
 cd web; npm ci; npm run dev          # http://localhost:5173
 ```
 
-Linux/macOS: `make install && make dev`. Tests: `make check` (or `pytest` in `pipeline/` and
+Linux/macOS: `make install && make demo && make dev`. Tests: `make check` (or `pytest` in `pipeline/` and
 `npm test && npm run e2e` in `web/`).

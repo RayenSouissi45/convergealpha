@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { formatDay, formatMoney, formatNum, formatPct, formatPctAbs, formatPrice, signClass } from '../../lib/format'
 import { Missing } from '../Missing'
+import { WhenVisible } from '../WhenVisible'
 import { Tip } from '../Tip'
 import { Badge, Card, Row } from '../ui'
 
@@ -248,9 +249,11 @@ export function EstimatesCard({ e }: { e: EstimatesSection }) {
       {points.length >= 2 && (
         <>
           <h3 className="mb-1 text-sm font-semibold">This year’s EPS estimate over 90 days</h3>
-          <Suspense fallback={<div className="h-44" />}>
-            <EpsChart points={points} />
-          </Suspense>
+          <WhenVisible height="h-44">
+            <Suspense fallback={<div className="h-44" />}>
+              <EpsChart points={points} />
+            </Suspense>
+          </WhenVisible>
         </>
       )}
       <Table head={['Period', 'Now', '30d ago', '90d ago', 'Up / down (30d)', 'Analysts']} caption="EPS estimates by period">

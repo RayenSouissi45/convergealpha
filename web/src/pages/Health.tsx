@@ -1,5 +1,6 @@
 import { Icon } from '../components/Icon'
 import { Missing } from '../components/Missing'
+import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader, Row, type Tone } from '../components/ui'
 import { formatAge, formatDateTime, formatNewYork, isStale } from '../lib/format'
 import { useHealth } from '../lib/health'
@@ -49,34 +50,42 @@ function Overview({ data }: { data: HealthData }) {
 }
 
 function Models({ data }: { data: HealthData }) {
+  const m = data.model_metrics
   return (
     <Card title="Models and safety">
       <dl>
         <Row label="Validation">
-          {data.validated.length > 0 ? (
-            <Badge tone="good">Passed: {data.validated.join(', ')}</Badge>
-          ) : (
-            <Badge tone="warn">Research mode</Badge>
-          )}
+          {data.validated.length > 0 ? <Badge tone="good">Passed: {data.validated.join(', ')}</Badge> : <Badge tone="warn">Research mode: nothing validated yet</Badge>}
         </Row>
+        <Row label="Forecast method">{data.forecast_method === 'model' ? 'Trained models (walk-forward, calibrated)' : 'Fallback estimate — not calibrated'}</Row>
         <Row label="Model version">
-          {data.model_version ?? <Missing reason="No model trained yet. Models arrive in build phase 4." />}
+          {data.model_version ?? <Missing reason="No trained model bundle yet: the weekly job trains them. Until then forecasts use the transparent fallback." />}
         </Row>
-        <Row label="Kill switch">
-          {data.kill_switch.implemented ? (
-            data.kill_switch.active ? (
-              <Badge tone="bad">Active</Badge>
-            ) : (
-              <Badge tone="good">Off</Badge>
-            )
+        {m && (
+          <Row label={<Tip content="Out-of-sample (walk-forward) quality of the 60-day trade probability: AUC above 0.5 means better than chance; Brier must beat the base rate.">Out-of-sample quality</Tip>}>
+            {`AUC ${m.auc_correct?.toFixed(3) ?? '—'} · Brier ${m.brier_correct?.toFixed(4) ?? '—'} vs ${m.brier_base?.toFixed(4) ?? '—'}`}
+          </Row>
+        )}
+        <Row label={<Tip content="No new BUY labels if the live strategy falls 15% from its peak, its rolling 12-month excess is below −5%, or the data fails to update.">Kill switch</Tip>}>
+          {data.kill_switch.implemented ? (data.kill_switch.active ? <Badge tone="bad">Active</Badge> : <Badge tone="good">Off</Badge>) : <Missing reason="Not computed in this run." />}
+        </Row>
+        <Row label={<Tip content="The prediction ledger is hash-chained: each entry includes the hash of the previous one, so past predictions cannot be edited unnoticed.">Prediction ledger</Tip>}>
+          {data.ledger ? (
+            <Badge tone={data.ledger.verified ? 'good' : 'bad'}>
+              {data.ledger.verified ? 'verified' : 'BROKEN'} · {data.ledger.entries} entries, {data.ledger.new_today} new
+            </Badge>
           ) : (
-            <Missing reason="Not implemented yet. The kill switch arrives in build phase 6." />
+            '—'
           )}
+        </Row>
+        <Row label={<Tip content="Population stability index of each model input vs the last two years of training data. Above 0.25 = the inputs look different from what the model learned on.">Data drift (PSI)</Tip>}>
+          {data.drift ? (data.drift.alerts.length ? <Badge tone="warn">Drift in {data.drift.alerts.join(', ')}</Badge> : <Badge tone="good">No input above 0.25</Badge>) : <Missing reason="Needs the trained model bundle." />}
         </Row>
         <Row label="Actions minutes used">
-          <Missing reason="Reported from build phase 6. Standard GitHub-hosted runners are free for public repositories." />
+          {data.actions_usage ? `${data.actions_usage.wall_minutes} min in ${data.actions_usage.runs} runs (${data.actions_usage.month}); ${data.actions_usage.billing}` : <Missing reason="Only measured on GitHub Actions. Standard runners are free for public repositories." />}
         </Row>
       </dl>
+      {data.kill_switch.active && <p className="mt-2 text-sm text-red-700 dark:text-red-400">{data.kill_switch.reasons.join(' · ')}</p>}
     </Card>
   )
 }

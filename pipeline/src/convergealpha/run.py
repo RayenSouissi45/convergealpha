@@ -58,6 +58,7 @@ class RunContext:
     states: dict[str, dict[str, Any]] = field(default_factory=dict)
     job: str = "build"
     touched: set[str] = field(default_factory=set)
+    extras_tr: Any = None  # total-return panel shared with the ledger step
 
     @property
     def today(self) -> pd.Timestamp:

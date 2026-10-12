@@ -1,0 +1,62 @@
+name: weekly
+
+# Saturday: refresh slow data (XBRL bulk), rebuild the point-in-time dataset, retrain the models
+# walk-forward, run the validation lab (holdout evaluated once per configuration), publish the
+# model bundle for the daily builds, and keep the scheduled workflows alive.
+on:
+  schedule:
+    - cron: '0 6 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ vars.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_DEPLOY_KEY }}
+          path: data
+          fetch-depth: 1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pipeline/pyproject.toml
+      - run: pip install ./pipeline
+      - name: Refresh XBRL fundamentals (bulk file; only new facts are stored)
+        run: python -m convergealpha bootstrap fundamentals --data data --cache "${{ runner.temp }}/cache"
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - name: Train and validate
+        run: python -u -m convergealpha weekly --data data --models models-out --out site-validation
+      - run: scripts/data-commit.sh data "weekly models + validation (run ${{ github.run_id }})"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: models
+          path: |
+            models-out/*.pkl
+            models-out/*.json
+            models-out/reference.parquet
+          retention-days: 90
+          if-no-files-found: error
+      # Scheduled workflows in public repos are disabled after 60 days without activity.
+      - name: Keep the schedules alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in daily.yml intraday.yml weekly.yml; do
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/enable" || echo "could not enable $wf"
+          done

@@ -200,7 +200,7 @@ function ColumnChooser({
                   <label key={c.key} className={`flex min-h-11 items-center gap-2 text-sm ${has ? '' : 'text-slate-400 dark:text-zinc-500'}`}>
                     <input
                       type="checkbox"
-                      className="size-5 accent-teal-700"
+                      className="size-6 accent-teal-700"
                       checked={on && has}
                       disabled={!has}
                       onChange={() => setVisible(on ? visible.filter((k) => k !== c.key) : [...visible, c.key])}
@@ -311,7 +311,7 @@ export default function Screener() {
               Columns
             </button>
             <label className="inline-flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" className="size-5 accent-teal-700" checked={onlyEligible} onChange={(e) => setOnlyEligible(e.target.checked)} />
+              <input type="checkbox" className="size-6 accent-teal-700" checked={onlyEligible} onChange={(e) => setOnlyEligible(e.target.checked)} />
               Eligible only
             </label>
           </div>

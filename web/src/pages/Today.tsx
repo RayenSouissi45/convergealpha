@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { IntradayCard } from '../components/IntradayCard'
 import { MarketCard } from '../components/MarketCard'
-import { LabelBadge } from '../components/stock/decision'
+import { LabelBadge } from '../components/LabelBadge'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
@@ -30,6 +30,7 @@ function StockList({
 }) {
   return (
     <Card
+      className="min-h-[22rem]"
       title={<Tip content={help}>{title}</Tip>}
       aside={more ? <Link to={more} className="min-h-11 text-sm text-teal-700 underline dark:text-teal-400">All</Link> : undefined}
     >
@@ -182,9 +183,15 @@ export default function Today() {
               more="/screener?preset=earnings"
             />
           </>
+        ) : screener.state === 'loading' ? (
+          ['Top Conviction', 'Buy list (by expected value)', 'Most likely to rise (6 months)', 'Biggest upside (6 months)'].map((title) => (
+            <Card key={title} title={title} className="min-h-[22rem]">
+              <p className="text-sm text-slate-500" aria-busy="true">Loading…</p>
+            </Card>
+          ))
         ) : (
           <Card>
-            <p className="text-sm text-slate-500">{screener.state === 'loading' ? 'Loading…' : 'Stock lists appear after the first daily pipeline run.'}</p>
+            <p className="text-sm text-slate-500">Stock lists appear after the first daily pipeline run.</p>
           </Card>
         )}
       </div>

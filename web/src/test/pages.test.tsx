@@ -10,6 +10,9 @@ import market from './fixtures/market.json'
 import screener from './fixtures/screener.json'
 import aapl from './fixtures/stocks/AAPL.json'
 import con from './fixtures/stocks/CON_.json'
+import ledger from './fixtures/ledger.json'
+import race from './fixtures/race.json'
+import scorecard from './fixtures/scorecard.json'
 
 function healthAt(generatedAt: Date, overrides: Partial<Health> = {}): Health {
   return { ...(fixture as unknown as Health), generated_at: generatedAt.toISOString(), ...overrides }
@@ -35,6 +38,9 @@ const ALL = () => ({
   'market.json': market,
   'stocks/AAPL.json': aapl,
   'stocks/CON_.json': con,
+  'ledger.json': ledger,
+  'scorecard.json': scorecard,
+  'race.json': race,
 })
 
 beforeEach(() => resetScreenerCache())
@@ -169,5 +175,25 @@ describe('stock page', () => {
     stubFetch(ALL())
     renderAt('/stock/NOPE')
     expect(await screen.findByText(/No data for NOPE/)).toBeInTheDocument()
+  })
+})
+
+describe('monitoring pages', () => {
+  it('scorecard shows the verified ledger', async () => {
+    stubFetch(ALL())
+    renderAt('/scorecard')
+    expect(await screen.findByText('Hash chain verified')).toBeInTheDocument()
+  })
+
+  it('validation explains when no report exists yet', async () => {
+    stubFetch(ALL())
+    renderAt('/validation')
+    expect(await screen.findByText(/No validation report yet/, {}, { timeout: 15000 })).toBeInTheDocument()
+  }, 30000)
+
+  it('baseline race explains the live race before it has results', async () => {
+    stubFetch(ALL())
+    renderAt('/baseline-race')
+    expect(await screen.findByText(/live race starts/i)).toBeInTheDocument()
   })
 })

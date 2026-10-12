@@ -1,11 +1,13 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router'
 import { formatDay, formatMoney, formatPct, formatPctAbs, formatPrice } from '../../lib/format'
-import { LABEL_TONE } from '../../lib/labels'
 import { holdingStatus, limitChecks, throttle, usePortfolio } from '../../lib/portfolio'
 import { useScreener } from '../../lib/screener'
+import type { ScreenerRow } from '../../types'
 import { positionShares } from '../../lib/sizing'
+import { LabelBadge } from '../LabelBadge'
 import { Missing } from '../Missing'
+import { WhenVisible } from '../WhenVisible'
 import { Tip } from '../Tip'
 import { Badge, Card, Row } from '../ui'
 
@@ -48,7 +50,7 @@ export interface HorizonForecast {
 
 export interface ForecastSection {
   method: string
-  validated: boolean
+  validated: boolean | Record<string, { up: boolean; beat: boolean }>
   horizons: Record<'1w' | '1m' | '3m' | '6m', HorizonForecast> | null
   inputs: { beta: number; risk_free: number; composite: number | null } | null
   options_move: { '1w': number | null; '1m': number | null }
@@ -85,9 +87,6 @@ export interface PlanSection {
 
 // ---------------------------------------------------------------- label badge
 
-export function LabelBadge({ label }: { label: string }) {
-  return <Badge tone={LABEL_TONE[label] ?? 'neutral'}>{label}</Badge>
-}
 
 const RESEARCH = (
   <Tip content="No probability on this site has passed the validation lab yet. Treat it as research, not a promise." label="Research mode: not yet validated" className="no-underline">
@@ -163,14 +162,17 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
   }
   const keys = ['1w', '1m', '3m', '6m'] as const
   const n = (k: string) => f.sample_size?.[k]
-  const promise = (k: (typeof keys)[number], what: string) =>
-    `${what} after ${H_LABEL[k]} (${f.horizons?.[k].days} trading days). ${f.validated ? 'Validated.' : 'RESEARCH MODE: not yet validated.'} Method: ${f.method}.${n(k) ? ` Based on ${n(k)!.toLocaleString('en-US')} past cases.` : ' No sample size: this is a model-free estimate.'}`
+  const isValid = (k: string, kind: 'up' | 'beat') => (typeof f.validated === 'object' ? !!f.validated[k]?.[kind] : !!f.validated)
+  const promise = (k: (typeof keys)[number], what: string, kind: 'up' | 'beat') =>
+    `${what} after ${H_LABEL[k]} (${f.horizons?.[k].days} trading days). ${isValid(k, kind) ? 'Validated on the holdout.' : 'RESEARCH MODE: not yet validated.'} Method: ${f.method}.${n(k) ? ` Calibrated on ${n(k)!.toLocaleString('en-US')} held-out past cases.` : ' No sample size: this is a model-free estimate.'}`
   return (
     <Card title="Forecast" aside={RESEARCH} className="lg:col-span-2">
       <p className="mb-2 text-xs text-slate-500 dark:text-zinc-400">Method: {f.method}</p>
-      <Suspense fallback={<div className="h-52" />}>
-        <FanChart points={keys.map((k) => ({ label: H_LABEL[k], days: f.horizons![k].days, median: f.horizons![k].median, band: [f.horizons![k].p10, f.horizons![k].p90] }))} />
-      </Suspense>
+      <WhenVisible height="h-52">
+        <Suspense fallback={<div className="h-52" />}>
+          <FanChart points={keys.map((k) => ({ label: H_LABEL[k], days: f.horizons![k].days, median: f.horizons![k].median, band: [f.horizons![k].p10, f.horizons![k].p90] }))} />
+        </Suspense>
+      </WhenVisible>
       <div className="-mx-4 overflow-x-auto px-4">
         <table className="mt-2 w-full min-w-max text-sm">
           <caption className="sr-only">Forecast by horizon</caption>
@@ -189,8 +191,8 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
               return (
                 <tr key={k}>
                   <th scope="row" className="px-2 py-1.5 text-left font-normal">{H_LABEL[k]}</th>
-                  <td className="px-2 py-1.5 tabular-nums"><Tip content={promise(k, 'Chance the price (with dividends) is higher')}>{`${Math.round(h.p_up * 100)}%`}</Tip></td>
-                  <td className="px-2 py-1.5 tabular-nums"><Tip content={promise(k, 'Chance the stock does better than the S&P 500 (total return)')}>{`${Math.round(h.p_beat * 100)}%`}</Tip></td>
+                  <td className="px-2 py-1.5 tabular-nums"><Tip content={promise(k, 'Chance the price (with dividends) is higher', 'up')}>{`${Math.round(h.p_up * 100)}%${isValid(k, 'up') ? '' : '*'}`}</Tip></td>
+                  <td className="px-2 py-1.5 tabular-nums"><Tip content={promise(k, 'Chance the stock does better than the S&P 500 (total return)', 'beat')}>{`${Math.round(h.p_beat * 100)}%${isValid(k, 'beat') ? '' : '*'}`}</Tip></td>
                   <td className="px-2 py-1.5 tabular-nums">{formatPct(h.median)}</td>
                   <td className="px-2 py-1.5 tabular-nums"><Tip content={`Between the 10th and 90th percentile: 8 out of 10 outcomes are expected inside this range after ${H_LABEL[k]}.`}>{`${formatPct(h.p10, 0)} to ${formatPct(h.p90, 0)}`}</Tip></td>
                 </tr>
@@ -199,6 +201,7 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
           </tbody>
         </table>
       </div>
+      <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">* research mode: this horizon has not passed the validation lab yet.</p>
       {(f.options_move['1w'] !== null || f.options_move['1m'] !== null) && (
         <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">
           Options-implied move: {f.options_move['1w'] !== null ? `±${formatPctAbs(f.options_move['1w']!)} in 1 week` : ''}
@@ -266,7 +269,8 @@ const FAMILY_HELP: Record<string, string> = {
 
 export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker: string; label: string; sector: string | null }) {
   const [portfolio, setPortfolio] = usePortfolio()
-  const screener = useScreener()
+  // The full stock list is only needed for limit checks against existing holdings.
+  const screener = useScreener(portfolio.holdings.length > 0)
   const [equityInput, setEquityInput] = useState(portfolio.equity !== null ? String(portfolio.equity) : '')
   const equity = Number(equityInput) > 0 ? Number(equityInput) : null
   const t = throttle({ ...portfolio, equity: equity ?? portfolio.equity })
@@ -276,8 +280,8 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
       : null
   const isBuy = label === 'BUY' || label === 'STRONG BUY — TOP CONVICTION'
   const rows = screener.state === 'ready' ? screener.data.byTicker : new Map()
-  const row = rows.get(ticker)
-  const checks = row && equity && sizing ? limitChecks({ ...portfolio, equity }, rows, row, sizing.shares * p.entry, sizing.shares * sizing.riskPerShare) : []
+  const row = rows.get(ticker) ?? ({ ticker, sector } as ScreenerRow)
+  const checks = equity && sizing ? limitChecks({ ...portfolio, equity }, rows, row, sizing.shares * p.entry, sizing.shares * sizing.riskPerShare) : []
   const held = portfolio.holdings.some((h) => h.ticker === ticker)
   const add = () => {
     if (!sizing) return
@@ -351,7 +355,7 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
       {held && (
         <p className="mt-3 text-sm">
           In <Link to="/portfolio" className="underline">your portfolio</Link>
-          {row ? ` · ${holdingStatus(portfolio.holdings.find((h) => h.ticker === ticker)!, row, []).label}` : ''}
+          {rows.get(ticker) ? ` · ${holdingStatus(portfolio.holdings.find((h) => h.ticker === ticker)!, rows.get(ticker), []).label}` : ''}
         </p>
       )}
       <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">{sector ? `Sector: ${sector}. ` : ''}Always a “planned exit level”, never a “maximum loss”: gaps can be worse.</p>

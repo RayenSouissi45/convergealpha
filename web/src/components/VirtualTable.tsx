@@ -9,7 +9,8 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { COLUMN_BY_KEY } from '../lib/columns'
+import { COLUMN_BY_KEY, probabilityStatus } from '../lib/columns'
+import { useHealth } from '../lib/health'
 import { renderCell } from '../lib/cells'
 import type { Cell, ScreenerRow } from '../types'
 import { Tip } from './Tip'
@@ -79,6 +80,9 @@ export function VirtualTable({
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const height = useAvailableHeight(scrollRef)
+  const health = useHealth()
+  const validated = health.state === 'ready' ? health.data.validated : []
+  const method = health.state === 'ready' ? health.data.forecast_method : undefined
   const model = table.getRowModel().rows
   const virtualizer = useVirtualizer({
     count: model.length,
@@ -98,7 +102,8 @@ export function VirtualTable({
       style={{ height }}
     >
       <div style={{ width: totalWidth, minWidth: '100%' }}>
-        <div role="rowgroup" className="sticky top-0 z-20 flex border-b border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950">
+        <div role="rowgroup" className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950">
+          <div role="row" aria-rowindex={1} className="flex">
           {table.getHeaderGroups()[0]?.headers.map((h, i) => {
             const col = COLUMN_BY_KEY[h.column.id]
             const dir = h.column.getIsSorted()
@@ -116,20 +121,21 @@ export function VirtualTable({
                 <button
                   type="button"
                   onClick={h.column.getToggleSortingHandler()}
-                  className="min-h-11 truncate"
+                  className="min-h-11 min-w-6 truncate"
                   aria-label={`Sort by ${col?.label ?? h.column.id}`}
                 >
                   {flexRender(h.column.columnDef.header, h.getContext())}
                   <span aria-hidden="true">{dir === 'asc' ? ' ▲' : dir === 'desc' ? ' ▼' : ''}</span>
                 </button>
                 {col && (
-                  <Tip content={col.help} label={`About ${col.label}`} className="no-underline text-slate-400">
+                  <Tip content={col.help + probabilityStatus(col.key, validated, method)} label={`About ${col.label}`} className="inline-flex min-h-6 min-w-6 items-center justify-center no-underline text-slate-400">
                     ⓘ
                   </Tip>
                 )}
               </div>
             )
           })}
+          </div>
         </div>
         <div role="rowgroup" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((vr) => {

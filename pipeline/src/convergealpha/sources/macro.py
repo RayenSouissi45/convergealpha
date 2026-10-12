@@ -130,7 +130,9 @@ def update_short_interest(data_dir: Path, today: date, since: date) -> list[date
             continue
         try:
             # Issue names can contain stray quotes: parse with quoting off, strip quotes after.
-            df = pd.read_csv(io.StringIO(r.text), sep="|", dtype=str, quoting=3, on_bad_lines="skip")
+            df = pd.read_csv(
+                io.StringIO(r.text), sep="|", dtype=str, quoting=3, on_bad_lines="skip"
+            )
             df.columns = [c.strip('"') for c in df.columns]
             df = df.apply(lambda col: col.str.strip('"'))
         except Exception as e:

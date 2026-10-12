@@ -99,8 +99,10 @@ export default function About() {
           </dl>
           <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">
             Each new source starts with zero weight and earns weight only if it adds value on data
-            it has never seen, after costs. Backtested excess returns are halved before being
-            shown, because free data mostly lacks delisted stocks.
+            it has never seen, after costs. F1 and F2 have no point-in-time history before
+            October 2026, so the models do not use them yet; they are shown as information.
+            Backtested excess returns are halved before being shown, because free data mostly
+            lacks delisted stocks.
           </p>
         </Card>
 

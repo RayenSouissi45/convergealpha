@@ -189,6 +189,8 @@ def credibility_sources(t: pd.DataFrame, sec: pd.Series) -> dict[str, pd.Series]
         "target_upside": norm(t["target_upside"].clip(-0.9, 3.0), sec),
         "rating_changes": norm(t["net_upgrades_90d"] + 3 * t["pt_change_90d"].fillna(0), sec),
     }
+    for name, scores in (t.attrs.get("manual_ratings") or {}).items():
+        out[f"manual_{name}"] = norm(scores.reindex(t.index), sec)
     return out
 
 
