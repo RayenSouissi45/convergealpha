@@ -175,6 +175,8 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
   Balanced KSPI + MTG, High risk TWST, Safest with upside DEA + MT, Confidence STWD + EFC, S&P 500
   yardstick SPY; Opportunity hunter stays in cash (no green badge today). The Health page shows
   "Trade ledger (paper money)" verified.
+- Re-run for the same day (GitHub `daily` run 38468293534): green, 0 new trade-ledger entries (still
+  20, verified), the same orders: no double trades.
 - Unfilled orders now read "Buy …" on the Strategies page; the ledger keeps its original past-tense
   text (decision 93).
 
