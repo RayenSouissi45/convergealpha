@@ -267,7 +267,185 @@ is on gettex. A hand-made list `manual/brokers/finanzen_zero.csv` (column `isin`
 replaces the FIRDS list when present. Source credit: ESMA FIRDS; reuse is authorised with the
 source acknowledged (transformation: filtered to gettex shares, mapped to tickers).
 
-## 15. Known biases and limits
+## 15. Trading costs in euros (shared by Plan, strategies and "Give me a strategy")
+
+`pipeline/src/convergealpha/decide/costs.py`, mirrored in `web/src/lib/costs.ts`; both are tested
+with the same reference values.
+
+- **Fee per order**: 1.00 € per buy and 1.00 € per sell by default (finanzen.net zero; the Plan page
+  lets you change it — check the broker's current price list). The paper strategies always use 1 €.
+- **Spread**: the existing liquidity estimate (`decide/rules.spread_estimate`: 0.03% at ≥ $200M a
+  day, 0.06% at ≥ $50M, 0.12% at ≥ $10M, 0.3% below, 0.5% unknown). Half is paid on the way in,
+  half on the way out. Market impact is left out (a 200 € order is a tiny share of a liquid stock's
+  volume). **Choice:** gettex market makers can quote wider spreads than US exchanges, especially
+  outside US hours; the estimate is the US-market one.
+- **Currency**: price in euros = US price ÷ DEXUSEU (FRED, US dollars per euro), using the latest
+  rate dated on or before the day. FRED publishes DEXUSEU about once a week, so the rate can be
+  up to ~10 days old; every fill records the rate and its date. Plan results assume the rate stays
+  the same; the strategies' values move with it.
+- **Whole shares** by default: shares = ⌊(amount − buy fee) ÷ (euro price × (1 + spread/2))⌋;
+  money left over stays as cash. Fractional shares are a setting labelled "simulation only".
+- **Break-even move** = (money spent + sell fee) ÷ (shares × euro price × (1 − spread/2)) − 1.
+  Reference: 100 € with 1 € fees and no spread → 99 € of stock, break-even +2.02% (101/99 − 1).
+- **Result** in euros for a stock move m = shares × euro price × (1 + m) × (1 − spread/2) − sell fee
+  − money spent. Round-trip cost of a position worth V = (buy fee + sell fee)/V + spread; cost of
+  switching one position for another = (sell fee + buy fee)/V + spread_out/2 + spread_in/2.
+- Dividends (strategies only): credited to cash on the ex-date at 85% (15% US withholding tax with
+  a W-8BEN form). German taxes are not modelled.
+
+## 16. Opportunity badge
+
+`pipeline/src/convergealpha/decide/opportunity.py`. One badge per stock that joins the event signals
+the app already had (insider-buying lists, earnings, dividends, gaps, estimate changes, analyst
+upgrades, news tags) with the event-pattern luck test (section 9), the families, the validated
+chance up and the blocking/risk checks. Fixed in advance; nothing was fitted.
+
+**Fresh events** (public in the last 7 calendar days, up to the decision day):
+
+| Event | Definition | Tested pattern ("this kind of event") |
+|---|---|---|
+| Insider cluster buy | ≥ 2 different insiders with opportunistic open-market buys (code P, not routine, not 10b5-1) filed within 30 days, the latest in the last 7 days | Opportunistic insider buying cluster |
+| Insider buy | one insider, same rules | none (only clusters are tested) |
+| Earnings beat | reported EPS above the consensus (Yahoo calendar) and a positive first trading day (open → close of the first session after the report); a beat whose reaction is not known yet cannot confirm | Earnings above last year (well above if the consensus SUE ≥ 2): the closest tested earnings pattern |
+| EPS up vs last year | a new 10-Q/10-K (XBRL, first reported) with EPS above the same quarter a year earlier | Earnings above / well above last year |
+| Dividend raised | ex-date in the last 7 days, ≥ 10% above the previous payment | Dividend raised ≥ 10% |
+| Gap up on volume | open ≥ 5% above the previous close on ≥ 2× the 50-day volume, last 5 sessions | Gap up ≥ 5% on heavy volume |
+| Estimates raised | this year's EPS estimate up ≥ 1% in 7 days, more analysts raising than cutting | none (no free dated history) |
+| Analyst upgrade | an upgrade dated in the last 7 days | none (not tested by the engine) |
+| Positive news | a headline tagged guidance raised, buyback, dividend raised or upgrade | none: **news alone is never green** |
+
+**History** for an event comes from the weekly engine, which now exports every test it ran (n,
+share of cases that went up, average return from the next open, average excess over the stock's
+own same-year average, q-value, both halves, holdout sign, passed) for each (stock, event, window)
+and each (3-digit SIC industry, event, window). The stock's own record is used if it was tested
+(≥ 20 events), else its industry's (≥ 200 events); a window that passed is preferred, then 21 days,
+then 5 days. The luck test itself is unchanged.
+
+**Colours** (the usual up rate = pooled hit rate of the 2016–2023 reliability buckets for that
+horizon, e.g. 1 month ≈ 54%):
+
+- **GREEN "Confirmed opportunity"** only if all hold: (1) a fresh positive non-news event whose
+  kind PASSED the luck test with a positive average excess; (2) at least 3 of 6 families ≥ 60;
+  (3) the validated chance up (1 month if validated, else 6 months) ≥ its usual rate + 3 points;
+  (4) eligible, not blocked and not SELL / RISK WARNING.
+- **RED "Hype / be careful"**: a trigger — a jump (≥ +10% in a day or ≥ +20% in a week), a gap up
+  on heavy volume, or a positive news headline — together with weak evidence (fewer than 2
+  families ≥ 60) or a risk flag: short interest ≥ 15% of float, share offering, going-concern
+  warning, restatement, auditor change, SEC/DOJ investigation, late filing, pending merger, a SELL /
+  RISK WARNING label, or a passed pattern pointing down (this kind of event was usually followed by
+  a worse-than-normal return).
+- **AMBER "Possible, not confirmed"**: any other fresh positive event. Risk flags are listed in the
+  "Why?" panel and keep it from being green when they block.
+- No badge: no fresh event and no jump, or a jump with decent evidence and no known reason.
+
+The "Why?" panel shows each event with its date and source link, what history says (n, how often
+it went up, average move, luck-test result), the four green checks, and what is missing or risky.
+Shown on Today, Screener (column "Opportunity" + filter + "Opportunities" preset), Picks, Plan,
+Strategies and the stock page. **Choice:** intraday alerts stay separate warnings (Today, stock
+page); badges change only after the close, like labels.
+
+## 17. Plan builder
+
+`web/src/lib/plan.ts` (in the browser, for your amount) with `plan.json` from
+`pipeline/src/convergealpha/decide/plan.py`. Thresholds are pinned by tests on both sides.
+
+- **Candidates**: the Picks candidates (eligible, not SELL / RISK WARNING, not blocked, full
+  forecast), with the "only finanzen.net zero" setting (unknown stays, marked "?"). Unless you
+  allow it, a stock is left out if its next known earnings date falls inside the period **or no
+  date is known** (no report can be promised).
+- **Sliders**: Safety s → minimum Picks Safety 10 × (s − 1); Upside u → minimum Upside 10 × (u − 1)
+  (1 → 0, 10 → 90).
+- **Ranking**: (s × Safety + u × Upside + 5 × Confidence) ÷ (s + u + 5); ties by Confidence, then
+  ticker. **Choice:** Confidence counts like a middle slider so an uncertain stock does not lead.
+  The top 3 stocks you can afford (one share costs less than the amount) are shown, plus "split the
+  amount over the top 2" (half each, each paying its own fees).
+- **Period**: calendar days 5–180 → trading days = round(days × 0.7) (30 days = 21). At 5, 21, 63
+  or 126 trading days one horizon is used; in between, every number (chance up, median, 10th/90th
+  percentile, reliability rate and range) is a straight-line mix of the nearest two, and the page
+  says so. Below 5 trading days the 1-week forecast is used.
+- **Distribution**: median and the conformal-widened 10th/90th percentiles of the model; the 25th
+  and 75th are placed on a bell shape between them (median ∓ (median − p10 or p90 − median) ×
+  0.6745/1.2816) — no separate 75th-percentile model exists, and adding one would change the model
+  configuration. The cumulative curve is a straight line between the five points, extended past
+  the ends, clamped to [0, 1].
+- **Chance of ending with more money** = calibrated chance up − (F(break-even) − F(0)): the
+  validated probability at 0, lowered by the forecast mass between 0 and the cost hurdle.
+- **How often right**: the reliability bucket of the chance up at each horizon used (2016–2023 only),
+  rate and 95% Wilson range, mixed when two horizons are used (n = the smaller one).
+- **Results**: middle / bad (1 in 10) / good (1 in 10) = result at the median / 10th / 90th
+  percentile. For the split: the two stocks are assumed to move together (outcomes at the same
+  percentile add up; the chance is found on that combined curve) — the cautious case.
+- **Verdict**: GREEN "Good opportunity now" only if chance ≥ 55% AND the low end of how often right
+  ≥ 52% AND the middle result is above the costs (expected gain > fees + spread) AND every horizon
+  used is validated. AMBER "Possible but weak" if chance ≥ 50% and the middle result is above the
+  costs. Otherwise GREY "No good opportunity now: waiting is a valid choice". RESEARCH MODE is
+  shown on every number whose horizon is not validated.
+
+## 18. Paper-trading strategies (paper money only)
+
+`pipeline/src/convergealpha/paper/` (rules: `strategies.py`, engine: `engine.py`, page:
+`export.py`); tests in `pipeline/tests/test_paper.py`. Nothing connects to a broker.
+
+**Shared rules** (all fixed before the first decision; tests pin every number):
+
+- Start: decision at the close of **Tuesday 13 Oct 2026**, first fills at the open of 14 Oct;
+  200 € each; benchmark 200 € into SPY at the first open (one buy fee, a fraction of a share
+  because one SPY share costs more than 200 €; SPY itself is not sold to EU retail investors — it is
+  only the yardstick), then held.
+- Decisions after each close with that day's data only (the build's table and forecasts). Orders
+  fill at the next trading day's official open (Yahoo daily open), in euros with half the spread
+  and the 1 € fee. Sells fill first; then the buys of the day share the available cash equally.
+  Whole shares; leftover money stays as cash. A buy that cannot afford one share at the open is
+  cancelled; a sell without an opening price waits for the next open.
+- Universe: finanzen.net zero = true (unknown excluded), eligible, not blocked, not SELL / RISK
+  WARNING, with a price and a 1-month forecast. New buys need the model forecasts (not the fallback
+  estimate) and an inactive kill switch.
+- Exit levels use the stock's dollar price against the fill's opening price. Stops (stop-loss,
+  trailing stop, a holding turning SELL / RISK WARNING, and for the opportunity hunter a red badge)
+  act at once; every other exit (take-profit, score rules, maximum hold) and every switch waits
+  for the **minimum hold of 3 trading days** (the fill day counts as day 1). A stock sold is not
+  bought again by the same strategy for **5 trading days**.
+- **Switch rule**: a holding is replaced only if a candidate's score is at least the strategy's
+  margin higher AND its expected 1-month gain (median 1-month forecast) exceeds the holding's by
+  more than the switching cost (both fees and both half-spreads, as a share of the position).
+- Every action and every kept holding gets a plain-English reason. A day the daily build missed is
+  caught up from prices only (fills, stops and limits; no new buys).
+
+| Strategy (key) | Positions | Buys | Score (switch margin) | Exits |
+|---|---|---|---|---|
+| Best overall (Balanced) `balanced-v1` | 2 | Picks (all three sub-scores ≥ 40), Balanced ≥ 60, validated P(up) 1m ≥ 52%, median 1-month forecast > round-trip cost | Picks Balanced (10) | +8% take-profit, −6% stop, Balanced < 60, SELL label, 63 trading days |
+| High risk, high reward `high_risk-v1` | 1 | any stock in the universe with a 1-month forecast | 0.6 × rank of the 1-month 90th percentile + 0.4 × rank of F5 (missing = 50), ranks 0–100 within the universe (10) | −12% stop, trailing stop 10% below the highest close, +20% take-profit, 21 trading days |
+| Safest with the most upside `safe_upside-v1` | 2 | Picks Safety ≥ 75 | Picks Upside (10) | −5% stop, +6% take-profit then rotate into the next safe stock, 63 trading days |
+| Most likely to rise (Confidence) `confidence-v1` | 2 | validated P(up) 1m ≥ its usual rate, a reliability record | 100 × P(up) 1m × reliability low end 1m (2) | −7% stop, P(up) 1m below its usual rate, 21 trading days |
+| Opportunity hunter `opportunity-v1` | 1 | GREEN opportunity badge only; cash otherwise | 100 − 10 × trading days since the confirmed event (10) | −8% stop, +12% take-profit, badge turns red, 15 trading days |
+
+Ties are broken by the Picks Balanced score, then the ticker. **Choice:** the parameters were not
+adjusted on 2016–2023 data: these strategies use daily numbers (Picks sub-scores, badges, F1/F2)
+that have no point-in-time history, so a fair backtest is impossible, and changing numbers without
+one would be guessing. "Usual rate" = the pooled 2016–2023 up rate for 1 month (section 16).
+
+**Versions**: each strategy's parameters are hashed into its `start` entry. If the code's rules
+ever differ from that hash under the same version, the engine refuses to trade it and the page
+says so: a rule change must be a new version (e.g. `balanced-v2`) that starts again from 200 €;
+old history stays.
+
+**Trade ledger** `ledger/trades.jsonl` in the private data repo: append-only and hash-chained like
+the signal ledger (`start`, `order`, `fill`, `cancel`, `dividend`, `split`, `day` entries; each
+`day` entry stores the value, cash, holdings with their peak and days held, the reasons, the
+EUR/USD rate and the SHA-256 of that day's scores snapshot). It is verified at every build and
+shown on Health; a test edits a past fill and checks that verification fails. A same-day re-run
+finds the day recorded and adds nothing; a weekly run never touches it.
+
+**Leaderboard**: value (cash + holdings at the last close), % since 200 €, difference to the S&P 500
+yardstick in percentage points, fees paid, filled trades, win rate (sells with a profit after fees ÷
+sells), worst drop (largest fall of the daily value from an earlier high), cash. The page keeps
+RESEARCH MODE until a strategy is ahead of the S&P 500 live after at least 126 trading days.
+"Give me a strategy" applies each strategy's buying rules to today's candidates for your own
+amount (2-position strategies split it in half), shows costs, the opportunity colour and a
+1-month Plan verdict, and marks as best overall the green or amber suggestion with the highest
+chance of ending with more money.
+
+## 19. Known biases and limits
 
 - **Survivorship bias**: free price history mostly lacks delisted stocks. Every backtested excess
   return is **halved** before it is shown, and the "+1%/yr over the best baseline" check uses the

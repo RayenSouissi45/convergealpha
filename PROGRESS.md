@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-13 (Phase 1–7 build run, then Picks and clarity)
+Last updated: 2026-10-13 (Phase 1–7 build run, Picks and clarity, then Plan, opportunity badge and paper strategies)
 
 - Live site: **https://rayensouissi45.github.io/convergealpha/**
 - Code: https://github.com/RayenSouissi45/convergealpha (public)
@@ -17,6 +17,7 @@ Last updated: 2026-10-13 (Phase 1–7 build run, then Picks and clarity)
 | 6 Ledger + monitoring | Hash-chained ledger, scorecard, baseline race, kill switch, drift, Telegram | **Done** (Telegram needs your bot, see questions) |
 | 7 Polish | PWA (offline, installable), Lighthouse ≥ 90, docs | **Done** (every page ≥ 90 on mobile, see checks) |
 | 8 Picks & clarity (2026-10-13) | Picks page, Forecast view, "How often was it right?", finanzen.net zero filter, Columns explained | **Done** (see "Picks and clarity" below) |
+| 9 Plan, opportunities, strategies (2026-10-13) | Euro cost model, Plan builder, one opportunity badge, 5 paper-money strategies + S&P 500 yardstick, trade ledger, Strategies page | **Done** (see "Plan, opportunities and strategies" below) |
 
 ## What works
 
@@ -61,6 +62,38 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
 - **Columns explained** (`/#/columns`): every column in plain English (meaning, formula,
   example, good/bad, source, validation status, common mistakes); full column names in the
   screener headers (wrapped, never cut off) and in the column chooser.
+
+**Plan, opportunities and strategies (added 2026-10-13)**:
+- **Trading costs in euros** (shared): 1 € per buy and per sell by default (editable on the Plan
+  page), the liquidity-based spread (half each way), US prices in euros with FRED's EUR/USD
+  (DEXUSEU), whole shares with leftover cash (fractional = "simulation only"), and the break-even
+  move everywhere ("the stock must rise X% just to cover costs").
+- **Plan** (`/#/plan`, bottom bar): Safety and Upside sliders (1 → minimum 0, 10 → 90 on the Picks
+  sub-scores), period 5–180 days (30 days = 21 trading days; between horizons a straight-line mix,
+  and the page says so), amount in €, "allow earnings inside the period", the finanzen.net zero box.
+  Top 3 stocks and "split over the top 2": shares, leftover, fees, break-even, chance of ending with
+  more money after costs, how often right (range, n), middle / bad / good result in €, and a
+  GREEN / AMBER / GREY verdict with fixed thresholds. RESEARCH MODE wherever the horizon is not validated.
+- **Opportunity badge**: one badge (green "Confirmed opportunity", amber "Possible, not
+  confirmed", red "Hype / be careful") built from the existing signals (insider buys, earnings,
+  dividends, gaps, estimate changes, upgrades, news tags) plus the event-pattern luck test, the
+  families, the validated chance up and the risk checks. "Why?" panel in plain English with date,
+  source link, what history says (n, how often it went up, average move, luck test) and what is
+  missing or risky. On Today ("Opportunities this week", "Be careful: hype"), Screener (column,
+  filter, "Opportunities" preset), Picks, Plan, Strategies and stock pages. Never green on news alone.
+- **Five paper-money strategies** with 200 € each from the close of Tue 13 Oct 2026, plus 200 € in
+  the S&P 500 (SPY) as the yardstick: decisions after each close, fills at the next official open
+  in euros with spread and fees, whole shares, finanzen.net zero stocks only, minimum hold 3 trading
+  days unless a stop triggers, a switch rule that must beat the switching cost, a plain-English
+  reason for every buy, sell and hold. Rules fixed in code and docs, pinned by tests, never tuned.
+- **Trade ledger** `ledger/trades.jsonl` (private data repo): append-only, hash-chained, verified at
+  every build (Health shows it), tamper test, idempotent per strategy per day.
+- **Strategies** (`/#/strategies`, under More and linked from Today): banner "Paper money only…",
+  leaderboard (value, % since start, vs S&P 500, fees, trades, win rate, worst drop, cash), one chart
+  with the five lines and the S&P 500, a card per strategy (mindset, rules, holdings with exit
+  levels, next-open orders with reasons, full history with links), and "Give me a strategy" for
+  your own amount with costs, opportunity colour and the best overall marked. RESEARCH MODE until a
+  strategy beats the S&P 500 live over at least 6 months.
 
 ### Checks run (2026-10-12 and 13)
 
@@ -215,6 +248,32 @@ Picks, Forecast view, finanzen.net zero, column explanations (2026-10-13)
 65. A `lighthouse` workflow (Actions → lighthouse → Run workflow) measures the live site on a GitHub runner, median of 3 runs: local scores depend on what else the PC is doing.
 66. The live Picks race reads each day's first scores file, so it starts with the first daily run of a new trading day that publishes picks (2026-10-13's run after the close): same-day re-runs never change a recorded strategy.
 
+Plan, opportunity badge and paper strategies (2026-10-13)
+67. The event-pattern engine now exports every test it ran (stock and industry level: n, how often up, average move, luck test): the "Why?" panel needs history for events that did not pass too. This sits outside the model configuration, so the weekly job I re-ran by hand (run 38398872342) reused the frozen holdout ("Holdout results reused … evaluated once for this configuration"; the log still has 2 entries).
+68. EUR/USD comes from FRED DEXUSEU as you asked. FRED publishes it about once a week (on 2026-10-13 the latest rate was 2 Oct), so each fill and value uses the latest rate dated on or before that day and records the rate and its date; the Plan says it assumes the rate stays the same.
+69. Spread = the existing liquidity estimate, half paid each way; no market-impact term for 200 € orders. gettex quotes can be wider than US spreads (written in METHODOLOGY).
+70. Dividends of held stocks (and SPY) go to cash on the ex-date at 85% (15% US withholding with W-8BEN); German taxes are not modelled.
+71. The S&P 500 yardstick holds a fraction of an SPY share (one share costs more than 200 €). SPY is not sold to EU retail investors; it is only the yardstick.
+72. Red badges need a trigger (a jump of ≥ 10% in a day or ≥ 20% in a week, a gap up on heavy volume, or a positive headline) plus weak evidence (fewer than 2 families ≥ 60) or a risk flag. The first local run without the trigger flagged 103 heavily shorted stocks red on an estimate raise alone; your definition starts with "a big jump or loud news".
+73. A green badge also needs eligible and not SELL / RISK WARNING. Risk flags show in the "Why?" panel; heavy short interest alone does not stop green (it was not in your green rule).
+74. An earnings beat is matched to the closest tested pattern ("earnings above last year", from SEC filings); a beat whose first trading reaction is not known yet cannot confirm. Estimate raises, single insider buys, upgrades and news have no luck-tested history, so they are amber at best.
+75. "Bucket's base rate" = the usual up rate for the horizon: the pooled 2016–2023 hit rate of its reliability buckets (1 month ≈ 54%). The badge uses the validated 1-month chance (else 6-month) and needs 3 points above it.
+76. Intraday alerts stay separate warnings (Today, stock page); badges change only after the close, like labels.
+77. Plan days are calendar days × 0.7 (30 → 21, 90 → 63, 180 → 126 trading days), so each horizon can be hit exactly and the validated 1-month and 6-month forecasts are usable.
+78. Plan ranking = (Safety slider × Safety + Upside slider × Upside + 5 × Confidence) ÷ total weight: an uncertain stock should not lead whatever the sliders say.
+79. The 25th/75th percentiles are placed on a bell shape between the median and the conformal-widened 10th/90th: there is no 75th-percentile model, and adding one would change the model configuration (and touch the holdout).
+80. Chance of more money = calibrated chance up − the forecast mass between 0 and the break-even move: it stays anchored on the validated probability.
+81. With "allow earnings" off, stocks with no known earnings date are left out too (no report can be promised): 13 of 2,100 candidates today. Over 2–6 months almost every company reports; the page says so when nothing fits.
+82. "Split over the top 2" assumes the two stocks move together: the cautious, widest range.
+83. No strategy parameter was changed before the start: the strategies use daily numbers (Picks sub-scores, badges, F1/F2) without point-in-time history, so a fair 2016–2023 test is impossible and changes would be guesses.
+84. Details your brief left open, fixed in advance and pinned by tests: High-risk score = 0.6 × rank of the 1-month 90th percentile + 0.4 × rank of F5; switch margins 10 points (Confidence: 2 points on 100 × chance × low end; Opportunity: freshness 100 − 10 per trading day); Balanced buys need Balanced ≥ 60 and Confidence buys need a chance at or above the usual rate (otherwise they would be sold at once); a stock sold is not bought back for 5 trading days (otherwise "lock in +6% and rotate" could buy the same stock straight back); a holding turning SELL / RISK WARNING (and a red badge for the opportunity hunter) is treated as a stop; exit levels use the dollar price; the fill day counts as day 1 of the minimum hold; buys of the same day share the cash equally; a buy that cannot afford one share at the open is cancelled.
+85. No new buys when the model forecasts are missing (fallback estimate) or the kill switch is on; a day without a daily build is caught up from prices only (fills, stops, limits; no buys).
+86. Each strategy's rules are hashed into its start entry; if the code differs under the same version, it does not trade and the page says a new version is needed.
+87. The paper-trading step can never stop the site from being published: a failure is logged and shown on the page.
+88. Bottom bar: Today, Picks, Plan, Screener, Portfolio, More. Health moved to More (still one tap from the header's "Updated …" link); Strategies is under More and linked from Today.
+89. Strategies chart: five validated categorical colours (dataviz palette, both themes) and a dashed neutral S&P 500 line; the legend plus the leaderboard table name every line.
+90. Today adds "Opportunities this week" (green, then amber by 1-month chance up) and "Be careful: hype" (red, biggest weekly moves); today.json carries only those extra rows.
+
 ## Questions for the owner
 
 All optional. The site works without them.
@@ -280,6 +339,13 @@ All optional. The site works without them.
   on gettex. Check in the broker app before trading.
 - **SEC 13F** (full institutional holdings), FDA calendar and buyback history are not built
   (no free dated source); see docs/DATA_SOURCES.md.
+- **Paper strategies are research.** A few weeks of paper results say almost nothing; the page
+  keeps RESEARCH MODE until a strategy beats the S&P 500 live over 6 months. Their first fills are
+  at the 14 Oct 2026 open.
+- **Opportunity coverage**: news, estimates and options are refreshed daily only for ~400
+  candidates and holdings, so amber/red badges from those sources cover those stocks best. Green
+  needs a luck-tested event type (insider clusters, earnings vs last year, dividend raises, gaps).
+- **EUR/USD lags**: FRED's DEXUSEU is published weekly, so euro values can use a rate up to ~10 days old.
 - `make` isn't installed on this Windows PC; SETUP.md lists the equivalent commands.
 
 ## Next steps
