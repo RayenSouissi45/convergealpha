@@ -7,7 +7,7 @@ on:
     inputs:
       pages:
         description: Hash routes, separated by spaces
-        default: '#/ #/picks #/screener #/screener?preset=forecast #/columns #/stock/AAPL'
+        default: '#/ #/picks #/plan #/strategies #/screener #/screener?preset=forecast #/columns #/stock/AAPL'
       runs:
         description: Runs per page (the median performance score is reported)
         default: '3'

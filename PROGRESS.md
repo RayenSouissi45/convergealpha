@@ -273,6 +273,8 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 88. Bottom bar: Today, Picks, Plan, Screener, Portfolio, More. Health moved to More (still one tap from the header's "Updated …" link); Strategies is under More and linked from Today.
 89. Strategies chart: five validated categorical colours (dataviz palette, both themes) and a dashed neutral S&P 500 line; the legend plus the leaderboard table name every line.
 90. Today adds "Opportunities this week" (green, then amber by 1-month chance up) and "Be careful: hype" (red, biggest weekly moves); today.json carries only those extra rows.
+91. A positive headline counts only if the company is its subject (name or ticker in the first five words): Finnhub attaches articles to every company they mention, and "Biogen upgraded to Buy at J.P. Morgan" had turned JPMorgan red in the first local run.
+92. The desktop top bar wraps to a second line when needed: two more pages made it wider than a 1,280 px screen on Linux fonts (caught by CI).
 
 ## Questions for the owner
 

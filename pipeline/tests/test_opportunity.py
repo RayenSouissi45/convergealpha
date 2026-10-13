@@ -150,3 +150,19 @@ def test_export_shape() -> None:
     assert out["short"] == "Insider cluster buy (Oct 12) +1"
     assert out["events"][0]["history"]["n"] == 31 and out["events"][1]["history"] is None
     assert "luck-tested" in out["events"][1]["history_note"]
+
+
+def test_news_counts_only_when_the_company_is_the_subject() -> None:
+    jpm = O.subject_tokens("JPM", "JP Morgan Chase & Co. Common Stock")
+    assert not O.is_about(
+        "Biogen Upgraded to Buy at J.P. Morgan. How the Stock Could Rise 28%.", jpm
+    )
+    assert O.is_about("JPMorgan raises its dividend by 10%", jpm)
+    assert O.is_about("JPM stock: analysts upgrade the bank", jpm)
+    crm = O.subject_tokens("CRM", "Salesforce, Inc. Common Stock")
+    assert O.is_about("Salesforce's AI Strategy Reduces Risk, BofA Says in Upgrade", crm)
+    assert not O.is_about("Oracle raises guidance as cloud demand beats Salesforce", crm)
+    ter = O.subject_tokens(
+        "TX", "Ternium S.A. Ternium S.A. American Depositary Shares (each representing ten shares)"
+    )
+    assert "ternium" in ter and "american" not in ter

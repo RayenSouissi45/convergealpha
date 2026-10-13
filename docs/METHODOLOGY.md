@@ -312,7 +312,7 @@ chance up and the blocking/risk checks. Fixed in advance; nothing was fitted.
 | Gap up on volume | open ≥ 5% above the previous close on ≥ 2× the 50-day volume, last 5 sessions | Gap up ≥ 5% on heavy volume |
 | Estimates raised | this year's EPS estimate up ≥ 1% in 7 days, more analysts raising than cutting | none (no free dated history) |
 | Analyst upgrade | an upgrade dated in the last 7 days | none (not tested by the engine) |
-| Positive news | a headline tagged guidance raised, buyback, dividend raised or upgrade | none: **news alone is never green** |
+| Positive news | a headline tagged guidance raised, buyback, dividend raised or upgrade **whose subject is the company** (its ticker, the first word of its name or its first two words joined appear in the first five words: news feeds attach an article to every company it mentions) | none: **news alone is never green** |
 
 **History** for an event comes from the weekly engine, which now exports every test it ran (n,
 share of cases that went up, average return from the next open, average excess over the stock's

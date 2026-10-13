@@ -17,6 +17,7 @@ News alone is never green: headlines have no luck-tested history.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -338,8 +339,39 @@ def analyst_events(t: pd.DataFrame, src: Sources, as_of: pd.Timestamp) -> dict[s
     return out
 
 
+_NAME_STOP = {
+    "the", "inc", "incorporated", "corp", "corporation", "co", "company", "holdings", "holding",
+    "group", "plc", "ltd", "limited", "lp", "nv", "sa", "ag", "se", "class", "common", "stock",
+    "ordinary", "shares", "of", "and",
+}  # fmt: skip
+SUBJECT_WORDS = 5  # the company must be named in the first words of the headline
+
+
+def subject_tokens(ticker: str, name: Any) -> set[str]:
+    """Ways a headline names the company: its ticker, the first word of its name, and the first
+    two words joined ("JP Morgan" -> "jpmorgan")."""
+    toks = {re.sub(r"[^a-z0-9]", "", ticker.lower())}
+    n = str(name or "")
+    n = re.split(r" - |\(|American Depositary|Depositary|,", n, maxsplit=1)[0]
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", n) if w.lower() not in _NAME_STOP]
+    if words:
+        toks.add(words[0].lower())
+    if len(words) >= 2:
+        toks.add((words[0] + words[1]).lower())
+    return {x for x in toks if len(x) >= 2}
+
+
+def is_about(headline: str, tokens: set[str]) -> bool:
+    """True if the company is the headline's subject: news feeds attach articles to every company
+    they mention ("Biogen upgraded at J.P. Morgan" is not news about JPMorgan)."""
+    words = [w.lower() for w in re.findall(r"[A-Za-z0-9]+", headline or "")][:SUBJECT_WORDS]
+    pairs = {a + b for a, b in zip(words, words[1:], strict=False)}
+    return bool(tokens & (set(words) | pairs))
+
+
 def news_events(t: pd.DataFrame, src: Sources, as_of: pd.Timestamp) -> dict[str, list[Event]]:
-    """Headlines tagged positive (guidance raised, buyback, dividend raised, upgrade)."""
+    """Headlines tagged positive (guidance raised, buyback, dividend raised, upgrade) whose subject
+    is the company itself."""
     out: dict[str, list[Event]] = {}
     n = src.news
     if n.empty or "tags" not in n:
@@ -347,6 +379,8 @@ def news_events(t: pd.DataFrame, src: Sources, as_of: pd.Timestamp) -> dict[str,
     w = n[_fresh(pd.to_datetime(n["datetime"]), as_of, hours=23) & (n["tag_direction"] > 0)]
     w = w[w["ticker"].isin(t.index)]
     w = w[w["tags"].fillna("").apply(lambda s: bool(set(str(s).split(",")) & set(POSITIVE_NEWS_TAGS)))]  # fmt: skip
+    names = t["name"] if "name" in t else pd.Series("", index=t.index)
+    w = w[[is_about(str(h), subject_tokens(str(tk), names.get(tk))) for tk, h in zip(w["ticker"], w["headline"], strict=True)]]  # fmt: skip
     for tk, g in w.sort_values("datetime").groupby("ticker"):
         r = g.iloc[-1]
         out.setdefault(str(tk), []).append(

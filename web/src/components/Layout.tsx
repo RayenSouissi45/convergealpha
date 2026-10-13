@@ -66,7 +66,7 @@ function Header() {
         <DataStatus />
         <ThemeToggle />
       </div>
-      <nav aria-label="Main" className="mx-auto hidden max-w-5xl gap-0.5 px-3 pb-2 lg:flex">
+      <nav aria-label="Main" className="mx-auto hidden max-w-5xl flex-wrap gap-0.5 px-3 pb-2 lg:flex">
         {[...PRIMARY_NAV, ...SECONDARY_NAV].map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to === '/'} className={desktopLink}>
             {item.label}
