@@ -19,11 +19,23 @@ from convergealpha.util.io import stock_file_stem, to_jsonable, write_json
 
 SCHEMA_VERSION = 1
 
-# (key, digits). Digits round floats; None keeps the value as is.
+# (key, digits). Digits round floats. Probabilities keep 4 digits (the reliability lookup uses
+# the same rounded value on both sides); returns shown with one decimal of a percent need 3.
 _DIGITS: dict[str, int] = {
     "price": 4,
     "adv_dollar": 0,
     "market_cap": 0,
+    "insider_net_90d": 0,
+    "insider_buy_7d": 0,
+    **{f"f{i}": 1 for i in range(1, 7)},
+    "n_eff": 2,
+    "disagreement": 1,
+    "consensus": 2,
+    "days_to_cover": 2,
+    **{f"{k}_{h}": 3 for k in ("med", "p10", "p90", "hit_up") for h in ("1w", "1m", "3m", "6m")},
+    **{k: 3 for k in ("gain_per_month", "speed", "target_upside", "rev60", "vol_63", "atr_pct")},
+    **{k: 3 for k in ("short_pct_float", "iv_30d", "dist_52w_high", "change_1d")},
+    **{k: 3 for k in ("ret_1w", "ret_1m", "ret_3m", "ret_ytd", "ret_1y")},
 }
 _DEFAULT_DIGITS = 4
 
@@ -55,8 +67,12 @@ def write_screener(
     as_of: str,
     now: datetime,
     name: str = "screener.json",
+    meta: Mapping[str, Any] | None = None,
 ) -> Path:
-    """`table` is indexed by ticker and holds at least the requested fields."""
+    """`table` is indexed by ticker and holds at least the requested fields.
+
+    `meta` adds file-level keys (e.g. the reliability tables and the broker list summary).
+    """
     present = [f for f in fields if f in table.columns or f == "ticker"]
     rows = []
     for ticker, rec in table.iterrows():
@@ -71,6 +87,7 @@ def write_screener(
         "count": len(rows),
         "fields": present,
         "rows": rows,
+        **to_jsonable(dict(meta or {})),
     }
     return write_json(payload, site_dir / name)
 

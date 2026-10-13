@@ -31,9 +31,11 @@ if TYPE_CHECKING:
 log = get(__name__)
 
 SCREENER_FIELDS: tuple[str, ...] = (
-    "ticker", "name", "exchange", "sector", "industry", "is_adr", "cik", "eligible",
+    "ticker", "name", "exchange", "sector", "industry", "is_adr", "cik", "eligible", "zero",
     "label", "tier", "blocked", "block_reason", "ev", "p_hat", "gain_per_month", "speed",
-    "p_up_1w", "p_up_1m", "p_up_3m", "p_up_6m", "p_beat_1m", "p_beat_6m", "med_6m", "p10_6m", "p90_6m",
+    "p_up_1w", "p_up_1m", "p_up_3m", "p_up_6m", "p_beat_1w", "p_beat_1m", "p_beat_3m", "p_beat_6m",
+    "med_1w", "med_1m", "med_3m", "med_6m", "p10_1w", "p10_1m", "p10_3m", "p10_6m",
+    "p90_1w", "p90_1m", "p90_3m", "p90_6m", "hit_up_1w", "hit_up_1m", "hit_up_3m", "hit_up_6m",
     "f1", "f2", "f3", "f4", "f5", "f6", "n_eff", "disagreement",
     "consensus", "n_analysts", "target_upside", "rev60",
     "insider_net_90d", "insider_buy_7d", "short_pct_float", "days_to_cover", "iv_30d",
@@ -233,6 +235,49 @@ def ledger_step(
     }
 
 
+def _reliability_meta(extra: dict[str, Any]) -> dict[str, Any] | None:
+    """The "chance up" reliability tables, for the screener's "How often right" column."""
+    rel = extra.get("reliability")
+    if not rel:
+        return None
+    return {
+        "method": rel.get("method"),
+        "years": rel.get("years"),
+        "up": {
+            h: [
+                {k: b[k] for k in ("lo", "hi", "n", "rate", "wilson_lo", "wilson_hi")}
+                for b in v.get("up", [])
+            ]
+            for h, v in (rel.get("horizons") or {}).items()
+        },
+    }
+
+
+def record_brokers(ctx: RunContext, summary: dict[str, Any] | None) -> None:
+    """Health: the finanzen.net zero list's date and how many of our stocks matched."""
+    from convergealpha.sources import brokers as B
+
+    if summary is None:
+        return  # never built: the weekly refresh records its own state
+    fresh = not summary.get("stale") and summary.get("age_days", 99) <= 16
+    if fresh:
+        ctx.record(
+            "brokers",
+            True,
+            as_of=summary.get("list_date"),
+            records=summary.get("matched"),
+            coverage=round(summary["matched"] / max(1, summary["stocks"]), 4),
+            detail=B.describe(summary),
+        )
+    else:
+        ctx.record(
+            "brokers",
+            False,
+            detail=f"The list is {summary.get('age_days')} days old (weekly refresh failing?); "
+            "older than 35 days, every stock shows as unknown",
+        )
+
+
 def _short_history(d: Any, tickers: Any) -> pd.DataFrame:
     s = M.load_short_interest(d)
     return s[s["ticker"].isin(set(tickers))] if not s.empty else s
@@ -383,8 +428,49 @@ def build(ctx: RunContext) -> int:
     except ModuleNotFoundError:
         pass
 
+    # ---- finanzen.net zero (true / false / unknown) and Picks
+    from convergealpha.decide import picks as PK
+    from convergealpha.ledger import monitor as MON
+    from convergealpha.sources import brokers as B
+
+    t["zero"], zero_summary = B.zero_flags(t, B.load_list(paths.data), as_of)
+    record_brokers(ctx, zero_summary)
+    validated = list((extra.get("health") or {}).get("validated") or [])
+    if "label" in t:
+        pick_scores, pick_summary = PK.compute(t, validated)
+        race_live = ((extra.get("files") or {}).get("race.json") or {}).get("live") or {}
+        site.write_json_file(
+            paths.site,
+            "picks.json",
+            PK.export(
+                t,
+                pick_scores,
+                pick_summary,
+                as_of.strftime("%Y-%m-%d"),
+                ctx.now,
+                validated,
+                zero_summary,
+                {
+                    "since": race_live.get("picks_since"),
+                    **((race_live.get("strategies") or {}).get(MON.PICKS_STRATEGY) or {}),
+                },
+            ),
+        )
+        scores_snap = (extra.get("snapshots") or {}).get("scores")
+        if scores_snap is not None:
+            ps = pick_scores.reindex(scores_snap["ticker"])
+            scores_snap["pick_balanced"] = ps["balanced"].where(ps["passes_floor"]).to_numpy()
+            scores_snap["pick_rank"] = ps["pick_rank"].to_numpy()
+        log.info("picks: %s", pick_summary)
+
     # ---- exports
-    site.write_screener(paths.site, t, SCREENER_FIELDS, as_of.strftime("%Y-%m-%d"), ctx.now)
+    meta = {
+        "reliability": _reliability_meta(extra),
+        "brokers": zero_summary,
+    }
+    site.write_screener(
+        paths.site, t, SCREENER_FIELDS, as_of.strftime("%Y-%m-%d"), ctx.now, meta=meta
+    )
     site.write_screener(
         paths.site,
         site.today_subset(t),
@@ -392,6 +478,7 @@ def build(ctx: RunContext) -> int:
         as_of.strftime("%Y-%m-%d"),
         ctx.now,
         name="today.json",
+        meta=meta,
     )
     site.write_intraday_placeholder(paths.site)
     site.reset_stock_dir(paths.site)
@@ -437,6 +524,8 @@ def build(ctx: RunContext) -> int:
             "name": row["name"],
             "exchange": row["exchange"],
             "is_adr": bool(row["is_adr"]),
+            # finanzen.net zero: True / False / None (unknown, never "not buyable").
+            "zero": bool(z) if pd.api.types.is_bool(z := row.get("zero")) else None,
             "cik": None if pd.isna(row["cik"]) else int(row["cik"]),
             "sector": SP._v(row.get("sector")),
             "industry": SP._v(row.get("industry")),
@@ -505,8 +594,6 @@ def build(ctx: RunContext) -> int:
     ledger_info = ledger_step(ctx, t, extra, as_of, snapshot_paths.get("scores"))
     usage = None
     try:
-        from convergealpha.ledger import monitor as MON
-
         usage = MON.actions_usage()
     except Exception as e:
         log.warning("actions usage: %s", e)
@@ -524,6 +611,7 @@ def build(ctx: RunContext) -> int:
             "ledger": ledger_info,
             "actions_usage": usage,
             "plugins": PL.status(paths.data, ctx.env),
+            "brokers": zero_summary,
             **extra.get("health", {}),
         },
     )

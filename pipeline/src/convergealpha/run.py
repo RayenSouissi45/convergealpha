@@ -505,6 +505,8 @@ def job_build(ctx: RunContext) -> int:
 def job_bootstrap(ctx: RunContext, what: str) -> int:
     ctx.job = f"bootstrap-{what}"
     ctx.load()
+    if what == "brokers":
+        return _bootstrap_brokers(ctx)
     stocks, _ = universe_tickers(ctx)
     ciks = sorted({int(c) for c in stocks["cik"].dropna()})
     sec = ctx.sec_session()
@@ -535,6 +537,27 @@ def job_bootstrap(ctx: RunContext, what: str) -> int:
     else:
         raise ValueError(f"unknown bootstrap target {what}")
     log.info("bootstrap %s done in %.0fs", what, time.time() - t0)
+    ctx.save()
+    return 0
+
+
+def _bootstrap_brokers(ctx: RunContext) -> int:
+    """Weekly: the finanzen.net zero list (gettex shares in ESMA FIRDS, mapped to tickers)."""
+    from convergealpha.sources import brokers as B
+
+    try:
+        meta = B.refresh(ctx.paths.data, ctx.paths.cache, ctx.today.date(), ctx.env)
+        ctx.record(
+            "brokers",
+            True,
+            as_of=meta["list_date"],
+            records=meta["with_us_ticker"],
+            detail=f"{meta['instruments']:,} gettex shares and ADRs, "
+            f"{meta['with_us_ticker']:,} with a US ticker",
+        )
+    except Exception as e:
+        log.warning("finanzen.net zero list: %s", e)
+        ctx.record("brokers", False, detail=f"List refresh failed: {type(e).__name__}: {e}")
     ctx.save()
     return 0
 

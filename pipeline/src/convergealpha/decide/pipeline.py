@@ -19,6 +19,7 @@ from convergealpha.core import stats
 from convergealpha.decide import rules as R
 from convergealpha.features import families as FA
 from convergealpha.features.evidence import Sources
+from convergealpha.models import reliability as RL
 from convergealpha.sources import macro as M
 from convergealpha.util.log import get
 
@@ -119,6 +120,7 @@ def decide(
 
     stock_sections: dict[str, dict[str, Any]] = {}
     out_cols: dict[str, dict[str, Any]] = {}
+    rel_tables = (model_meta.get("reliability") or {}).get("horizons") or {}
     for tk, r in t.iterrows():
         tk = str(tk)
         b = float(beta.get(tk, 1.0)) if pd.notna(beta.get(tk, np.nan)) else 1.0
@@ -171,6 +173,27 @@ def decide(
         if not bool(r.get("eligible")) and label in (R.LABEL_BUY, R.LABEL_TOP, R.LABEL_WATCH):
             label = R.LABEL_NONE
         six = fc["6m"] if fc else None
+        # "How often was it right?" for this stock's calibrated probabilities (models only).
+        rel: dict[str, dict[str, Any]] | None = None
+        hits: dict[str, Any] = {}
+        if fc and mrow is not None and rel_tables:
+            rel = {
+                k: {
+                    # Rounded like the screener export, so the site finds the same bucket.
+                    kind: RL.lookup(rel_tables.get(k, {}).get(kind), round(v[f"p_{kind}"], 4))
+                    for kind in RL.KINDS
+                }
+                for k, v in fc.items()
+            }
+            for k, v in rel.items():
+                u = v.get("up")
+                if u:
+                    hits |= {
+                        f"hit_up_{k}": u["rate"],
+                        f"hit_up_{k}_lo": u["lo"],
+                        f"hit_up_{k}_hi": u["hi"],
+                        f"hit_up_{k}_n": u["n"],
+                    }
         vol_m = float(r.get("vol_63") or np.nan) / math.sqrt(12)
         gain_m = six["median"] / 6 if six else np.nan
         out_cols[tk] = {
@@ -182,9 +205,10 @@ def decide(
             "speed": gain_m / vol_m if six and vol_m > 0 else np.nan,
             **({f"p_up_{k}": v["p_up"] for k, v in fc.items()} if fc else {}),
             **({f"p_beat_{k}": v["p_beat"] for k, v in fc.items()} if fc else {}),
-            "med_6m": six["median"] if six else np.nan,
-            "p90_6m": six["p90"] if six else np.nan,
-            "p10_6m": six["p10"] if six else np.nan,
+            **({f"med_{k}": v["median"] for k, v in fc.items()} if fc else {}),
+            **({f"p10_{k}": v["p10"] for k, v in fc.items()} if fc else {}),
+            **({f"p90_{k}": v["p90"] for k, v in fc.items()} if fc else {}),
+            **hits,
             "p25_1m": fc["1m"]["p25"] if fc else np.nan,
             "blocked": bool(blocks.get(tk)),
             "block_reason": (blocks.get(tk) or [None])[0],
@@ -227,6 +251,7 @@ def decide(
                     "1w": _f(r.get("implied_move_1w")),
                     "1m": _f(r.get("implied_move_1m")),
                 },
+                "reliability": rel,
                 "analog": model_meta.get("analogs", {}).get(tk),
                 "sample_size": model_meta.get("sample_sizes", {}).get(tk),
             },
@@ -341,6 +366,7 @@ def decide(
             },
         },
         "kill_switch": ks,
+        "reliability": model_meta.get("reliability"),
     }
     return t, extra_out
 

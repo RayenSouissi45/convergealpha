@@ -48,6 +48,13 @@ SOURCES: tuple[SourceSpec, ...] = (
     SourceSpec("macro", "Macro and regime (FRED)", 2, "FRED_API_KEY"),
     SourceSpec("news", "News and filings", 2, "FINNHUB_API_KEY"),
     SourceSpec("institutional", "Institutional ownership", 2, stale_after_days=10),
+    SourceSpec(
+        "brokers",
+        "finanzen.net zero list (gettex shares, ESMA FIRDS)",
+        2,
+        stale_after_days=16,
+        optional=True,
+    ),
     SourceSpec("danelfin", "Danelfin AI score (optional)", 2, "DANELFIN_API_KEY", optional=True),
     SourceSpec(
         "ai_news", "AI news event extraction (optional)", 2, "ANTHROPIC_API_KEY", optional=True

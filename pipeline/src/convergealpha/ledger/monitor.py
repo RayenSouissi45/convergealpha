@@ -81,28 +81,49 @@ def _reliability(p: np.ndarray, y: np.ndarray, bins: int = 5) -> list[dict[str, 
 # --------------------------------------------------------------------------- live baseline race
 
 
+PICKS_STRATEGY = "Picks – Balanced top 25"
+PICKS_TOP = 25
+
+
 def race(data_dir: Path, tr: pd.DataFrame) -> dict[str, Any]:
-    """Each month's first snapshot: top-2% picks by strategy, held 21 trading days, excess vs SPY."""
+    """Each month's first snapshot: top-2% picks by strategy, held 21 trading days, excess vs SPY.
+
+    "Picks – Balanced top 25" holds the Picks page's 25 balanced picks equally weighted, from the
+    first snapshot of each month that has them: it is a live-only strategy (no backtest), so it
+    starts on the first day the Picks page ran.
+    """
+    import pyarrow.parquet as pq
+
     files = sorted((data_dir / "snapshots").glob("*/*/scores.parquet"))
     if not files or SPY not in tr:
-        return {"months": [], "strategies": {}}
+        return {"months": 0, "strategies": {}, "picks_since": None}
     by_month: dict[str, Path] = {}
+    picks_month: dict[str, Path] = {}
     for f in files:
         d = f.parent.name
         by_month.setdefault(d[:6], f)
+        if d[:6] not in picks_month and "pick_rank" in pq.read_schema(f).names:
+            picks_month[d[:6]] = f
     idx = tr.index
     series: dict[str, list[tuple[str, float]]] = {}
-    for _, f in sorted(by_month.items()):
+
+    def forward(f: Path) -> tuple[pd.Timestamp, pd.Series, float] | None:
         d = pd.Timestamp(f.parent.name)
         if d not in idx:
-            continue
+            return None
         i = idx.get_loc(d)
         if i + 21 >= len(idx):
+            return None
+        fwd = tr.iloc[i + 21] / tr.iloc[i] - 1
+        return d, fwd, float(fwd[SPY])
+
+    for _, f in sorted(by_month.items()):
+        got = forward(f)
+        if got is None:
             continue
+        d, fwd, spy = got
         s = pd.read_parquet(f).set_index("ticker")
         el = s[s["label"] != "SELL / RISK WARNING"] if "label" in s else s
-        fwd = tr.iloc[i + 21] / tr.iloc[i] - 1
-        spy = float(fwd[SPY])
         for name, col in (
             ("App (model rank)", "l1"),
             ("Equal-weight family average", "composite"),
@@ -118,6 +139,18 @@ def race(data_dir: Path, tr: pd.DataFrame) -> dict[str, Any]:
                     (d.strftime("%Y-%m-%d"), float(r.mean()) - spy - 0.002)
                 )
         series.setdefault("S&P 500", []).append((d.strftime("%Y-%m-%d"), 0.0))
+    for _, f in sorted(picks_month.items()):
+        got = forward(f)
+        if got is None:
+            continue
+        d, fwd, spy = got
+        ranks = pd.read_parquet(f, columns=["ticker", "pick_rank"]).set_index("ticker")
+        pick = ranks["pick_rank"].dropna().sort_values().index[:PICKS_TOP]
+        r = fwd.reindex(pick).dropna()
+        if len(r):
+            series.setdefault(PICKS_STRATEGY, []).append(
+                (d.strftime("%Y-%m-%d"), float(r.mean()) - spy - 0.002)
+            )
     out = {}
     for name, pts in series.items():
         m = np.array([v for _, v in pts])
@@ -127,7 +160,12 @@ def race(data_dir: Path, tr: pd.DataFrame) -> dict[str, Any]:
             "months": len(m),
             "max_drawdown": V.max_drawdown(m),
         }
-    return {"months": len(next(iter(series.values()), [])), "strategies": out}
+    first_picks = min(picks_month) if picks_month else None
+    return {
+        "months": len(series.get("S&P 500", [])),
+        "strategies": out,
+        "picks_since": picks_month[first_picks].parent.name if first_picks else None,
+    }
 
 
 # --------------------------------------------------------------------------- kill switch

@@ -173,10 +173,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--no-yahoo", action="store_true")
     p.set_defaults(func=_cmd_fetch)
 
-    p = sub.add_parser("bootstrap", help="one-time history loads: sec | fundamentals | finra")
+    p = sub.add_parser(
+        "bootstrap", help="history loads and weekly lists: sec | fundamentals | finra | brokers"
+    )
     common(p)
     tick(p)
-    p.add_argument("what", choices=["sec", "fundamentals", "finra"])
+    p.add_argument("what", choices=["sec", "fundamentals", "finra", "brokers"])
     p.set_defaults(func=_cmd_bootstrap)
 
     p = sub.add_parser("demo", help="30-ticker end-to-end run into web/public/data")

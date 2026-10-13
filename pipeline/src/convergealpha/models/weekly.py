@@ -103,6 +103,10 @@ def run(ctx: RunContext, out_dir: Path) -> dict[str, Any]:
     oos.to_parquet(out_dir / "oos_devval.parquet", index=False)
     cal = T.calibrate(oos, cfg)
     T.fit_meta(oos, cal)
+    # "How often was it right?" tables (dev + validation years only; not part of the config).
+    from convergealpha.models import reliability as RL
+
+    write_json(RL.build(oos, cfg.calibration_min_bin), out_dir / "reliability.json")
     final = T.fit_models(df, cfg, trading)
     analogs = analog_index(df)
     recent = df[df["date"] >= df["date"].max() - pd.Timedelta(days=730)]

@@ -40,6 +40,12 @@ jobs:
         run: python -m convergealpha bootstrap fundamentals --data data --cache "${{ runner.temp }}/cache"
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      # finanzen.net zero only trades on gettex: its official share list (ESMA FIRDS), mapped to
+      # tickers with OpenFIGI. Only new ISINs are looked up; a failure never blocks training.
+      - name: Refresh the finanzen.net zero list
+        run: python -m convergealpha bootstrap brokers --data data --cache "${{ runner.temp }}/cache"
+        env:
+          OPENFIGI_API_KEY: ${{ secrets.OPENFIGI_API_KEY }}
       - name: Train and validate
         run: python -u -m convergealpha weekly --data data --models models-out --out site-validation
       - run: scripts/data-commit.sh data "weekly models + validation (run ${{ github.run_id }})"

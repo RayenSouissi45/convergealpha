@@ -71,7 +71,8 @@ def test_screener_is_columnar_and_nan_free(tmp_path: Path) -> None:
     )
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["fields"] == ["ticker", "name", "price", "ret_1m", "eligible"]
-    assert data["rows"][0] == ["A", "A Inc", 12.35, 0.1235, True]
+    # Returns keep 3 decimals (one decimal of a percent), prices 2 above $10.
+    assert data["rows"][0] == ["A", "A Inc", 12.35, 0.123, True]
     assert data["rows"][1] == ["B", "B Inc", None, None, False]
     assert "NaN" not in path.read_text(encoding="utf-8")
 

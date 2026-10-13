@@ -53,6 +53,7 @@ SECRETS: tuple[SecretSpec, ...] = (
     SecretSpec("ALPHAVANTAGE_API_KEY", "Optional backup data"),
     SecretSpec("FMP_API_KEY", "Optional backup data"),
     SecretSpec("DANELFIN_API_KEY", "Optional third-party AI score"),
+    SecretSpec("OPENFIGI_API_KEY", "Optional: faster ISIN-to-ticker mapping (broker list)"),
     SecretSpec("ANTHROPIC_API_KEY", "Optional AI news event extraction"),
     SecretSpec("TELEGRAM_BOT_TOKEN", "Optional phone alerts"),
     SecretSpec("TELEGRAM_CHAT_ID", "Optional phone alerts"),

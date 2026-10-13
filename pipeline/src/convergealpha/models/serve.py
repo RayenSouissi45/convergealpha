@@ -184,6 +184,11 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         # The verdict is a pure function of the report: recompute it so its rules and wording
         # always match the current code, even for a bundle trained by an older version.
         validation["verdict"] = lab.verdict(validation)
+    reliability = (
+        json.loads((d / "reliability.json").read_text(encoding="utf-8"))
+        if (d / "reliability.json").is_file()
+        else None
+    )
     drift = None
     if (d / "reference.parquet").is_file():
         from convergealpha.ledger import monitor as MON
@@ -197,6 +202,7 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         if drift is not None
         else None,
         "files": {"validation.json": validation} if validation else {},
+        "reliability": reliability,
         "analogs": analog_out,
         "sample_sizes": sample_hz,
         "patterns": {
