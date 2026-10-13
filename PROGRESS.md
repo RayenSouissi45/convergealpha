@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-13 (end of the Phase 1–7 build run)
+Last updated: 2026-10-13 (Phase 1–7 build run, then Picks and clarity)
 
 - Live site: **https://rayensouissi45.github.io/convergealpha/**
 - Code: https://github.com/RayenSouissi45/convergealpha (public)
@@ -79,6 +79,35 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
   revisions 74%; XBRL quality ratios 87% of stocks, 93% of eligible ones; options implied
   volatility for 753 candidates; news for 146 stocks; ledger 664 entries, chain verified, no
   stock recorded twice for the same day; kill switch off.
+
+### Checks run for Picks and clarity (2026-10-13)
+
+- Tests: **101 pipeline** (adds Picks rules — exclusions, minimum 40, fixed weights, sector ranks,
+  zero tabs —, reliability buckets, cross-fitting and lookup, FIRDS parsing, ISIN check digits,
+  OpenFIGI cache, zero true/false/unknown, manual list, live Picks race), **66 web unit** (adds
+  column-explanation coverage, Forecast columns, broker filter incl. saved setting and disabled
+  state, Picks, Columns explained, stock-page reliability, navigation; fixtures cut from a real
+  local build) and **43 Playwright checks** (+3 phone-only skips on desktop; adds Picks, Columns,
+  Forecast view without sideways scroll down to 360 px, headers never cut off, remembered zero
+  setting). ruff, strict mypy, oxlint and TypeScript are clean.
+- The whole build ran locally on a copy of the data repo first (5,356 stocks, 390 s); the real
+  data repo was not touched by that test.
+- GitHub `weekly` run 38371204176: new model `m-20261013-7ef7099b4d` (same configuration digest),
+  `reliability.json` built, note "Holdout results reused … (evaluated once for this
+  configuration)"; `validation/holdout_log.json` still has 2 entries. Verdict unchanged: 2 of 12
+  checks, P(up) 1m and 6m validated.
+- GitHub `daily` run 38373161508, live: 2,100 Picks candidates, 807 pass the minimum of 40, 25 per
+  tab; finanzen.net zero list dated 2026-10-10: 2,939 of 5,355 stocks and 1,984 of 2,461 eligible
+  ones buyable, 35 unknown; ledger 668 entries, verified. Checked in a phone browser on the live
+  site: ticking the box changes Picks #1 from EPD (not on gettex) to R, the setting carries over
+  to the Screener, the Forecast view shows "58% · 56% ±1% ✓ validated".
+- Lighthouse, mobile, live site, new `lighthouse` workflow (GitHub runner, median of 3, CPU
+  benchmark ≈ 2,500): Today 100, Picks 99, Screener 97, Forecast view 97, Columns explained 100,
+  Stock 99; accessibility 100 and best practices 100 on all six. (The local PC was busy with a game
+  during this run, which made local scores meaningless: hence the workflow. The runner's CPU is
+  faster than the PC used for the 2026-10-12 numbers above, so the two sets are not comparable.)
+- Screener file: 75 fields (was 59), 832 KB compressed (was 831 KB) thanks to per-field rounding;
+  `picks.json` 11 KB compressed.
 
 ### Validation result (first weekly run)
 
@@ -172,7 +201,7 @@ Picks, Forecast view, finanzen.net zero, column explanations (2026-10-13)
 51. Probabilities are exported with 4 decimals and looked up with the same rounded value: the site always finds the bucket the pipeline used.
 52. The screener carries only the hit rate per horizon (`hit_up_*`); the bucket tables (range and n) travel once in the file header: 12 more fields per row would have added ≈ 250 KB.
 53. The reliability tables sit outside the model configuration, so its digest is unchanged and the weekly job reuses the frozen holdout result instead of evaluating it again.
-54. finanzen.net zero list = the gettex shares and ADRs in ESMA's FIRDS register (official, reuse allowed with credit): the broker trades only on gettex, gettex lists ≈ 8,600 of them against the broker's "more than 8,500 shares", and the broker's own site blocks automated access and offers no download.
+54. finanzen.net zero list = the gettex shares, ADRs, partnership units and REITs in ESMA's FIRDS register (official, reuse allowed with credit; REITs are filed as collective investment vehicles, so the fund file is read too — without it AMT, PLD or O looked unavailable): the broker trades only on gettex, gettex lists ≈ 8,600 of them against the broker's "more than 8,500 shares", and the broker's own site blocks automated access and offers no download.
 55. ISINs are mapped to tickers with OpenFIGI (public-domain identifiers) and cached in the data repo; the first full mapping (8,642 ISINs, ≈ 38 minutes without a key) ran once locally: later weekly runs only map new ISINs and re-check old ones.
 56. "Buyable" means the exact US-listed security: a foreign company's ADR is a different security from its home-market share.
 57. Unknown (no list, list older than 35 days, or a US listing younger than 30 days) is never treated as "not buyable": with the box ticked those stocks stay visible, marked "?".
@@ -183,6 +212,8 @@ Picks, Forecast view, finanzen.net zero, column explanations (2026-10-13)
 62. Forecast view: one horizon at a time on phones (1W | 1M | 3M | 6M chips, compact widths, headers without the horizon); all four on desktop, where the Screener page uses a wider layout.
 63. One explanations file (`web/src/lib/columnDocs.ts`) feeds both the ⓘ tooltips and the Columns explained page; a test fails if a column lacks any of the 8 parts.
 64. Column groups follow your 10 groups, and labels use plain words ("Chance up 6M", "Return 1 month") instead of codes ("P(up) 6m", "1m").
+65. A `lighthouse` workflow (Actions → lighthouse → Run workflow) measures the live site on a GitHub runner, median of 3 runs: local scores depend on what else the PC is doing.
+66. The live Picks race reads each day's first scores file, so it starts with the first daily run of a new trading day that publishes picks (2026-10-13's run after the close): same-day re-runs never change a recorded strategy.
 
 ## Questions for the owner
 
