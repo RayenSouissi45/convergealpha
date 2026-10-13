@@ -41,7 +41,7 @@ SCREENER_FIELDS: tuple[str, ...] = (
     "insider_net_90d", "insider_buy_7d", "short_pct_float", "days_to_cover", "iv_30d",
     "price", "change_1d", "ret_1w", "ret_1m", "ret_3m", "ret_ytd", "ret_1y",
     "vol_63", "atr_pct", "trend_up", "dist_52w_high", "market_cap", "adv_dollar",
-    "next_earnings", "days_to_earnings", "cluster", "last_date",
+    "next_earnings", "days_to_earnings", "cluster", "last_date", "opp", "opp_event",
 )  # fmt: skip
 
 STAT_KEYS: tuple[str, ...] = (
@@ -69,6 +69,10 @@ def load_sources(
     q = F.quarterly_flows(facts) if not facts.empty else pd.DataFrame()
     ttm = F.ttm(q) if not q.empty else pd.DataFrame()
     inst = F.instants(facts) if not facts.empty else pd.DataFrame()
+    from convergealpha.models.dataset import eps_surprise_series
+
+    # EPS vs the same quarter last year, known from the filing date (models and opportunity badge).
+    eps_sue = eps_surprise_series(facts) if not facts.empty else None
     log.info(
         "loaded insiders (%d trades) and fundamentals (%d facts) in %.0fs",
         len(trades),
@@ -108,7 +112,12 @@ def load_sources(
         news=news,
         filings=filings,
         as_of=as_of,
-        extras={"lexicon": lex.name, "data_dir": d, "short_all": _short_history(d, stocks.index)},
+        extras={
+            "lexicon": lex.name,
+            "data_dir": d,
+            "short_all": _short_history(d, stocks.index),
+            "eps_sue": eps_sue,
+        },
     )
 
 
@@ -233,6 +242,82 @@ def ledger_step(
         "outcomes": len(outcomes),
         "verified": ok_l and ok_o,
     }
+
+
+def paper_step(
+    ctx: RunContext,
+    panel: P.Panel,
+    t: pd.DataFrame,
+    as_of: pd.Timestamp,
+    extra: dict[str, Any],
+    validated: list[str],
+    base_up: dict[str, float],
+    fx_series: pd.Series,
+    fx_now: tuple[float, str] | None,
+    snapshot_paths: dict[str, Path],
+    price_coverage: float,
+) -> dict[str, Any]:
+    """Paper trading (paper money only): extend the trade ledger with today's fills, values and
+    decisions, verify the whole chain, and publish strategies.json."""
+    from datetime import UTC
+
+    from convergealpha.ledger import ledger as LG
+    from convergealpha.paper import engine as PE
+    from convergealpha.paper import export as PX
+    from convergealpha.paper import strategies as PS
+
+    d = ctx.paths.data
+    specs = (*PS.SPECS, PS.BENCHMARK)
+    model_ok = extra.get("forecast_method") == "model"
+    ks = bool((extra.get("kill_switch") or {}).get("active"))
+    if model_ok and not ks:
+        why_not = None
+    elif not model_ok:
+        why_not = "the model forecasts are not available today"
+    else:
+        why_not = "the kill switch is active"
+    snap = snapshot_paths.get("scores")
+    inputs = {
+        "scores_snapshot": str(snap.relative_to(d)).replace(chr(92), "/") if snap else None,
+        "scores_sha256": LG.file_sha256(snap) if snap else None,
+        "model_version": (extra.get("health") or {}).get("model_version"),
+    }
+    today = PE.Today(t, validated, base_up.get("1m"), why_not is None, why_not, inputs)
+    status = None
+    new: list[dict[str, Any]] = []
+    if price_coverage <= 0.5:
+        log.warning("paper trading waits: prices for only %.0f%% of stocks", 100 * price_coverage)
+        books = PE.replay(LG.read(d / PE.LEDGER), specs)
+        status = "waiting for good price data"
+    else:
+        try:
+            recorded = ctx.now.astimezone(UTC).isoformat(timespec="seconds")
+            books, new = PE.run(d, panel, fx_series, as_of, today, recorded)
+        except Exception:
+            log.exception("paper trading failed; nothing was recorded today")
+            books = PE.replay(LG.read(d / PE.LEDGER), specs)
+            status = "error: nothing recorded today"
+    ok, why = PE.verify(d)
+    n = len(LG.read(d / PE.LEDGER))
+    site.write_json_file(
+        ctx.paths.site,
+        "strategies.json",
+        PX.export(
+            books,
+            t,
+            as_of.strftime("%Y-%m-%d"),
+            ctx.now,
+            fx_now,
+            (ok, why, n),
+            validated,
+            base_up.get("1m"),
+            status,
+            extra.get("reliability"),
+        ),
+    )
+    log.info("paper trading: %d new ledger entries (%d in total), chain %s", len(new), n, "ok" if ok else "BROKEN")  # fmt: skip
+    last = max((b.last_day or "" for b in books.values()), default="") or None
+    return {"verified": ok, "detail": why, "entries": n, "new_today": len(new), "last_day": last}
 
 
 def _reliability_meta(extra: dict[str, Any]) -> dict[str, Any] | None:
@@ -436,8 +521,47 @@ def build(ctx: RunContext) -> int:
     t["zero"], zero_summary = B.zero_flags(t, B.load_list(paths.data), as_of)
     record_brokers(ctx, zero_summary)
     validated = list((extra.get("health") or {}).get("validated") or [])
+    day = as_of.strftime("%Y-%m-%d")
+
+    # ---- opportunity badge: one per stock, from the signals the app already has
+    from convergealpha.decide import costs as CO
+    from convergealpha.decide import opportunity as OP
+
+    badges: dict[str, OP.Badge] = {}
+    base_up: dict[str, float] = OP.base_rates(extra.get("reliability"))
+    if "label" in t:
+        badges, base_up = OP.compute(
+            t,
+            src,
+            as_of,
+            extra.get("pattern_history"),
+            extra.get("reliability"),
+            validated,
+            src.extras.get("eps_sue"),
+        )
+    t["opp"] = pd.Series({k: b.color for k, b in badges.items()}, dtype=object).reindex(t.index)
+    t["opp_event"] = pd.Series(
+        {k: OP.short_text(b) for k, b in badges.items()}, dtype=object
+    ).reindex(t.index)
+    t["opp_days"] = pd.Series(
+        {k: b.days_since_event for k, b in badges.items()}, dtype=float
+    ).reindex(t.index)
+    opp_export = {k: OP.export(b, day) for k, b in badges.items()}
+    counts = {c: sum(1 for b in badges.values() if b.color == c) for c in (OP.GREEN, OP.AMBER, OP.RED)}  # fmt: skip
+    site.write_json_file(
+        paths.site,
+        "opportunities.json",
+        {"as_of": day, "base_up": base_up, "counts": counts, "stocks": opp_export},
+    )
+    log.info("opportunity badges: %s", counts)
+    fred = M.load_fred(paths.data)
+    fx_series = CO.fx_series(fred)
+    fx_now = CO.fx_on(fx_series, as_of)
     if "label" in t:
         pick_scores, pick_summary = PK.compute(t, validated)
+        for k in ("safety", "upside", "confidence", "balanced"):
+            t[f"pick_{k}"] = pick_scores[k].reindex(t.index)
+        t["pick_passes"] = pick_scores["passes_floor"].reindex(t.index).eq(True)
         race_live = ((extra.get("files") or {}).get("race.json") or {}).get("live") or {}
         site.write_json_file(
             paths.site,
@@ -461,7 +585,17 @@ def build(ctx: RunContext) -> int:
             ps = pick_scores.reindex(scores_snap["ticker"])
             scores_snap["pick_balanced"] = ps["balanced"].where(ps["passes_floor"]).to_numpy()
             scores_snap["pick_rank"] = ps["pick_rank"].to_numpy()
+            for k in ("safety", "upside", "confidence"):
+                scores_snap[f"pick_{k}"] = ps[k].to_numpy()
+            scores_snap["opp"] = t["opp"].reindex(scores_snap["ticker"]).astype("string").to_numpy()
         log.info("picks: %s", pick_summary)
+        from convergealpha.decide import plan as PLAN
+
+        site.write_json_file(
+            paths.site,
+            "plan.json",
+            PLAN.export(t, day, ctx.now, validated, extra.get("reliability"), base_up, fx_now),
+        )
 
     # ---- exports
     meta = {
@@ -545,10 +679,10 @@ def build(ctx: RunContext) -> int:
             "events": SP.blocking_inputs(row),
         }
         payload.update(extra.get("stock_sections", {}).get(tk, {}))
+        payload["opportunity"] = opp_export.get(tk)
         site.write_stock(paths.site, tk, payload)
 
     market = market_summary(panel, snap)
-    fred = M.load_fred(paths.data)
     macro = {}
     for sid, label in M.FRED_SERIES.items():
         if sid in fred:
@@ -592,6 +726,24 @@ def build(ctx: RunContext) -> int:
         snapshot_paths[name] = write_parquet(float32_snapshot(df), path)
 
     ledger_info = ledger_step(ctx, t, extra, as_of, snapshot_paths.get("scores"))
+    try:
+        paper_info: dict[str, Any] | None = paper_step(
+            ctx,
+            panel,
+            t,
+            as_of,
+            extra,
+            validated,
+            base_up,
+            fx_series,
+            fx_now,
+            snapshot_paths,
+            coverage,
+        )
+    except Exception:
+        # Paper trading must never stop the site from being published.
+        log.exception("paper trading step failed")
+        paper_info = {"verified": False, "detail": "the paper-trading step failed", "entries": None}
     usage = None
     try:
         usage = MON.actions_usage()
@@ -612,6 +764,7 @@ def build(ctx: RunContext) -> int:
             "actions_usage": usage,
             "plugins": PL.status(paths.data, ctx.env),
             "brokers": zero_summary,
+            "trade_ledger": paper_info,
             **extra.get("health", {}),
         },
     )

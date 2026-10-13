@@ -72,12 +72,17 @@ def _history_today(src: Sources, t: pd.DataFrame, fred: pd.DataFrame) -> D.Histo
     from convergealpha.sources import fundamentals as F
 
     facts_sue = pd.DataFrame(columns=["cik", "end", "known", "sue"])
-    try:
-        facts = F.load_facts(src.extras["data_dir"]) if "data_dir" in src.extras else pd.DataFrame()
-        if not facts.empty:
-            facts_sue = D.eps_surprise_series(facts)
-    except Exception as e:
-        log.warning("eps surprise series unavailable: %s", e)
+    if src.extras.get("eps_sue") is not None:
+        facts_sue = src.extras["eps_sue"]  # already computed by the build
+    else:
+        try:
+            facts = (
+                F.load_facts(src.extras["data_dir"]) if "data_dir" in src.extras else pd.DataFrame()
+            )
+            if not facts.empty:
+                facts_sue = D.eps_surprise_series(facts)
+        except Exception as e:
+            log.warning("eps surprise series unavailable: %s", e)
     return D.History(
         sub_panel,
         stocks,

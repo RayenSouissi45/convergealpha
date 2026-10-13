@@ -299,6 +299,8 @@ def export(
             "horizons": hz,
             "reasons": reasons(row, s),
             "risk": main_risk(row),
+            "opp": row.get("opp") if isinstance(row.get("opp"), str) else None,
+            "opp_event": row.get("opp_event") if isinstance(row.get("opp_event"), str) else None,
         }
     return {
         "schema_version": 1,

@@ -367,6 +367,8 @@ def decide(
         },
         "kill_switch": ks,
         "reliability": model_meta.get("reliability"),
+        "pattern_history": model_meta.get("pattern_history"),
+        "forecast_method": "model" if model is not None else "fallback",
     }
     return t, extra_out
 

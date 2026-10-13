@@ -255,7 +255,7 @@ def job_prepare(ctx: RunContext) -> int:
                 True,
                 as_of=pd.Timestamp(last).strftime("%Y-%m-%d"),
                 records=len(fred),
-                detail="VIX, high-yield spread, 10y-2y, fed funds",
+                detail="VIX, high-yield spread, 10y-2y, fed funds, EUR/USD",
             )
         except Exception as e:
             log.error("fred failed: %s", e)

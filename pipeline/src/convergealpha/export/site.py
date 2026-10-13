@@ -93,6 +93,7 @@ def write_screener(
 
 
 TODAY_TOP = 20  # per list; the Today page shows at most 12
+TODAY_OPP_RED = 12  # "Be careful" list
 
 
 def today_subset(t: pd.DataFrame) -> pd.DataFrame:
@@ -120,6 +121,13 @@ def today_subset(t: pd.DataFrame) -> pd.DataFrame:
     days = num("days_to_earnings")
     soon = pd.DataFrame({"d": days, "adv": -num("adv_dollar").fillna(0)})[elig & days.between(0, 5)]
     keep |= idx.isin(soon.sort_values(["d", "adv"]).head(TODAY_TOP).index)
+    # Opportunity badges: every green, the amber ones with the best chance up, the biggest red jumps.
+    if "opp" in t:
+        opp = t["opp"].astype("string")
+        keep |= opp.eq("green").fillna(False).to_numpy()
+        amber = opp.eq("amber").fillna(False) & elig
+        keep |= idx.isin(num("p_up_1m")[amber].nlargest(TODAY_TOP).index)
+        keep |= idx.isin(num("ret_1w")[opp.eq("red").fillna(False)].nlargest(TODAY_OPP_RED).index)
     return t[keep]
 
 
