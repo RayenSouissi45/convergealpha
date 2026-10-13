@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-12 (end of the Phase 1–7 build run)
+Last updated: 2026-10-13 (end of the Phase 1–7 build run)
 
 - Live site: **https://rayensouissi45.github.io/convergealpha/**
 - Code: https://github.com/RayenSouissi45/convergealpha (public)
@@ -10,12 +10,12 @@ Last updated: 2026-10-12 (end of the Phase 1–7 build run)
 |---|---|---|
 | 0 Setup | Repos, CI, secrets, deploy | **Done** |
 | 1 Universe + prices + screener | 5,356 US common stocks, prices since 2010, screener, stock page | **Done** |
-| 2 Evidence data | Analysts, estimates, earnings, insiders, XBRL fundamentals, short interest, options, regime, news | **Done** (options fill from the second daily run, see below) |
+| 2 Evidence data | Analysts, estimates, earnings, insiders, XBRL fundamentals, short interest, options, regime, news | **Done** |
 | 3 Families + labels | F1–F7, N_eff, D, R1–R12 / C1–C7, labels, position plan, Today page | **Done** |
 | 4 Models + forecasts | L0–L3, 4-horizon forecasts with conformal ranges, analogs, event patterns | **Done** (weekly training on GitHub) |
 | 5 Validation lab | /validation: walk-forward, ablation, DSR, PBO, holdout | **Done**. Result: BUY labels **not validated**; some horizon probabilities are |
 | 6 Ledger + monitoring | Hash-chained ledger, scorecard, baseline race, kill switch, drift, Telegram | **Done** (Telegram needs your bot, see questions) |
-| 7 Polish | PWA (offline, installable), Lighthouse ≥ 90, docs | **Done** except the Today page on a cold phone load (see Known limits) |
+| 7 Polish | PWA (offline, installable), Lighthouse ≥ 90, docs | **Done** (every page ≥ 90 on mobile, see checks) |
 
 ## What works
 
@@ -24,7 +24,7 @@ SEC filings and Form 4 insider trades, a rotating share of Yahoo analyst data (p
 ~400 candidates, holdings and stocks near earnings), Finnhub trends, calendar and news, options
 implied volatility for candidates, FRED macro and FINRA short interest. Then families, regime,
 model forecasts, labels and position plans; the ledger records new signals and measures due
-outcomes; the site is rebuilt and deployed. About 40 minutes.
+outcomes; the site is rebuilt and deployed. 17–40 minutes.
 
 **Every 2 hours in market hours (`intraday.yml`)**: gap, exit-level and drop checks for BUY/WATCH
 stocks and your holdings, SEC live filings and negative news. It only warns; labels change after
@@ -40,16 +40,23 @@ plan, evidence sections, chart, analogs, patterns), Compare, My portfolio (store
 browser), Scorecard, Baseline race, Validation, Health, About & method. Missing values show "—"
 and explain why. RESEARCH MODE badges stay on until something passes validation.
 
-### Checks run (2026-10-12)
+### Checks run (2026-10-12 and 13)
 
-- GitHub: `ci`, `deploy`, `daily` (38 min, 5,356 stocks), `intraday`, `bootstrap`, `backfill`
-  and `weekly` all ran by hand and succeeded.
-- Tests: 83 pipeline tests (all section 13 reference values, leakage, ledger tamper test,
-  validation metrics, calibration), 40 web unit tests, 28 Playwright checks at phone and desktop
-  size. ruff, strict mypy, oxlint and TypeScript are clean.
-- Lighthouse on the live site, mobile, real data: Screener 96, Stock 97, Portfolio 99,
-  accessibility 100 on every page. Today scored 76 because it downloaded the whole 1 MB
-  screener; it now uses a ~10 KB `today.json` (deployed with the next daily run).
+- GitHub: `ci`, `deploy`, `daily`, `intraday`, `bootstrap`, `backfill` and `weekly` all ran by
+  hand and succeeded; CI and deploy are green for every commit. The first scheduled `daily` and
+  `intraday` runs also succeeded (GitHub started them late, see Known limits).
+- Tests: 84 pipeline tests (all section 13 reference values, leakage, holdout once per
+  configuration, ledger tamper test, validation metrics, calibration, same-day merge), 40 web
+  unit tests, 30 Playwright checks at phone and desktop size (2 skipped by design). ruff, strict
+  mypy, oxlint and TypeScript are clean.
+- Lighthouse on the live site, mobile, real data (performance): Today 97, Screener 91–96
+  (3 runs), Stock 97, Portfolio 99, Validation 94–96, Health 98. Accessibility 100 on every
+  page; best practices 100 on Today, Screener and Stock.
+- Live `health.json` after the 2026-10-13 03:21 UTC build: 13 of 15 sources live; prices for
+  5,355 of 5,356 stocks; analyst snapshot ≤ 8 days old for 100% (consensus for 53%); EPS
+  revisions 74%; XBRL quality ratios 87% of stocks, 93% of eligible ones; options implied
+  volatility for 753 candidates; news for 146 stocks; ledger 664 entries, chain verified, no
+  stock recorded twice for the same day; kill switch off.
 
 ### Validation result (first weekly run)
 
@@ -118,12 +125,18 @@ Website
 30. React 19, Vite, Tailwind 4, TanStack Table v8 (not v9): v9 is not stable yet.
 31. oxlint instead of ESLint: the official Vite React template moved to it.
 32. Core pages load immediately, heavy pages on demand: lazy-loading everything scored worse.
-33. `today.json` for the Today page: phones download ~10 KB instead of the 1 MB screener.
+33. `today.json` for the Today page (top 20 per list, ~16 KB compressed): phones no longer download the 0.8 MB screener; the full file loads only if you have holdings or `today.json` is missing.
 34. Your portfolio is stored only in your browser; the optional `HOLDINGS` variable gives the pipeline tickers only: the code repo is public.
 35. Numbers and dates always use US English: this PC's locale is French.
 36. Offline mode: hashed assets cache-first, data network-first: works offline with the last data you opened, never stale when online.
 37. No AI news layer: it costs money; Loughran–McDonald + keyword tags are used instead.
 38. Telegram is optional and skipped without its secrets; Health shows "not connected".
+
+Re-runs and incidents
+39. A second run on the same day merges into that day's files (analyst and options snapshots, news, rating changes, earnings events) instead of replacing them: on 2026-10-12 a second manual run replaced the full analyst snapshot (5,356 → ~1,555 rows) and the day's event files. The bug was found the same evening, fixed (commit a7a2b73) and the lost rows were restored from the data repo's git history (data commit 0ed6297).
+40. The first `scores.parquet` of a day is never overwritten; later runs write `scores-HHMMSS.parquet` and their ledger entries hash that file: every ledger entry can always be re-checked against its exact inputs.
+41. Ledger entries from that incident are kept, not cleaned up: 364 SELL warnings came from the run with incomplete analyst data, 300 more from the corrected runs (other stocks). The ledger is append-only; deleting entries would defeat its purpose.
+42. Each daily build resets `intraday.json` to an empty placeholder, and the Today page shows intraday alerts only from today: no 404 in the console and no stale warnings.
 
 ## Questions for the owner
 
@@ -160,9 +173,13 @@ All optional. The site works without them.
 - **BUY labels are not validated** (see the table above). Labels keep their RESEARCH MODE badge.
 - **F1/F2 history starts now.** The models will improve once months of analyst snapshots exist.
 - **Survivorship bias**: free price history lacks most delisted stocks (hence the 50% haircut).
-- **Options** were empty in the first daily run because no candidate list existed yet; filled
-  from the next run.
-- **Lighthouse, Today page**: to be re-measured once `today.json` is live.
+- **Late scheduled runs**: GitHub started the first scheduled runs 4–6 hours late (daily at
+  03:07 UTC instead of 22:30, the 20:15 intraday check at 02:01). Results are the same, they
+  just arrive later; an intraday check that fires after the close finds nothing to check. Use
+  **Run workflow** if you need an update sooner.
+- **Data drift** (Health page): `days_since_report` and `industry_mom` are above PSI 0.25 against
+  the training data. The first is most likely the earnings-season timing (mid-October, just
+  before Q3 reports); watch whether it fades after the reports.
 - **SEC 13F** (full institutional holdings), FDA calendar and buyback history are not built
   (no free dated source); see docs/DATA_SOURCES.md.
 - `make` isn't installed on this Windows PC; SETUP.md lists the equivalent commands.

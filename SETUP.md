@@ -104,7 +104,7 @@ Needs Cloudflare hosting (above); Access cannot protect a `github.io` address.
 | What | How |
 |---|---|
 | A daily run now | GitHub → **Actions → daily → Run workflow** |
-| Retrain the models now | **Actions → weekly → Run workflow** (≈ 1–2 hours) |
+| Retrain the models now | **Actions → weekly → Run workflow** (≈ 15–30 minutes) |
 | An intraday check now | **Actions → intraday → Run workflow** |
 | Re-download price history | **Actions → backfill → Run workflow** |
 | Re-load SEC / FINRA history | **Actions → bootstrap → Run workflow** |
