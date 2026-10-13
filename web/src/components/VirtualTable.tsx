@@ -180,7 +180,7 @@ export function VirtualTable({
                 role="row"
                 aria-rowindex={vr.index + 2}
                 className={`absolute left-0 flex border-b border-slate-100 text-sm dark:border-zinc-800 ${
-                  eligible ? '' : 'text-slate-400 dark:text-zinc-500'
+                  eligible ? '' : 'text-slate-500 dark:text-zinc-400'
                 }`}
                 style={{ transform: `translateY(${vr.start}px)`, height: ROW_HEIGHT, width: totalWidth, minWidth: '100%' }}
               >
@@ -208,7 +208,7 @@ export function VirtualTable({
                           <span className="flex items-center gap-1">
                             <ZeroBadge value={row.original.zero} interactive={false} />
                             {!eligible && (
-                              <span className="text-[10px] leading-4 font-normal text-slate-400" aria-hidden="true">
+                              <span className="text-[10px] leading-4 font-normal text-slate-500 dark:text-zinc-400" aria-hidden="true">
                                 n/e
                               </span>
                             )}

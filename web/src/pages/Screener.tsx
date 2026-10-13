@@ -390,7 +390,7 @@ export default function Screener() {
                       className={`min-h-11 flex-1 rounded-lg border text-sm font-semibold ${
                         horizon === h ? 'border-teal-700 bg-teal-700 text-white dark:border-teal-500 dark:bg-teal-600' : 'border-slate-300 bg-white dark:border-zinc-600 dark:bg-zinc-900'
                       }`}
-                      aria-label={H_LONG[h]}
+                      aria-label={`${H_SHORT[h]} (${H_LONG[h]})`}
                     >
                       {H_SHORT[h]}
                     </button>

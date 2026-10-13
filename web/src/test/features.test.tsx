@@ -193,8 +193,8 @@ describe('screener Forecast view', () => {
     let headers = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '')
     expect(headers).toHaveLength(4)
     expect(headers[1]).toMatch(/^Expected change/)
-    await userEvent.click(within(chips).getByRole('button', { name: '1 month' }))
-    expect(within(chips).getByRole('button', { name: '1 month' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(chips).getByRole('button', { name: /1 month/ }))
+    expect(within(chips).getByRole('button', { name: '1M (1 month)' })).toHaveAttribute('aria-pressed', 'true')
     headers = screen.getAllByRole('columnheader').map((h) => h.getAttribute('aria-sort') ?? '')
     // Sorting follows the chosen horizon (chance up, high to low).
     expect(screen.getAllByRole('columnheader')[2]).toHaveAttribute('aria-sort', 'descending')
