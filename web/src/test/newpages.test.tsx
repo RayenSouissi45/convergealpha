@@ -8,6 +8,7 @@ import { COLUMNS } from '../lib/columns'
 import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
+import { byValue, planned, statusOf, twinOf } from '../lib/strategies'
 import { AppRoutes } from '../routes'
 import type { Health, OpportunitiesFile, Opportunity, StrategiesFile } from '../types'
 import health from './fixtures/health.json'
@@ -93,20 +94,81 @@ describe('Plan page', () => {
 })
 
 describe('Strategies page', () => {
-  it('shows the paper-money banner, research mode, leaderboard and a card per strategy', async () => {
+  const f = strategies as unknown as StrategiesFile
+
+  it('shows each strategy at a glance: value, return, what the money is in', async () => {
     stubFetch(FILES())
     renderAt('/strategies')
     expect(await screen.findByRole('heading', { level: 1, name: 'Strategies' })).toBeInTheDocument()
     expect(screen.getByText('Paper money only. Past and live results do not guarantee future results.')).toBeInTheDocument()
     expect(await screen.findByText(/RESEARCH MODE — not yet proven live/)).toBeInTheDocument()
+    // finanzen.net zero by default: the versions you can copy.
+    expect(screen.getByRole('radio', { name: 'Only finanzen.net zero' })).toBeChecked()
     const board = screen.getByRole('list', { name: 'Strategies by value' })
-    const f = strategies as unknown as StrategiesFile
-    expect(within(board).getAllByRole('listitem')).toHaveLength(f.strategies.length + 1)
-    for (const s of f.strategies) expect(screen.getAllByText(s.name).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/What it will do at the next open/).length).toBe(f.strategies.length)
-    // Orders not filled yet read as plans, not as done.
-    expect(screen.getByText(/^Buy KSPI: #24 for this strategy/)).toBeInTheDocument()
-    expect(screen.queryByText(/^Bought KSPI/)).not.toBeInTheDocument()
+    const tiles = within(board).getAllByRole('listitem', { name: (_, el) => el.parentElement === board })
+    expect(tiles).toHaveLength(f.strategies.length)
+    const balanced = within(board).getByRole('link', { name: /Best overall \(Balanced\)/ })
+    expect(balanced).toHaveAttribute('href', '/strategies/balanced')
+    expect(within(balanced).getByText('Buys at the open, Oct 14')).toBeInTheDocument()
+    expect(within(balanced).getByText('KSPI')).toBeInTheDocument()
+    expect(within(balanced).getByText('MTG')).toBeInTheDocument()
+    expect(within(balanced).getByText(/Same rules on all stocks: €200\.00/)).toBeInTheDocument()
+    const hunter = within(board).getByRole('link', { name: /Opportunity hunter/ })
+    expect(within(hunter).getByText('In cash')).toBeInTheDocument()
+    expect(within(hunter).getByText('All in cash: no stock it may buy has a green opportunity badge today.')).toBeInTheDocument()
+    expect(screen.getByText('S&P 500 yardstick')).toBeInTheDocument()
+    // The long texts are folded away.
+    expect(screen.getByText('How it works').closest('details')).not.toHaveAttribute('open')
+  })
+
+  it('switches to the same rules on all stocks, ranked by value', async () => {
+    stubFetch(FILES())
+    const user = userEvent.setup()
+    renderAt('/strategies')
+    await user.click(await screen.findByRole('radio', { name: 'All stocks' }))
+    expect(screen.getByRole('radio', { name: 'All stocks' })).toBeChecked()
+    const board = screen.getByRole('list', { name: 'Strategies by value' })
+    const first = within(board).getAllByRole('link')[0]!
+    expect(first).toHaveAttribute('href', '/strategies/high_risk?stocks=all')
+    expect(within(first).getByText('Invested')).toBeInTheDocument()
+    expect(within(first).getByText('COHU')).toBeInTheDocument()
+    expect(within(first).getByText('+3.2%')).toBeInTheDocument()
+    expect(within(first).getByText('€214.36')).toBeInTheDocument()
+    expect(within(first).getByText(/Only finanzen\.net zero: €200\.00/)).toBeInTheDocument()
+  })
+
+  it('a strategy page shows the orders for the next open with shares, euros and why', async () => {
+    stubFetch(FILES())
+    const user = userEvent.setup()
+    renderAt('/strategies/balanced')
+    expect(await screen.findByRole('heading', { level: 1, name: /Best overall \(Balanced\)/ })).toBeInTheDocument()
+    expect(screen.getByText(/No stocks yet:/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'At the next open (Oct 14, 2026)' })).toBeInTheDocument()
+    const orders = screen.getByRole('list', { name: 'Orders for the next open' })
+    const kspi = f.strategies[0]!.pending[0]!
+    const n = kspi.est_shares!
+    expect(within(orders).getByText(`about ${n} share${n === 1 ? '' : 's'} ≈ €${kspi.est_eur!.toFixed(2)}`)).toBeInTheDocument()
+    await user.click(within(orders).getAllByText('Why')[0]!)
+    expect(within(orders).getByText(/^Buy KSPI: #24 for this strategy/)).toBeInTheDocument()
+    expect(within(orders).queryByText(/^Bought KSPI/)).not.toBeInTheDocument()
+    // Both versions side by side.
+    expect(screen.getByRole('heading', { name: 'finanzen.net zero vs all stocks' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Show the All stocks version' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Trade history (0)' })).toBeInTheDocument()
+  })
+
+  it('the all-stocks page shows holdings, exit levels and the trade history', async () => {
+    stubFetch(FILES())
+    renderAt('/strategies/high_risk?stocks=all')
+    expect(await screen.findByRole('heading', { level: 1, name: /High risk, high reward/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'All stocks' })).toBeChecked()
+    const held = screen.getByRole('list', { name: 'Holdings' })
+    expect(within(held).getByRole('link', { name: 'COHU' })).toBeInTheDocument()
+    expect(within(held).getByText(/3 shares · worth €206\.74/)).toBeInTheDocument()
+    expect(within(held).getByText(/sells at: stop \$57\.38 · trailing stop \$60\.57 · take-profit \$78\.25 · latest in 19 trading days/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Trade history (3)' })).toBeInTheDocument()
+    expect(screen.getByText('+€8.60 (+4.6%)')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Show the Only finanzen.net zero version' })).toBeInTheDocument()
   })
 
   it('“Give me a strategy” uses your amount and marks the best overall', async () => {
@@ -117,6 +179,33 @@ describe('Strategies page', () => {
     const amount = screen.getByRole('spinbutton', { name: 'Your amount in euros' })
     expect(amount).toHaveValue(200)
     expect(screen.getAllByText(/Best overall/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Chance of more money after costs/).length).toBeGreaterThan(0)
+  })
+})
+
+describe('strategy status at a glance', () => {
+  const f = strategies as unknown as StrategiesFile
+  const base = f.strategies[0]!
+
+  it('says whether the money is in cash, waiting to buy, invested or changing', () => {
+    expect(statusOf(base)).toMatchObject({ kind: 'buying', tone: 'warn', label: 'Buys at the open, Oct 14' })
+    expect(statusOf(base).text).toBe('All in cash now; buys 2 stocks at the open on Oct 14, 2026.')
+    const hr = f.strategies_all!.find((x) => x.id === 'high_risk')!
+    expect(statusOf(hr)).toMatchObject({ kind: 'invested', tone: 'good', label: 'Invested', text: 'Holds 1 stock.' })
+    const changing = { ...hr, pending: [{ ...base.pending[0]!, side: 'sell' as const, ticker: 'COHU' }] }
+    expect(statusOf(changing)).toMatchObject({ kind: 'changing', text: 'Holds 1 stock; sells 1 at the open on Oct 14, 2026.' })
+    const cash = { ...base, pending: [], notes: ['Skipped: AAA (too expensive).', 'No buy: nothing else it may buy fits today. The money stays in cash.'] }
+    expect(statusOf(cash)).toMatchObject({ kind: 'cash', text: 'All in cash: nothing else it may buy fits today.' })
+    expect(statusOf({ ...base, locked: 'changed' }).kind).toBe('locked')
+  })
+
+  it('ranks by value and keeps the fixed order on ties; reasons read as plans before the fill', () => {
+    const [a, b, c] = f.strategies
+    const ranked = byValue([a!, b!, { ...c!, value: 250 }])
+    expect(ranked.map((x) => x.id)).toEqual([c!.id, a!.id, b!.id])
+    expect(planned('Bought KSPI: #1')).toBe('Buy KSPI: #1')
+    expect(planned('Sold KSPI to switch into MTG: x')).toBe('Sell KSPI to switch into MTG: x')
+    expect(twinOf(f, a!)?.key).toBe('balanced-all-v1')
   })
 })
 
@@ -170,7 +259,7 @@ describe('Columns explained covers the new numbers', () => {
       expect(d.status).toBeTruthy()
     }
     const ids = EXTRA_DOCS.map((d) => d.id)
-    for (const id of ['plan-shares', 'plan-leftover', 'plan-fees', 'plan-breakeven', 'plan-chance', 'plan-right', 'plan-results', 'plan-verdict', 'strat-value', 'strat-vs', 'strat-fees', 'strat-win', 'strat-drop', 'strat-cash', 'strat-levels']) {
+    for (const id of ['plan-shares', 'plan-leftover', 'plan-fees', 'plan-breakeven', 'plan-chance', 'plan-right', 'plan-results', 'plan-verdict', 'strat-value', 'strat-vs', 'strat-fees', 'strat-win', 'strat-drop', 'strat-cash', 'strat-levels', 'strat-universe', 'strat-status', 'strat-estimate']) {
       expect(ids).toContain(id)
     }
   })

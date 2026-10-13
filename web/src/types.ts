@@ -329,6 +329,8 @@ export interface StrategyCard {
   id: string
   version: number
   name: string
+  /** Stocks it may buy: finanzen.net zero only, or all stocks (null for the S&P 500 yardstick). */
+  universe?: 'zero' | 'all' | null
   mindset: string
   rules: string[]
   max_positions: number
@@ -348,7 +350,8 @@ export interface StrategyCard {
   max_drawdown: number | null
   cash: number | null
   holdings: StrategyHolding[]
-  pending: { side: 'buy' | 'sell'; ticker: string; name: string | null; reason: string; date: string; fill_on: string }[]
+  /** Orders waiting for the next open; shares and euros are estimates from the last close. */
+  pending: { side: 'buy' | 'sell'; ticker: string; name: string | null; reason: string; date: string; fill_on: string; est_shares?: number | null; est_eur?: number | null }[]
   history: StrategyEvent[]
   notes: string[]
   series: [string, number][]
@@ -391,6 +394,11 @@ export interface StrategiesFile {
   base_up_1m: number | null
   reliability_1m?: ReliabilityBucket[]
   benchmark: StrategyCard | null
+  /** finanzen.net zero stocks only: the versions you can copy. */
   strategies: StrategyCard[]
+  /** The same rules on all stocks (absent in files from before Oct 14, 2026). */
+  strategies_all?: StrategyCard[]
+  universes?: Record<'zero' | 'all', string>
   suggestions: Record<string, StrategySuggestion[]>
+  suggestions_all?: Record<string, StrategySuggestion[]>
 }

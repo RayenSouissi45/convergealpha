@@ -8,6 +8,8 @@ export interface ChartSeries {
   /** CSS colour; the benchmark uses the neutral reference colour, dashed. */
   color: string
   dashed?: boolean
+  /** A dotted line in the strategy's colour: the same rules on the other set of stocks. */
+  dotted?: boolean
   points: [string, number][]
 }
 
@@ -28,7 +30,7 @@ export default function StrategyChart({ series, start }: { series: ChartSeries[]
         {series.map((s) => (
           <li key={s.key} className="inline-flex items-center gap-1.5 text-slate-700 dark:text-zinc-300">
             <svg width="18" height="8" aria-hidden="true">
-              <line x1="1" y1="4" x2="17" y2="4" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? '4 3' : undefined} strokeLinecap="round" />
+              <line x1="1" y1="4" x2="17" y2="4" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? '4 3' : s.dotted ? '1 3' : undefined} strokeLinecap="round" />
             </svg>
             {s.name}
           </li>
@@ -56,7 +58,8 @@ export default function StrategyChart({ series, start }: { series: ChartSeries[]
                 dataKey={s.key}
                 stroke={s.color}
                 strokeWidth={2}
-                strokeDasharray={s.dashed ? '5 4' : undefined}
+                strokeDasharray={s.dashed ? '5 4' : s.dotted ? '1 4' : undefined}
+                strokeLinecap={s.dotted ? 'round' : undefined}
                 dot={few ? { r: 4, fill: s.color, strokeWidth: 2, stroke: 'var(--color-white, #fff)' } : false}
                 activeDot={{ r: 4 }}
                 connectNulls

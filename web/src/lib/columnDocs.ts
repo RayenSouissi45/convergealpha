@@ -745,6 +745,30 @@ export const EXTRA_DOCS: { group: string; id: string; doc: ColumnDoc }[] = [
     read: 'They are planned levels, set in advance and never changed for a holding.',
     source: PAPER_SRC, status: { kind: 'data' },
     mistakes: 'The sale is at the next opening price, which can gap below the stop: the loss can be bigger than planned.' } },
+  { group: 'Strategies', id: 'strat-universe', doc: {
+    name: 'Stocks it may buy: finanzen.net zero or all stocks',
+    what: 'Each strategy runs twice with the same rules and 200 € each: once on finanzen.net zero stocks only (the version you can copy) and once on every stock the app covers.',
+    how: 'The only difference is the list of stocks it may buy. finanzen.net zero = the broker’s weekly list says yes (not “not sure”). All stocks = US-listed shares and ADRs the app covers, whether or not the broker offers them.',
+    example: '"Same rules on all stocks: €206.10 (+3.1%)" under a zero strategy at €201.40 (+0.7%): the wider choice did better so far.',
+    read: 'A big gap tells you how much the broker’s list helps or hurts that strategy. To follow one with finanzen.net zero, use the zero version.',
+    source: PAPER_SRC, status: { kind: 'data' },
+    mistakes: 'Do not copy the all-stocks version: some of its stocks cannot be bought on finanzen.net zero. Both started on Oct 13, 2026, so early gaps are mostly luck.' } },
+  { group: 'Strategies', id: 'strat-status', doc: {
+    name: 'Status: In cash, Buys at the open, Invested',
+    what: 'What the strategy’s money is doing right now.',
+    how: 'In cash = no stocks and no order waiting. Buys (or trades) at the open = orders decided after the last close that fill at the next official opening price. Invested = holds stocks and has no order waiting. Stopped = its rules changed without a new version, so it does not trade.',
+    example: '"Buys at the open, Oct 14" with KSPI and MTG: on Oct 13 after the close it decided to buy them; they fill at the Oct 14 open.',
+    read: 'To copy a strategy, act when it says it buys or sells at the open, at the same opening price.',
+    source: PAPER_SRC, status: { kind: 'data' },
+    mistakes: 'An order is not a fill: the price is only known at the open. “In cash” is a decision too (nothing passed the rules), not an error.' } },
+  { group: 'Strategies', id: 'strat-estimate', doc: {
+    name: 'About N shares ≈ € (waiting order)',
+    what: 'Roughly how many shares a waiting buy gets, and what it costs, before it fills.',
+    how: 'From the last close: the cash is shared equally between the waiting buys; shares = whole part of (share of cash − 1 € fee) ÷ (last close in euros × (1 + half the spread)). Sells: shares held × last close in euros, minus half the spread and the fee.',
+    example: '"about 1 share ≈ €76.70": about €100 for KSPI at $85.20 and 1.1193 $/€; the real fill uses the opening price.',
+    read: 'A guide for copying the order with the same amount. The trade history shows the real fill.',
+    source: PAPER_SRC, status: { kind: 'data' },
+    mistakes: 'The opening price can differ from the close, so the real number of shares and euros can differ too.' } },
 ]
 
 /** Plain text of a column's validation status (7th part), from health.json's validated list. */

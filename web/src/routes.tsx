@@ -20,6 +20,7 @@ const Picks = lazy(() => import('./pages/Picks'))
 const Columns = lazy(() => import('./pages/Columns'))
 const Plan = lazy(() => import('./pages/Plan'))
 const Strategies = lazy(() => import('./pages/Strategies'))
+const StrategyDetail = lazy(() => import('./pages/StrategyDetail'))
 
 const wait = (el: React.ReactNode) => <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>{el}</Suspense>
 
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route path="picks" element={wait(<Picks />)} />
           <Route path="plan" element={wait(<Plan />)} />
           <Route path="strategies" element={wait(<Strategies />)} />
+          <Route path="strategies/:id" element={wait(<StrategyDetail />)} />
           <Route path="screener" element={wait(<Screener />)} />
           <Route path="columns" element={wait(<Columns />)} />
           <Route path="stock/:ticker" element={wait(<Stock />)} />

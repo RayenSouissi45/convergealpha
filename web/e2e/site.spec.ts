@@ -219,10 +219,10 @@ test('picks: tabs, cards and the link to each stock page', async ({ page }) => {
 test('new pages fit a 360 px phone without sideways scrolling', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'phone layout')
   await page.setViewportSize({ width: 360, height: 780 })
-  for (const hash of ['#/plan', '#/strategies', '#/', '#/screener?preset=opportunities', '#/stock/AAPL']) {
+  for (const hash of ['#/plan', '#/strategies', '#/strategies/balanced', '#/strategies/high_risk?stocks=all', '#/', '#/screener?preset=opportunities', '#/stock/AAPL']) {
     await page.goto(hash)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    if (hash === '#/strategies') {
+    if (hash.startsWith('#/strategies')) {
       const give = page.getByRole('button', { name: 'Give me a strategy' })
       if (await give.isVisible()) await give.tap()
       // Open every history list and the shared rules too.
@@ -271,4 +271,21 @@ test('strategies: leaderboard, paper-money banner and Give me a strategy', async
   await expect(page.getByRole('list', { name: 'Strategies by value' })).toBeVisible()
   await page.getByRole('button', { name: 'Give me a strategy' }).click()
   await expect(page.getByRole('spinbutton', { name: 'Your amount in euros' })).toBeVisible()
+})
+
+test('strategies: switch to all stocks, open a strategy, compare both versions', async ({ page }) => {
+  await page.goto('#/strategies')
+  const board = page.getByRole('list', { name: 'Strategies by value' })
+  await expect(board.getByRole('link', { name: /Best overall/ })).toContainText('KSPI')
+  await page.getByText('All stocks', { exact: true }).click()
+  await expect(page).toHaveURL(/stocks=all/)
+  await expect(board.getByRole('link').first()).toContainText('COHU')
+  await board.getByRole('link').first().click()
+  await expect(page.getByRole('heading', { level: 1, name: /High risk, high reward/ })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Holdings' })).toContainText('COHU')
+  await page.getByRole('link', { name: 'Show the Only finanzen.net zero version' }).click()
+  await expect(page).not.toHaveURL(/stocks=all/)
+  await expect(page.getByRole('list', { name: 'Orders for the next open' })).toBeVisible()
+  await page.getByRole('link', { name: '← All strategies' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Strategies' })).toBeVisible()
 })

@@ -86,14 +86,22 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
   in euros with spread and fees, whole shares, finanzen.net zero stocks only, minimum hold 3 trading
   days unless a stop triggers, a switch rule that must beat the switching cost, a plain-English
   reason for every buy, sell and hold. Rules fixed in code and docs, pinned by tests, never tuned.
+- **Two versions of each strategy** (added the evening of 13 Oct, before the first fills): the same
+  rules and 200 € each, on finanzen.net zero stocks only (the version to copy) and on all stocks
+  (`balanced-all-v1` …), so the page shows what the broker's list changes.
 - **Trade ledger** `ledger/trades.jsonl` (private data repo): append-only, hash-chained, verified at
   every build (Health shows it), tamper test, idempotent per strategy per day.
-- **Strategies** (`/#/strategies`, under More and linked from Today): banner "Paper money only…",
-  leaderboard (value, % since start, vs S&P 500, fees, trades, win rate, worst drop, cash), one chart
-  with the five lines and the S&P 500, a card per strategy (mindset, rules, holdings with exit
-  levels, next-open orders with reasons, full history with links), and "Give me a strategy" for
-  your own amount with costs, opportunity colour and the best overall marked. RESEARCH MODE until a
-  strategy beats the S&P 500 live over at least 6 months.
+- **Strategies** (`/#/strategies`, under More and linked from Today), redesigned on 13 Oct for a
+  quick look: a switch "Only finanzen.net zero / All stocks" (default zero, kept in the link), one
+  tile per strategy ranked by value (value, % since 200 €, vs S&P 500, a status pill "In cash /
+  Buys at the open / Invested", the stocks as chips with their return or the estimated euros of a
+  waiting buy, and the other version's result), the S&P 500 yardstick, "Give me a strategy" with
+  one line per strategy (shares to buy, verdict, chance of more money; details folded), the chart,
+  and "How it works" folded. Each tile opens `/#/strategies/<id>`: the value and six key numbers,
+  what it holds (exit levels) and what it does at the next open (about N shares ≈ €X, "Why"
+  folded), zero vs all side by side, a chart of both versions and the S&P 500, the trade history
+  (reasons folded) and the rules. Banner "Paper money only…"; RESEARCH MODE until a strategy beats
+  the S&P 500 live over at least 6 months.
 
 ### Checks run (2026-10-12 and 13)
 
@@ -314,6 +322,13 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 91. A positive headline counts only if the company is its subject (name or ticker in the first five words): Finnhub attaches articles to every company they mention, and "Biogen upgraded to Buy at J.P. Morgan" had turned JPMorgan red in the first local run.
 92. The desktop top bar wraps to a second line when needed: two more pages made it wider than a 1,280 px screen on Linux fonts (caught by CI).
 93. Orders waiting for the next open show "Buy …" / "Sell …" instead of the ledger's "Bought …" / "Sold …": the ledger text is permanent and also explains the fill later, so only the page wording changes.
+94. Each strategy now also runs on all stocks, as separate strategies with their own 200 € and keys (`<id>-all-v1`): the owner copies the finanzen.net zero version and compares; changing the existing five was not allowed (their rules hash is recorded).
+95. The "universe" setting enters the rules hash only when it is not "zero", so the five live strategies keep the exact hashes recorded on 13 Oct (pinned by a test); "not sure" stocks stay excluded from the zero versions.
+96. The all-stocks versions start on 13 Oct like the others: they decided from 13 Oct data in a run that evening (before any fill), so both versions share start, prices and fills from 14 Oct.
+97. The Strategies page shows status first and folds the long texts: the owner found the wall of reasons exhausting; every reason is still one tap away.
+98. One page per strategy (`/#/strategies/<id>`) instead of five long cards on one page; the switch lives in the link (`?stocks=all`) so a shared link shows the same version.
+99. Waiting orders show "about N shares ≈ €X" estimated from the last close (same sharing rule as the engine); the trade history shows the real fill.
+100. Playwright uses 127.0.0.1 instead of localhost: on Windows localhost resolved to IPv6 for the server and IPv4 for the browser, so local runs failed at random.
 
 ## Questions for the owner
 

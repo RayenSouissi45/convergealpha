@@ -397,9 +397,14 @@ page); badges change only after the close, like labels.
   and the 1 € fee. Sells fill first; then the buys of the day share the available cash equally.
   Whole shares; leftover money stays as cash. A buy that cannot afford one share at the open is
   cancelled; a sell without an opening price waits for the next open.
-- Universe: finanzen.net zero = true (unknown excluded), eligible, not blocked, not SELL / RISK
-  WARNING, with a price and a 1-month forecast. New buys need the model forecasts (not the fallback
-  estimate) and an inactive kill switch.
+- Universe: eligible, not blocked, not SELL / RISK WARNING, with a price and a 1-month forecast.
+  New buys need the model forecasts (not the fallback estimate) and an inactive kill switch.
+- **Two versions of each strategy** (added 13 Oct 2026, before the first fills): the same rules
+  and 200 € each, on (a) **finanzen.net zero stocks only** (= true, "not sure" excluded; keys
+  `balanced-v1` …, the versions the owner can copy) and (b) **all stocks** the app covers (keys
+  `balanced-all-v1` …, `"universe": "all"` in the hashed parameters). The zero versions' parameter
+  hashes stay exactly as recorded at their start (a test pins them). Both started with the close
+  of 13 Oct; the all-stocks versions decided from the same day's data in a later run that evening.
 - Exit levels use the stock's dollar price against the fill's opening price. Stops (stop-loss,
   trailing stop, a holding turning SELL / RISK WARNING, and for the opportunity hunter a red badge)
   act at once; every other exit (take-profit, score rules, maximum hold) and every switch waits
@@ -435,6 +440,14 @@ the signal ledger (`start`, `order`, `fill`, `cancel`, `dividend`, `split`, `day
 EUR/USD rate and the SHA-256 of that day's scores snapshot). It is verified at every build and
 shown on Health; a test edits a past fill and checks that verification fails. A same-day re-run
 finds the day recorded and adds nothing; a weekly run never touches it.
+
+**Waiting orders**: the page shows about how many shares and euros each order gets, estimated from
+the last close (sells first, then the cash shared equally between the buys, whole shares, half the
+spread and the 1 € fee). The fill uses the opening price, so the real numbers differ a little.
+
+**Status at a glance**: "In cash" (no stocks, no order), "Buys / Trades at the open" (orders waiting
+for the next open), "Invested" (holds stocks, no order waiting), "Stopped" (rules changed without a
+new version).
 
 **Leaderboard**: value (cash + holdings at the last close), % since 200 €, difference to the S&P 500
 yardstick in percentage points, fees paid, filled trades, win rate (sells with a profit after fees ÷
