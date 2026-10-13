@@ -76,7 +76,8 @@ export default function Columns() {
         {GROUP_ORDER.map((g) => {
           const cols = COLUMNS.filter((c) => c.group === g)
           return (
-            <div key={g} id={`group-${slug(g)}`} className="scroll-mt-28">
+            // Off-screen groups skip layout until they scroll into view (a long page on phones).
+            <div key={g} id={`group-${slug(g)}`} className="scroll-mt-28 [contain-intrinsic-size:auto_1200px] [content-visibility:auto]">
               <Card title={g}>
                 <div className="divide-y divide-slate-100 dark:divide-zinc-800">
                   {cols.map((c) => {

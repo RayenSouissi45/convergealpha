@@ -1,0 +1,55 @@
+name: lighthouse
+
+# On demand: Lighthouse (mobile) for the live site's main pages, measured on a GitHub runner so the
+# score does not depend on how busy your own computer is. Results appear in the run summary.
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: Hash routes, separated by spaces
+        default: '#/ #/picks #/screener #/screener?preset=forecast #/columns #/stock/AAPL'
+      runs:
+        description: Runs per page (the median performance score is reported)
+        default: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Lighthouse (mobile)
+        env:
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          PAGES: ${{ inputs.pages }}
+          RUNS: ${{ inputs.runs }}
+        run: |
+          npm install --no-save --silent lighthouse@12.8.2
+          {
+            echo "### Lighthouse, mobile, $(date -u +%Y-%m-%d)"
+            echo
+            echo "| Page | Performance (median of $RUNS) | All runs | Accessibility | Best practices | LCP | TBT | CPU benchmark |"
+            echo "|---|---|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for page in $PAGES; do
+            for i in $(seq 1 "$RUNS"); do
+              npx lighthouse "$SITE$page" --quiet --form-factor=mobile \
+                --only-categories=performance,accessibility,best-practices \
+                --output=json --output-path="lh-$i.json" --chrome-flags="--headless=new --no-sandbox" || true
+            done
+            PAGE="$page" node -e '
+              const fs = require("fs")
+              const runs = fs.readdirSync(".").filter((f) => /^lh-\d+\.json$/.test(f)).map((f) => JSON.parse(fs.readFileSync(f, "utf8")))
+              const s = (r, c) => Math.round(r.categories[c].score * 100)
+              const perf = runs.map((r) => s(r, "performance")).sort((a, b) => a - b)
+              const mid = runs.sort((a, b) => s(a, "performance") - s(b, "performance"))[Math.floor(runs.length / 2)]
+              const a = mid.audits
+              console.log(`| \`${process.env.PAGE}\` | **${perf[Math.floor(perf.length / 2)]}** | ${perf.join(" / ")} | ${s(mid, "accessibility")} | ${s(mid, "best-practices")} | ${a["largest-contentful-paint"].displayValue} | ${a["total-blocking-time"].displayValue} | ${Math.round(mid.environment.benchmarkIndex)} |`)
+            ' >> "$GITHUB_STEP_SUMMARY"
+            rm -f lh-*.json
+          done
