@@ -585,7 +585,7 @@ def run(
     as_of: pd.Timestamp,
     today: Today | None,
     recorded_at: str,
-    specs: Sequence[S.Spec] = (*S.SPECS, S.BENCHMARK),
+    specs: Sequence[S.Spec] = S.ALL_SPECS,
     start: date = S.START,
 ) -> tuple[dict[str, Book], list[dict[str, Any]]]:
     """Extend the trade ledger up to `as_of`. Returns the books and the entries written."""

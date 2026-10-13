@@ -267,7 +267,7 @@ def paper_step(
     from convergealpha.paper import strategies as PS
 
     d = ctx.paths.data
-    specs = (*PS.SPECS, PS.BENCHMARK)
+    specs = PS.ALL_SPECS
     model_ok = extra.get("forecast_method") == "model"
     ks = bool((extra.get("kill_switch") or {}).get("active"))
     if model_ok and not ks:

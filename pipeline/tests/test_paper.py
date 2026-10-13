@@ -15,6 +15,7 @@ import pytest
 from convergealpha.decide import costs as C
 from convergealpha.ledger import ledger as LG
 from convergealpha.paper import engine as E
+from convergealpha.paper import export as X
 from convergealpha.paper import strategies as S
 from convergealpha.sources.prices import Panel
 
@@ -123,22 +124,75 @@ def test_fx_uses_the_latest_rate_published_on_or_before_the_day() -> None:
 
 def test_parameters_are_fixed() -> None:
     # Changing any number is a NEW version that starts again from 200 € (update METHODOLOGY too).
-    got = {s.key: s.params() for s in (*S.SPECS, S.BENCHMARK)}
-    want = {
+    got = {s.key: s.params() for s in S.ALL_SPECS}
+    zero = {
         "balanced-v1": (2, 0.06, 0.08, None, 63, 10.0, {"min_balanced": 60.0, "min_p_up_1m": 0.52}),
         "high_risk-v1": (1, 0.12, 0.20, 0.10, 21, 10.0, {"w_momentum": 0.4, "w_p90_1m": 0.6}),
         "safe_upside-v1": (2, 0.05, 0.06, None, 63, 10.0, {"min_safety": 75.0}),
         "confidence-v1": (2, 0.07, None, None, 21, 2.0, {}),
         "opportunity-v1": (1, 0.08, 0.12, None, 15, 10.0, {"freshness_step": 10.0}),
-        "sp500-v1": (1, None, None, None, None, 0.0, {}),
     }
+    # The same rules on all stocks: their own keys, the same numbers.
+    want = {**zero, **{k.replace("-v1", "-all-v1"): v for k, v in zero.items()}, "sp500-v1": (1, None, None, None, None, 0.0, {})}  # fmt: skip
     assert set(got) == set(want)
     for k, (mp, stop, tp, trail, hold, margin, extra) in want.items():
         p = got[k]
         assert (p["max_positions"], p["stop"], p["take_profit"], p["trailing"], p["max_hold"], p["switch_margin"], p["extra"]) == (mp, stop, tp, trail, hold, margin, extra)  # fmt: skip
         assert p["min_hold"] == 3 and p["rebuy_cooldown"] == 5 and p["capital"] == 200.0
         assert p["start"] == "2026-10-13"
+        assert p.get("universe") == ("all" if "-all-" in k else None)
     assert (C.FEE_BUY_EUR, C.FEE_SELL_EUR, C.DIVIDEND_WITHHOLDING) == (1.0, 1.0, 0.15)
+
+
+def test_zero_strategies_keep_the_rules_recorded_at_their_start() -> None:
+    # Digests written in the live trade ledger on 2026-10-13: adding the all-stocks versions must
+    # not change them (the engine would refuse to trade).
+    recorded = {
+        "balanced-v1": "1981d0ceb492", "high_risk-v1": "9bb8d2f7d838", "safe_upside-v1": "a6cca2e052f6",
+        "confidence-v1": "5316bfed2a2b", "opportunity-v1": "45d81d558ebb", "sp500-v1": "4356200233cc",
+    }  # fmt: skip
+    assert {s.key: s.digest() for s in (*S.SPECS, S.BENCHMARK)} == recorded
+    assert all(s.digest() != recorded[s.key.replace("-all", "")] for s in S.SPECS_ALL)
+
+
+def test_all_stocks_version_may_buy_what_finanzen_net_zero_does_not_offer(tmp_path: Path) -> None:
+    pnl = panel({"AAA": [50.0] * 12, "BBB": [50.0] * 12, "CCC": [50.0] * 12})
+    t = table({
+        "AAA": {"zero": False, "pick_balanced": 95.0},
+        "BBB": {"zero": None, "pick_balanced": 90.0},  # "not sure" counts as not buyable
+        "CCC": {"zero": True, "pick_balanced": 70.0},
+    })  # fmt: skip
+    z, a = spec("balanced"), S.SPECS_ALL[0]
+    assert (z.key, a.key, a.id, a.universe) == ("balanced-v1", "balanced-all-v1", "balanced", "all")
+    E.run(tmp_path, pnl, FX, DAYS[8], today(t), "x", (z, a))
+    bought = {(str(o["strategy"]), str(o["ticker"])) for o in kinds(tmp_path, "order")}
+    assert bought == {
+        ("balanced-v1", "CCC"),
+        ("balanced-all-v1", "AAA"),
+        ("balanced-all-v1", "BBB"),
+    }
+
+
+def test_export_splits_the_two_versions_and_estimates_waiting_orders(tmp_path: Path) -> None:
+    pnl = panel({"AAA": [50.0] * 12, "SPY": [660.0] * 12})
+    t = table({"AAA": {}, "SPY": {"price": 660.0, "adv_dollar": 3e10}})
+    books, _ = E.run(tmp_path, pnl, FX, DAYS[8], today(t), "x")
+    from datetime import UTC, datetime
+
+    out = X.export(books, t, "2026-10-13", datetime(2026, 10, 13, 21, tzinfo=UTC), (1.10, "2026-10-09"), (True, "ok", 0), VAL, 0.56)  # fmt: skip
+    assert [c["key"] for c in out["strategies"]] == [s.key for s in S.SPECS]
+    assert [c["key"] for c in out["strategies_all"]] == [s.key for s in S.SPECS_ALL]
+    assert {c["universe"] for c in out["strategies"]} == {"zero"}
+    assert out["benchmark"]["universe"] is None and set(out["universes"]) == {"zero", "all"}
+    assert set(out["suggestions_all"]) == {s.id for s in S.SPECS}
+    # Balanced buys AAA with all 200 € at the next open: about 3 whole shares... of a $50 stock.
+    o = next(c for c in out["strategies"] if c["id"] == "balanced")["pending"][0]
+    s = C.spread(5e8)
+    each = 50.0 / 1.10 * (1 + s / 2)
+    assert o["ticker"] == "AAA" and o["est_shares"] == math.floor((200 - 1) / each)
+    assert o["est_eur"] == pytest.approx(o["est_shares"] * each + 1, abs=0.01)
+    spy = out["benchmark"]["pending"][0]
+    assert 0 < spy["est_shares"] < 1 and spy["est_eur"] == pytest.approx(200.0)
 
 
 def test_changed_rules_without_a_new_version_do_not_trade(tmp_path: Path) -> None:
@@ -193,9 +247,9 @@ def test_same_day_rerun_adds_nothing(tmp_path: Path) -> None:
     _, new = E.run(tmp_path, pnl, FX, DAYS[8], today(t), "y")
     assert new == []
     assert (tmp_path / E.LEDGER).read_text(encoding="utf-8") == before
-    # Every strategy and the benchmark decided once for Oct 13, and nothing filled yet.
+    # Every strategy (both versions) and the benchmark decided once for Oct 13, nothing filled yet.
     days = kinds(tmp_path, "day")
-    assert len(days) == 6 and {d["date"] for d in days} == {"2026-10-13"}
+    assert len(days) == 11 and {d["date"] for d in days} == {"2026-10-13"}
     assert kinds(tmp_path, "fill") == []
 
 

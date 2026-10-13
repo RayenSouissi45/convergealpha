@@ -7,8 +7,11 @@ engine refuses to trade a version whose rules differ from the ones recorded at i
 
 All five use the app's daily numbers (Picks sub-scores, calibrated forecasts, the opportunity
 badge) with a different mindset. Shared rules live in engine.py: decisions after the close,
-fills at the next official open in euros with spread and fees, whole shares, finanzen.net zero
-stocks only, minimum hold of 3 trading days unless a stop triggers, and the switch rule.
+fills at the next official open in euros with spread and fees, whole shares, minimum hold of 3
+trading days unless a stop triggers, and the switch rule.
+
+Each strategy runs twice with the same rules: on finanzen.net zero stocks only (the version the
+owner can copy) and on all stocks the app covers (`universe="all"`, its own key and 200 EUR).
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any
 
@@ -45,13 +48,18 @@ class Spec:
     extra: dict[str, float] = field(default_factory=dict)
     rules: tuple[str, ...] = ()
     benchmark: bool = False
+    universe: str = (
+        "zero"  # "zero": finanzen.net zero stocks only; "all": every stock the app covers
+    )
 
     @property
     def key(self) -> str:
-        return f"{self.id}-v{self.version}"
+        if self.universe == "zero":
+            return f"{self.id}-v{self.version}"
+        return f"{self.id}-{self.universe}-v{self.version}"
 
     def params(self) -> dict[str, Any]:
-        return {
+        p = {
             "id": self.id,
             "version": self.version,
             "max_positions": self.max_positions,
@@ -67,6 +75,10 @@ class Spec:
             "extra": dict(sorted(self.extra.items())),
             "benchmark": self.benchmark,
         }
+        # Added after the zero versions started: they keep the rules digest recorded on Oct 13.
+        if self.universe != "zero":
+            p["universe"] = self.universe
+        return p
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.params(), sort_keys=True).encode()).hexdigest()[:12]
@@ -76,7 +88,7 @@ SHARED_RULES = (
     "Decides after each US close with that day's data only; orders fill at the next trading day's official opening price.",
     "Euros: 1 € fee per buy and per sell, half the estimated spread each way, US prices converted with the EUR/USD rate (FRED).",
     "Whole shares only; money left over stays as cash.",
-    "Only stocks buyable on finanzen.net zero (not “not sure”), eligible for signals, not blocked by an event, never SELL / RISK WARNING. A holding that turns SELL / RISK WARNING is sold like a stop.",
+    "Only stocks eligible for signals, not blocked by an event, never SELL / RISK WARNING. A holding that turns SELL / RISK WARNING is sold like a stop.",
     "Keeps a stock at least 3 trading days unless a stop triggers, and does not buy back a stock it sold in the last 5 trading days.",
     "Switches only if the new stock's score is ahead by the strategy's margin AND its expected 1-month gain beats the holding's by more than the cost of switching (both fees and spreads).",
 )
@@ -189,7 +201,17 @@ BENCHMARK = Spec(
     benchmark=True,
 )
 
-BY_KEY = {s.key: s for s in (*SPECS, BENCHMARK)}
+# The same five rules on every stock the app covers (not only finanzen.net zero): the comparison
+# shows what the broker's list costs or gains. Same start, same 200 EUR, own trade history.
+SPECS_ALL: tuple[Spec, ...] = tuple(replace(s, universe="all") for s in SPECS)
+
+UNIVERSES = {
+    "zero": "Only stocks you can buy on finanzen.net zero (the list says yes, not “not sure”).",
+    "all": "All stocks the app covers (US-listed shares and ADRs), whether or not finanzen.net zero offers them.",
+}
+
+ALL_SPECS: tuple[Spec, ...] = (*SPECS, *SPECS_ALL, BENCHMARK)
+BY_KEY = {s.key: s for s in ALL_SPECS}
 
 
 # --------------------------------------------------------------------------- scores
@@ -214,10 +236,13 @@ def _pct_rank(s: pd.Series) -> pd.Series:
     return ((ok.rank(method="average") - 1) / (len(ok) - 1) * 100).reindex(s.index)
 
 
-def universe(t: pd.DataFrame) -> pd.DataFrame:
-    """Stocks any strategy may buy today: buyable on finanzen.net zero (true, not unknown),
-    eligible, not blocked, not SELL / RISK WARNING, with a price and a 1-month forecast."""
-    zero = t["zero"].map(lambda v: v is True or v is np.True_) if "zero" in t else pd.Series(False, index=t.index)  # fmt: skip
+def universe(t: pd.DataFrame, which: str = "zero") -> pd.DataFrame:
+    """Stocks a strategy may buy today: eligible, not blocked, not SELL / RISK WARNING, with a
+    price and a 1-month forecast; for "zero" also buyable on finanzen.net zero (true, not unknown)."""
+    if which == "zero":
+        zero = t["zero"].map(lambda v: v is True or v is np.True_) if "zero" in t else pd.Series(False, index=t.index)  # fmt: skip
+    else:
+        zero = pd.Series(True, index=t.index)
     ok = (
         zero.astype(bool)
         & t.get("eligible", pd.Series(False, index=t.index)).eq(True)
@@ -235,7 +260,7 @@ def scores(spec: Spec, t: pd.DataFrame, validated: list[str], base_up_1m: float 
 
     Scores are computed for the whole universe, so a holding that is still in it can be compared
     with candidates for the switch rule."""
-    u = universe(t)
+    u = universe(t, spec.universe)
     out = pd.DataFrame(index=u.index)
     out["score"] = np.nan
     out["ok"] = False

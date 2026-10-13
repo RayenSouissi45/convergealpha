@@ -36,8 +36,41 @@ def _name(t: pd.DataFrame | None, tk: str) -> str | None:
     return str(v) if isinstance(v, str) and v else None
 
 
-def strategy_card(b: E.Book, t: pd.DataFrame | None, bench_pct: float | None) -> dict[str, Any]:
+def _estimates(b: E.Book, t: pd.DataFrame | None, fx: float | None) -> dict[str, tuple[float, float]]:  # fmt: skip
+    """Orders waiting for the next open: about how many shares and euros, from the last close.
+    The real fill uses the opening price, so these are estimates (shown with "about")."""
+    out: dict[str, tuple[float, float]] = {}
+    if t is None or not fx or "price" not in t:
+        return out
+    fees = C.Fees(fractional=b.spec.benchmark)
+    cash = b.cash
+
+    def close(tk: str) -> float:
+        v = _f(t.at[tk, "price"]) if tk in t.index else None
+        return v if v and v > 0 else math.nan
+
+    for o in b.pending:
+        p = b.positions.get(o.ticker)
+        if o.side == "sell" and p is not None and math.isfinite(c := close(o.ticker)):
+            v = C.sell_value(p.shares, c, fx, o.spread, fees.sell)
+            out[o.order_id] = (p.shares, v)
+            cash += v
+    buys = [o for o in b.pending if o.side == "buy"]
+    for i, o in enumerate(buys):
+        c = close(o.ticker)
+        if not math.isfinite(c):
+            continue
+        x = C.buy(cash / (len(buys) - i), c, fx, o.spread, fees)
+        out[o.order_id] = (x.shares, x.spent)
+        cash -= x.spent
+    return out
+
+
+def strategy_card(
+    b: E.Book, t: pd.DataFrame | None, bench_pct: float | None, fx: float | None = None
+) -> dict[str, Any]:
     spec = b.spec
+    est = _estimates(b, t, fx)
     values = [v for _, v in b.values]
     value = values[-1] if values else S.CAPITAL
     pct = value / S.CAPITAL - 1
@@ -73,6 +106,8 @@ def strategy_card(b: E.Book, t: pd.DataFrame | None, bench_pct: float | None) ->
             "reason": o.reason,
             "date": o.date,
             "fill_on": next_trading_day(date.fromisoformat(o.date)).isoformat(),
+            "est_shares": _f(est[o.order_id][0], 6) if o.order_id in est else None,
+            "est_eur": _f(est[o.order_id][1], 2) if o.order_id in est else None,
         }
         for o in b.pending
     ]
@@ -108,6 +143,7 @@ def strategy_card(b: E.Book, t: pd.DataFrame | None, bench_pct: float | None) ->
         "id": spec.id,
         "version": spec.version,
         "name": spec.name,
+        "universe": None if spec.benchmark else spec.universe,
         "mindset": spec.mindset,
         "rules": list(spec.rules),
         "max_positions": spec.max_positions,
@@ -135,11 +171,14 @@ def strategy_card(b: E.Book, t: pd.DataFrame | None, bench_pct: float | None) ->
 
 
 def suggestions(
-    t: pd.DataFrame, validated: list[str], base_up_1m: float | None
+    t: pd.DataFrame,
+    validated: list[str],
+    base_up_1m: float | None,
+    specs: Sequence[S.Spec] = S.SPECS,
 ) -> dict[str, list[dict[str, Any]]]:
     """What each strategy would buy today, starting fresh (best first)."""
     out: dict[str, list[dict[str, Any]]] = {}
-    for spec in S.SPECS:
+    for spec in specs:
         r = S.ranked(spec, t, validated, base_up_1m).head(SUGGESTIONS)
         rows = []
         for i, tk in enumerate(r.index, start=1):
@@ -182,10 +221,12 @@ def export(
 ) -> dict[str, Any]:
     bench = books.get(S.BENCHMARK.key)
     bench_pct = (bench.values[-1][1] / S.CAPITAL - 1) if bench and bench.values else None
-    cards = [strategy_card(books[s.key], t, bench_pct) for s in S.SPECS if s.key in books]
+    rate = fx[0] if fx else None
+    cards = [strategy_card(books[s.key], t, bench_pct, rate) for s in S.SPECS if s.key in books]
+    cards_all = [strategy_card(books[s.key], t, bench_pct, rate) for s in S.SPECS_ALL if s.key in books]  # fmt: skip
     proven = [
-        c["name"]
-        for c in cards
+        c["name"] + (" (all stocks)" if c["universe"] == "all" else "")
+        for c in (*cards, *cards_all)
         if len(c["series"]) >= PROVEN_DAYS and (c["vs_benchmark"] or 0) > 0 and not c["locked"]
     ]
     started = any(b.values for b in books.values())
@@ -212,6 +253,7 @@ def export(
             "rebuy_cooldown": S.REBUY_COOLDOWN,
         },
         "shared_rules": list(S.SHARED_RULES),
+        "universes": S.UNIVERSES,
         "ledger": {"verified": ledger[0], "detail": ledger[1], "entries": ledger[2]},
         "validated": list(validated),
         "base_up_1m": _f(base_up_1m),
@@ -220,7 +262,11 @@ def export(
             {k: b[k] for k in ("lo", "hi", "n", "rate", "wilson_lo", "wilson_hi")}
             for b in (((reliability or {}).get("horizons") or {}).get("1m") or {}).get("up", [])
         ],
-        "benchmark": strategy_card(bench, t, None) if bench else None,
-        "strategies": cards,
+        "benchmark": strategy_card(bench, t, None, rate) if bench else None,
+        "strategies": cards,  # finanzen.net zero stocks only (the versions you can copy)
+        "strategies_all": cards_all,  # the same rules on all stocks
         "suggestions": suggestions(t, list(validated), base_up_1m) if t is not None else {},
+        "suggestions_all": suggestions(t, list(validated), base_up_1m, S.SPECS_ALL)
+        if t is not None
+        else {},
     }
