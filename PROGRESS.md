@@ -16,6 +16,7 @@ Last updated: 2026-10-13 (end of the Phase 1–7 build run)
 | 5 Validation lab | /validation: walk-forward, ablation, DSR, PBO, holdout | **Done**. Result: BUY labels **not validated**; some horizon probabilities are |
 | 6 Ledger + monitoring | Hash-chained ledger, scorecard, baseline race, kill switch, drift, Telegram | **Done** (Telegram needs your bot, see questions) |
 | 7 Polish | PWA (offline, installable), Lighthouse ≥ 90, docs | **Done** (every page ≥ 90 on mobile, see checks) |
+| 8 Picks & clarity (2026-10-13) | Picks page, Forecast view, "How often was it right?", finanzen.net zero filter, Columns explained | **Done** (see "Picks and clarity" below) |
 
 ## What works
 
@@ -32,13 +33,34 @@ the close.
 
 **Saturdays (`weekly.yml`)**: XBRL refresh, point-in-time dataset rebuild (≈ 265,000 stock-months
 since 2012), walk-forward training, calibration, analog index, event-pattern tests, validation
-lab. Publishes the model bundle for the daily builds.
+lab, "how often was it right?" tables. Refreshes the finanzen.net zero list (gettex shares from
+ESMA FIRDS, mapped to tickers with OpenFIGI). Publishes the model bundle for the daily builds.
 
 **Website** (phone first): Today, Screener (5,356 rows, virtualized, presets, filters, column
 chooser), Stock page (decision card with every rule, forecasts and ranges, families, position
 plan, evidence sections, chart, analogs, patterns), Compare, My portfolio (stored in your
 browser), Scorecard, Baseline race, Validation, Health, About & method. Missing values show "—"
 and explain why. RESEARCH MODE badges stay on until something passes validation.
+
+**Picks and clarity (added 2026-10-13)**:
+- **Picks** (`/#/picks`, in the bottom bar and linked from Today): the best-balanced suggestions.
+  Safety, Upside and Confidence are sector-neutral percentiles (0–100) with weights fixed in
+  advance; a pick needs 40+ on each. Tabs Balanced / Safest / Most upside / Most likely to rise,
+  top 25 each. Every card shows the three bars, expected change and chance up for 1W/1M/3M/6M,
+  "how often this was right before", 2–3 reasons, the main risk and a link to the stock page.
+  Research banner on top; tracked live as "Picks – Balanced top 25" in the Baseline race.
+- **Screener Forecast view** (`/#/screener?preset=forecast`): expected change (with the 80%
+  range), chance up and how often right (±, ✓ or "research") per horizon; one horizon at a time
+  on phones (1W | 1M | 3M | 6M chips), all four on desktop. A one-line legend explains the three numbers.
+- **How often was it right?**: per horizon, the hit rate of past forecasts with a similar chance
+  (2016–2023 out-of-sample, ≥ 200 cases per group, 95% Wilson range) on the stock page, in the
+  screener and on Picks; explained on the About page.
+- **Only stocks I can buy on finanzen.net zero**: a tick box on Screener, Picks, Today and
+  Compare (remembered in the browser) with a count, a small "✓ buyable" badge, and the list date
+  and match count on Health.
+- **Columns explained** (`/#/columns`): every column in plain English (meaning, formula,
+  example, good/bad, source, validation status, common mistakes); full column names in the
+  screener headers (wrapped, never cut off) and in the column chooser.
 
 ### Checks run (2026-10-12 and 13)
 
@@ -138,6 +160,30 @@ Re-runs and incidents
 41. Ledger entries from that incident are kept, not cleaned up: 364 SELL warnings came from the run with incomplete analyst data, 300 more from the corrected runs (other stocks). The ledger is append-only; deleting entries would defeat its purpose.
 42. Each daily build resets `intraday.json` to an empty placeholder, and the Today page shows intraday alerts only from today: no 404 in the console and no stale warnings.
 
+Picks, Forecast view, finanzen.net zero, column explanations (2026-10-13)
+43. Picks weights were written into the code and METHODOLOGY before any result was looked at, and a test pins them (Confidence 0.70 chance + 0.30 past hit rate; Upside 0.75 median + 0.25 good case; Safety 0.35 volatility + 0.35 bad case + 0.20 F6 + 0.10 no earnings soon): you asked for no tuning, and fixing them first keeps the live record honest.
+44. Sub-scores are percentile ranks within the sector, ranked again after weighting; sectors with fewer than 10 candidates are ranked against all candidates: a rank among three stocks says little.
+45. The minimum of 40 on each sub-score applies to every tab, not only Balanced: a pick should never be terrible in one area, whatever the sort.
+46. Earnings component: a known date outside the next 5 trading days = 100, an unknown date = 50 (stocks reporting within 5 days are already blocked): an unknown date cannot be called safe.
+47. Picks are tracked live only, as "Picks – Balanced top 25" in the baseline race (from the first snapshot that has picks, then each month's first; 21 trading days; equal weight; 0.2% cost): a backtest would need the holdout again.
+48. With the finanzen.net zero box ticked, Picks shows the top 25 among stocks not known to be unavailable (precomputed `tabs_zero`) rather than filtering the top 25 down: you still get a full list.
+49. "How often right" tables use calibration cross-fitted by year (each year's cases are calibrated on the other years): hit rates measured on the outcomes that fitted the calibration would flatter the model.
+50. Their buckets use the p̂ edges extended to 0.20–0.80, merged until each holds at least 200 cases: horizon probabilities spread wider than p̂.
+51. Probabilities are exported with 4 decimals and looked up with the same rounded value: the site always finds the bucket the pipeline used.
+52. The screener carries only the hit rate per horizon (`hit_up_*`); the bucket tables (range and n) travel once in the file header: 12 more fields per row would have added ≈ 250 KB.
+53. The reliability tables sit outside the model configuration, so its digest is unchanged and the weekly job reuses the frozen holdout result instead of evaluating it again.
+54. finanzen.net zero list = the gettex shares and ADRs in ESMA's FIRDS register (official, reuse allowed with credit): the broker trades only on gettex, gettex lists ≈ 8,600 of them against the broker's "more than 8,500 shares", and the broker's own site blocks automated access and offers no download.
+55. ISINs are mapped to tickers with OpenFIGI (public-domain identifiers) and cached in the data repo; the first full mapping (8,642 ISINs, ≈ 38 minutes without a key) ran once locally: later weekly runs only map new ISINs and re-check old ones.
+56. "Buyable" means the exact US-listed security: a foreign company's ADR is a different security from its home-market share.
+57. Unknown (no list, list older than 35 days, or a US listing younger than 30 days) is never treated as "not buyable": with the box ticked those stocks stay visible, marked "?".
+58. The badge is the app's own small teal "✓ buyable" pill: no broker logo, colours or wordmark.
+59. One tick-box setting shared by Screener, Picks, Today and Compare, kept in browser storage (wrapped in try/catch).
+60. Screener numbers are rounded per field (returns 3 decimals, family scores 1, probabilities 4): the file gained 17 fields but stayed about the same size.
+61. Headers wrap to two lines with their full names; the whole header cell sorts and the ⓘ sits inline: nothing is cut off and columns did not need to double in width.
+62. Forecast view: one horizon at a time on phones (1W | 1M | 3M | 6M chips, compact widths, headers without the horizon); all four on desktop, where the Screener page uses a wider layout.
+63. One explanations file (`web/src/lib/columnDocs.ts`) feeds both the ⓘ tooltips and the Columns explained page; a test fails if a column lacks any of the 8 parts.
+64. Column groups follow your 10 groups, and labels use plain words ("Chance up 6M", "Return 1 month") instead of codes ("P(up) 6m", "1m").
+
 ## Questions for the owner
 
 All optional. The site works without them.
@@ -164,6 +210,16 @@ All optional. The site works without them.
    Cloudflare R2 (free 10 GB, needs a Cloudflare account).
 9. **Spec PDF**: `docs/ConvergeAlpha_v3_Final_Specification.pdf` was never in the folder.
    Everything follows the build prompt; add the PDF if you want it cross-checked.
+10. **finanzen.net zero list check** (optional): the app uses gettex's official list, the only
+    venue the broker uses. If the broker app ever disagrees (a stock marked buyable that you
+    cannot buy, or the reverse): ask finanzen.net zero customer service (contact form in the app
+    or on the website) for the list of tradable US shares as CSV or Excel, or note the ISINs or
+    tickers yourself, then in the **private data repo** create `manual/brokers/finanzen_zero.csv`
+    with one column `isin` or `ticker` (example in SETUP.md, section F). It replaces the gettex
+    list from the next daily run; delete the file to switch back.
+11. **Faster broker-list mapping** (optional): free account at https://www.openfigi.com → sign up
+    → *API Key* → copy it → GitHub repo **Settings → Secrets and variables → Actions → New
+    repository secret**, name `OPENFIGI_API_KEY`. Only speeds up the weekly job.
 
 ## Known limits
 
@@ -180,6 +236,17 @@ All optional. The site works without them.
 - **Data drift** (Health page): `days_since_report` and `industry_mom` are above PSI 0.25 against
   the training data. The first is most likely the earnings-season timing (mid-October, just
   before Q3 reports); watch whether it fades after the reports.
+- **Picks are research.** They are the strongest-looking stocks by the app's own numbers. Their
+  live record starts with the first daily run that published them; the first result arrives 21
+  trading days later. Until the live race shows they beat the S&P 500, the page keeps its
+  RESEARCH MODE badge.
+- **"How often right" understates uncertainty.** Past cases overlap in time and stocks move
+  together, so the true range is wider than the ± shown (said on the site). Out of sample, the
+  app's extreme probabilities were less reliable than its middle ones (for example, 6-month
+  "up" calls of ~73% came true ~56% of the time); the table shows this rather than hiding it.
+- **finanzen.net zero list = gettex's list.** The broker can still restrict a single stock
+  (e.g. for regulatory reasons); a foreign company's ADR can be "No" although its home share is
+  on gettex. Check in the broker app before trading.
 - **SEC 13F** (full institutional holdings), FDA calendar and buyback history are not built
   (no free dated source); see docs/DATA_SOURCES.md.
 - `make` isn't installed on this Windows PC; SETUP.md lists the equivalent commands.

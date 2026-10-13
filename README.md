@@ -26,7 +26,8 @@ docs/       methodology and data-source notes
   ci.yml        lint, types, unit + phone e2e tests on every push
   daily.yml     Mon-Fri 22:30 UTC: prepare -> 6 fetch shards + finnhub -> build -> deploy
   intraday.yml  every ~2 h in market hours: risk/event check for candidates and holdings
-  weekly.yml    Saturday: XBRL refresh, retrain walk-forward, validation lab, keep-alive
+  weekly.yml    Saturday: XBRL refresh, finanzen.net zero list, retrain walk-forward,
+                "how often right" tables, validation lab, keep-alive
   deploy.yml    build the site and publish (GitHub Pages or Cloudflare Pages)
   backfill.yml / bootstrap.yml   one-time history loads
 ```

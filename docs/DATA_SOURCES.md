@@ -35,6 +35,7 @@ repository `convergealpha-data`; the public website shows derived numbers.
 | Short interest | FINRA equity short interest files (`cdn.finra.org`, twice monthly) | Public files; missing dates return HTTP 403. Used only from an estimated publication date (settlement + 8 trading days) | Twice monthly | 2019-01 |
 | Macro / regime | FRED API (`FRED_API_KEY`): VIXCLS, BAMLH0A0HYM2, T10Y2Y, DFF | Free key; the ICE BofA high-yield series is copyrighted by ICE Data Indices: personal use only | Daily | 2009 |
 | Benchmark | SPY (total-return proxy, via Yahoo) and ^GSPC (price index for the 200-day rule) | As Yahoo | Daily | 2010 |
+| finanzen.net zero availability | ESMA FIRDS full equity files (`FULINS_E_*.zip`, listed by the FIRDS register API) filtered to gettex (MIC MUND/MUNC) shares and ADRs; ISINs mapped to tickers with the OpenFIGI API | Official EU reference data, free; reuse authorised with the source acknowledged. OpenFIGI: free, identifiers public domain; 25 requests/minute × 10 ISINs without a key (optional `OPENFIGI_API_KEY`: 25 requests/6 s × 100). The list is checked against the broker's own claim (≈ 8,600 gettex shares/ADRs vs "more than 8,500 shares") | Weekly (Saturday) | Live only |
 | News tone | Loughran–McDonald sentiment word lists (Notre Dame SRAF) | Free for academic/non-commercial research; kept **only in the private data repo**, never published | Static | 1993–2023 release |
 
 ## Not connected (and why)

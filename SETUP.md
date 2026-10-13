@@ -68,6 +68,26 @@ NVDA,1,2026-10-12
 Rating 1 = best … 5 = worst. Each file becomes one more opinion source in F1 (ratings older than
 45 days are ignored).
 
+### F. finanzen.net zero list (works without you; optional fixes)
+
+The weekly job builds the list itself from gettex's official instrument list (ESMA FIRDS), the
+only venue finanzen.net zero uses. Two optional extras:
+
+- **Faster ISIN mapping**: create a free OpenFIGI account at https://www.openfigi.com → sign up →
+  *API Key* → copy it, then add it as the secret `OPENFIGI_API_KEY`. Without it the first full
+  mapping takes ~35 minutes (it was already done on 2026-10-13); later weeks only map new ISINs.
+- **Your own list instead** (if the broker gives you one, e.g. from the app or customer service):
+  put `manual/brokers/finanzen_zero.csv` in the **private data repo** with a column `isin` or
+  `ticker`:
+
+  ```csv
+  isin
+  US0378331005
+  US5949181045
+  ```
+
+  It replaces the FIRDS list from the next daily run; delete the file to go back.
+
 ---
 
 ## Optional: host on Cloudflare Pages instead (needed to put the site behind a login)

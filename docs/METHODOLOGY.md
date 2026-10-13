@@ -190,7 +190,84 @@ net excess < −5%, or a data-health failure → no new BUY labels, a banner and
 Telegram alert. Drift: population stability index of each model input vs the last two training
 years (alert > 0.25).
 
-## 12. Known biases and limits
+## 12. "How often was it right?" (reliability per horizon)
+
+Built by the weekly job from the walk-forward out-of-sample predictions of the development and
+validation years only (2016–2023; the 2024–2026 holdout is never used). For each horizon (1w, 1m,
+3m, 6m) and each promise ("up", "beat the S&P 500"):
+
+1. **Cross-fitted calibration**: the probability of a case from year Y comes from a binned
+   isotonic calibration (bins of ≥ 200 predictions, as for p̂) fitted on the other years only,
+   so a bucket's hit rate is never measured on the outcomes that shaped its own calibration.
+2. **Buckets**: the same fixed edges as the p̂ buckets (0.35, 0.40, 0.45, 0.48, 0.50, 0.52,
+   0.55, 0.58, 0.62, 0.66), extended with 0.20, 0.25, 0.30, 0.70, 0.75 and 0.80 because horizon
+   probabilities spread wider. A bucket with fewer than **200 cases** is merged with the next one
+   (the last small one joins the bucket below), so every bucket rests on at least 200 outcomes.
+3. Each bucket stores n, the actual hit rate and its **95% Wilson interval**.
+
+The daily build looks up each stock's bucket from its calibrated probability (rounded to 4 decimals,
+exactly as exported, so the site finds the same bucket) and exports the hit rate, Wilson low/high
+and n (`hit_up_<h>` in the screener; up and beat on the stock pages and in `picks.json`). Only model
+forecasts get a record; the fallback estimate has none.
+
+Caveat shown on the site: cases overlap in time (monthly rows, multi-month horizons) and stocks
+move together, so the true uncertainty is wider than the Wilson range. A ✓ means the horizon's
+probability also passed the holdout test (section 10).
+
+## 13. Picks (fixed weights, research mode)
+
+All weights below were fixed before any result was looked at and are never fitted to past data
+(`pipeline/src/convergealpha/decide/picks.py`; a test pins them).
+
+- **Universe**: eligible stocks, without a SELL / RISK WARNING label, without a blocking event,
+  with a complete 6-month forecast (P(up), median, 10th and 90th percentile).
+- **Components** are sector-neutral percentile ranks among those candidates:
+  (rank − 1) ÷ (n − 1) × 100, so 0 = weakest and 100 = strongest in the sector. Sectors with fewer
+  than 10 candidates are ranked against all candidates. A sub-score is the weighted average of its
+  components (weights of a missing component are spread over the others), ranked again the same way.
+
+| Sub-score | Components and weights |
+|---|---|
+| Confidence | 0.70 × chance of rising + 0.30 × how often the app was right for that chance (Wilson lower bound of its reliability bucket). The chance is the validated P(up) 6m; if 6m is not validated, the validated P(up) 1m; if neither, p̂ with its own bucket's Wilson lower bound. |
+| Upside | 0.75 × median 6-month forecast + 0.25 × 90th-percentile 6-month outcome |
+| Safety | 0.35 × low volatility (63-day) + 0.35 × smaller downside (10th-percentile 6-month outcome) + 0.20 × quality family F6 (missing = 50) + 0.10 × no earnings report in the next 5 trading days (known date not within 5 days = 100, unknown date = 50, within 5 days = 0) |
+
+- **Balanced** = (Confidence + Upside + Safety) ÷ 3. A stock is a pick only if **each** of the
+  three is at least **40**, so a pick is never strong in one area and terrible in another. The
+  floor applies to every tab.
+- Tabs (top 25 each): Balanced, Safest (by Safety), Most upside (by Upside), Most likely to rise
+  (by Confidence); ties broken by Balanced. With the finanzen.net zero box ticked, the page shows
+  the top 25 among stocks not known to be unavailable there (`tabs_zero`).
+- Each pick lists 2–3 reasons (families scoring ≥ 55, strongest first; if fewer than two, the
+  best sub-score) and one main risk chosen by fixed priority: earnings within 5 days, short
+  interest ≥ 15% of float, a family ≤ 25, volatility ≥ 50%/yr, else the 10th-percentile 6-month loss.
+- **Live tracking only**: the scores snapshot stores each stock's `pick_rank`; the live baseline
+  race adds "Picks – Balanced top 25": each month's first snapshot that has picks, the 25 balanced
+  picks equally weighted, held 21 trading days, excess return vs SPY after a 0.2% round-trip cost —
+  the same rules as the other live strategies. There is **no backtest**: the strategy uses the
+  model's current forecasts, and the 2024–2026 holdout must not be evaluated again. The page keeps
+  its RESEARCH MODE badge until the strategy is proven live.
+
+## 14. finanzen.net zero availability
+
+finanzen.net zero routes every order to **gettex** (Börse München's market-maker segments, MIC
+codes MUND and MUNC). The weekly job downloads the newest **ESMA FIRDS** full equity files (the EU's
+official reference data: every instrument each EU venue trades, as reported by the venue), keeps
+the gettex shares and depositary receipts (CFI codes ES and ED) that are not terminated, and maps
+each ISIN to a US ticker with the **OpenFIGI** mapping API (exchange code "US"; results cached in
+the data repo, new ISINs looked up weekly, old ones re-checked after 28 days). gettex lists ≈ 8,600
+such instruments, in line with the broker's own "more than 8,500 shares".
+
+Per stock: **true** if its exact US-listed security is on the list; **false** if it is not;
+**unknown** if there is no list, the list is older than 35 days, or the stock has traded in the
+US for less than 30 days (the weekly file may not have it yet). Unknown is never treated as "not
+buyable": with the tick box on, unknown stocks stay visible, marked "?". A foreign company's US ADR
+is a different security from its home-market share, so an ADR can be "No" even when the home share
+is on gettex. A hand-made list `manual/brokers/finanzen_zero.csv` (column `isin` or `ticker`)
+replaces the FIRDS list when present. Source credit: ESMA FIRDS; reuse is authorised with the
+source acknowledged (transformation: filtered to gettex shares, mapped to tickers).
+
+## 15. Known biases and limits
 
 - **Survivorship bias**: free price history mostly lacks delisted stocks. Every backtested excess
   return is **halved** before it is shown, and the "+1%/yr over the best baseline" check uses the
