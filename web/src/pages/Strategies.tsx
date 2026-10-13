@@ -26,6 +26,8 @@ const COLORS: Record<string, string> = {
 }
 
 const day = (d: string) => formatDay(d)
+// Ledger reasons are in the past tense (they also explain the fill later); before the fill they are plans.
+const planned = (reason: string) => reason.replace(/^Bought /, 'Buy ').replace(/^Sold /, 'Sell ')
 const pctOrDash = (v: number | null | undefined, digits = 1) => (v === null || v === undefined ? '—' : formatPct(v, digits))
 
 function TickerLink({ t }: { t: string }) {
@@ -172,7 +174,7 @@ function StrategyCardView({ s, f }: { s: StrategyCard; f: StrategiesFile }) {
           <ul className="space-y-1 text-sm">
             {s.pending.map((o) => (
               <li key={`${o.side}-${o.ticker}`}>
-                <Badge tone={o.side === 'buy' ? 'good' : 'neutral'}>{o.side === 'buy' ? 'BUY' : 'SELL'}</Badge> <TickerLink t={o.ticker} /> at the official opening price. <span className="text-slate-600 dark:text-zinc-400">{o.reason}</span>
+                <Badge tone={o.side === 'buy' ? 'good' : 'neutral'}>{o.side === 'buy' ? 'BUY' : 'SELL'}</Badge> <TickerLink t={o.ticker} /> at the official opening price. <span className="text-slate-600 dark:text-zinc-400">{planned(o.reason)}</span>
               </li>
             ))}
           </ul>

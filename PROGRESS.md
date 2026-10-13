@@ -169,6 +169,14 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
 - Looked at every new page in a 360 px phone browser (screenshots): fixed a floating-point
   "55.00000000000001%", wrapped labels, long company names, an insider name shown as "Hill John C",
   and "Give me a strategy" not applying the Balanced cost rule.
+- **First live decisions**, GitHub `daily` run 38463391526 (started 20:30 UTC, after the 13 Oct close):
+  green; strategies.json "live", as of 2026-10-13, EUR/USD 1.1193 (FRED, dated Oct 9). Trade ledger
+  verified, 20 entries (6 starts, 8 orders, 6 day records). Orders waiting for the 14 Oct open:
+  Balanced KSPI + MTG, High risk TWST, Safest with upside DEA + MT, Confidence STWD + EFC, S&P 500
+  yardstick SPY; Opportunity hunter stays in cash (no green badge today). The Health page shows
+  "Trade ledger (paper money)" verified.
+- Unfilled orders now read "Buy …" on the Strategies page; the ledger keeps its original past-tense
+  text (decision 93).
 
 ### Validation result (first weekly run)
 
@@ -303,6 +311,7 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 90. Today adds "Opportunities this week" (green, then amber by 1-month chance up) and "Be careful: hype" (red, biggest weekly moves); today.json carries only those extra rows.
 91. A positive headline counts only if the company is its subject (name or ticker in the first five words): Finnhub attaches articles to every company they mention, and "Biogen upgraded to Buy at J.P. Morgan" had turned JPMorgan red in the first local run.
 92. The desktop top bar wraps to a second line when needed: two more pages made it wider than a 1,280 px screen on Linux fonts (caught by CI).
+93. Orders waiting for the next open show "Buy …" / "Sell …" instead of the ledger's "Bought …" / "Sold …": the ledger text is permanent and also explains the fill later, so only the page wording changes.
 
 ## Questions for the owner
 

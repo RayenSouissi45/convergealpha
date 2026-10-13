@@ -104,6 +104,9 @@ describe('Strategies page', () => {
     expect(within(board).getAllByRole('listitem')).toHaveLength(f.strategies.length + 1)
     for (const s of f.strategies) expect(screen.getAllByText(s.name).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/What it will do at the next open/).length).toBe(f.strategies.length)
+    // Orders not filled yet read as plans, not as done.
+    expect(screen.getByText(/^Buy KSPI: #24 for this strategy/)).toBeInTheDocument()
+    expect(screen.queryByText(/^Bought KSPI/)).not.toBeInTheDocument()
   })
 
   it('“Give me a strategy” uses your amount and marks the best overall', async () => {
