@@ -3,7 +3,10 @@ import { expect, test } from '@playwright/test'
 const PAGES: [string, string][] = [
   ['#/', 'Today'],
   ['#/picks', 'Picks'],
+  ['#/plan', 'Plan'],
+  ['#/strategies', 'Strategies'],
   ['#/screener', 'Screener'],
+  ['#/screener?preset=opportunities', 'Screener'],
   ['#/screener?preset=forecast', 'Screener'],
   ['#/columns', 'Columns explained'],
   ['#/stock/AAPL', 'AAPL Apple Inc. - Common Stock'],
@@ -41,7 +44,13 @@ test('phone bottom navigation reaches every page', async ({ page, isMobile }) =>
   test.skip(!isMobile, 'bottom bar is phone-only')
   await page.goto('#/')
   const nav = page.getByRole('navigation', { name: 'Main' })
-  await nav.getByRole('link', { name: 'Health' }).click()
+  await nav.getByRole('link', { name: 'Plan' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Plan' })).toBeVisible()
+  await nav.getByRole('link', { name: 'More' }).click()
+  await page.getByRole('link', { name: 'Strategies' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Strategies' })).toBeVisible()
+  await nav.getByRole('link', { name: 'More' }).click()
+  await page.getByRole('link', { name: 'Health' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Health' })).toBeVisible()
   await nav.getByRole('link', { name: 'More' }).click()
   await page.getByRole('link', { name: 'Validation' }).click()
@@ -205,4 +214,61 @@ test('picks: tabs, cards and the link to each stock page', async ({ page }) => {
   await first.getByRole('link').first().click()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page).toHaveURL(/#\/stock\//)
+})
+
+test('new pages fit a 360 px phone without sideways scrolling', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'phone layout')
+  await page.setViewportSize({ width: 360, height: 780 })
+  for (const hash of ['#/plan', '#/strategies', '#/', '#/screener?preset=opportunities', '#/stock/AAPL']) {
+    await page.goto(hash)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    if (hash === '#/strategies') {
+      const give = page.getByRole('button', { name: 'Give me a strategy' })
+      if (await give.isVisible()) await give.tap()
+      // Open every history list and the shared rules too.
+      for (const d of await page.locator('details').all()) await d.evaluate((el) => el.setAttribute('open', ''))
+    }
+    if (hash === '#/plan') await page.locator('details').first().evaluate((el) => el.setAttribute('open', ''))
+    await page.waitForTimeout(300)
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    expect(overflow, hash).toBeLessThanOrEqual(0)
+  }
+})
+
+test('plan builder: sliders, period, amount and costs change the result', async ({ page }) => {
+  await page.goto('#/plan')
+  await expect(page.getByText(/Forecast used:/)).toBeVisible()
+  await expect(page.getByText(/candidates fit\./)).toBeVisible()
+  await page.getByRole('button', { name: '6 months' }).click()
+  await expect(page.getByText(/Uses the 6-month forecast/)).toBeVisible()
+  await page.getByRole('checkbox', { name: /Allow stocks that report earnings/ }).check()
+  await page.getByRole('slider', { name: /Period/ }).fill('60')
+  await expect(page.getByText(/is between the 1-month and 3-month forecasts/)).toBeVisible()
+  await page.getByRole('spinbutton', { name: 'Amount in euros' }).fill('500')
+  const best = page.getByRole('list', { name: 'Best fits' })
+  await expect(best.getByRole('listitem').first()).toBeVisible()
+  await expect(best.getByText(/the stock must rise/).first()).toBeVisible()
+  await expect(best.getByText(/GREEN|AMBER|GREY/).first()).toBeVisible()
+  // The setting is remembered.
+  await page.reload()
+  await expect(page.getByRole('spinbutton', { name: 'Amount in euros' })).toHaveValue('500')
+})
+
+test('opportunity badges explain themselves', async ({ page }) => {
+  await page.goto('#/screener?preset=opportunities')
+  const why = page.getByRole('button', { name: /^Why is .* marked/ }).first()
+  await expect(why).toBeVisible()
+  await why.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('What happened')).toBeVisible()
+  await expect(dialog.getByText(/What history says|Never green on news alone/).first()).toBeVisible()
+})
+
+test('strategies: leaderboard, paper-money banner and Give me a strategy', async ({ page }) => {
+  await page.goto('#/strategies')
+  await expect(page.getByText('Paper money only. Past and live results do not guarantee future results.')).toBeVisible()
+  await expect(page.getByText(/RESEARCH MODE/).first()).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Strategies by value' })).toBeVisible()
+  await page.getByRole('button', { name: 'Give me a strategy' }).click()
+  await expect(page.getByRole('spinbutton', { name: 'Your amount in euros' })).toBeVisible()
 })

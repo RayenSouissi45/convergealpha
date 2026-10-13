@@ -4,6 +4,8 @@ import { Icon } from '../components/Icon'
 import { IntradayCard } from '../components/IntradayCard'
 import { MarketCard } from '../components/MarketCard'
 import { LabelBadge } from '../components/LabelBadge'
+import { OppBadge, OppPill } from '../components/Opportunity'
+import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
@@ -64,6 +66,35 @@ function StockList({
 
 const RM = 'RESEARCH MODE: not yet validated.'
 
+/** Rows with an opportunity badge: the badge and its "Why?" sit beside the link, not inside it. */
+function OppList({ title, help, rows, empty, more }: { title: string; help: string; rows: ScreenerRow[]; empty: string; more?: string }) {
+  return (
+    <Card
+      title={<Tip content={help}>{title}</Tip>}
+      aside={more ? <Link to={more} className="min-h-11 text-sm text-teal-700 underline dark:text-teal-400">All</Link> : undefined}
+    >
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-zinc-400">{empty}</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-zinc-800">
+          {rows.map((r) => (
+            <li key={r.ticker} className="py-1.5">
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <Link to={`/stock/${encodeURIComponent(r.ticker)}`} className="flex min-w-0 items-baseline gap-1.5 hover:underline">
+                  <span className="shrink-0 font-semibold">{r.ticker}</span>
+                  <span className="min-w-0 truncate text-sm text-slate-500 dark:text-zinc-400">{String(r.name ?? '')}</span>
+                </Link>
+                {isOpp(r.opp) && <OppBadge ticker={r.ticker} color={r.opp} compact />}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-zinc-400">{String(r.opp_event ?? '')}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
 export default function Today() {
   const [portfolio] = usePortfolio()
   // today.json holds only the rows these lists can show (a few KB). The full screener (~1 MB) is
@@ -93,6 +124,10 @@ export default function Today() {
     .filter((r) => num(r, 'days_to_earnings') !== null && (num(r, 'days_to_earnings') as number) >= 0 && (num(r, 'days_to_earnings') as number) <= 5 && r.eligible === true)
     .sort((a, b) => (num(a, 'days_to_earnings') ?? 0) - (num(b, 'days_to_earnings') ?? 0) || (num(b, 'adv_dollar') ?? 0) - (num(a, 'adv_dollar') ?? 0))
     .slice(0, 10)
+  const greens = rows.filter((r) => r.opp === 'green')
+  // Amber leads to research: eligible stocks only here (green already requires it).
+  const ambers = top(rows.filter((r) => r.opp === 'amber' && r.eligible === true), 'p_up_1m', Math.max(0, 10 - greens.length))
+  const reds = top(rows.filter((r) => r.opp === 'red'), 'ret_1w', 6)
   const candidates = (full ?? rows).filter((r) => r.eligible === true && isBuy(r))
   const warnings = portfolio.holdings
     .map((h) => ({ h, s: holdingStatus(h, byTicker.get(h.ticker), candidates) }))
@@ -111,6 +146,22 @@ export default function Today() {
         </span>
         <Icon name="chevron" className="size-5 shrink-0 text-teal-700 dark:text-teal-300" />
       </Link>
+      <div className="mb-3 grid gap-2 sm:grid-cols-2">
+        <Link to="/plan" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+          <span className="min-w-0">
+            <span className="block font-semibold">Plan: your amount, your period</span>
+            <span className="block text-sm text-slate-600 dark:text-zinc-400">The best fits in euros, after fees.</span>
+          </span>
+          <Icon name="chevron" className="size-5 shrink-0 text-slate-400" />
+        </Link>
+        <Link to="/strategies" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+          <span className="min-w-0">
+            <span className="block font-semibold">Strategies: 5 × 200 € paper money</span>
+            <span className="block text-sm text-slate-600 dark:text-zinc-400">Live since Oct 13, 2026, against the S&P 500.</span>
+          </span>
+          <Icon name="chevron" className="size-5 shrink-0 text-slate-400" />
+        </Link>
+      </div>
       <div className="mb-3">
         <ZeroToggle values={allRows.map((r) => r.zero)} noun="stocks in these lists" />
       </div>
@@ -159,6 +210,21 @@ export default function Today() {
               empty="No stock passes every rule today. The app says NO TRADE when the evidence is weak."
               more="/screener?preset=likely"
             />
+            <OppList
+              title="Opportunities this week"
+              help={`Fresh positive events (last 7 days). Green = confirmed: the kind of event passed the luck test, the evidence agrees and the validated chance up is above usual. Amber = possible, not confirmed. Tap “Why?”. ${RM}`}
+              rows={[...greens, ...ambers]}
+              empty="No fresh positive event among the stocks the app follows closely."
+              more="/screener?preset=opportunities"
+            />
+            {reds.length > 0 && (
+              <OppList
+                title="Be careful: hype"
+                help="A big jump, a fresh event or loud news together with weak evidence or a risk (heavy short selling, share offering, going-concern warning…)."
+                rows={reds}
+                empty=""
+              />
+            )}
             {watch.length > 0 && (
               <StockList title="Watch" help="Stocks that miss exactly one evidence rule by a small margin." rows={watch} metric={(r) => <LabelBadge label={String(r.label)} />} empty="" />
             )}
@@ -198,7 +264,12 @@ export default function Today() {
               title="Insider buying this week"
               help="Opportunistic open-market purchases filed with the SEC in the last 7 days (routine traders and 10b5-1 plan trades excluded)."
               rows={top(rows.filter((r) => (num(r, 'insider_buy_7d') ?? 0) > 0), 'insider_buy_7d', 10)}
-              metric={(r) => formatMoney(num(r, 'insider_buy_7d') ?? 0)}
+              metric={(r) => (
+                <span className="inline-flex items-center gap-1.5">
+                  {isOpp(r.opp) && <OppPill color={r.opp} compact />}
+                  {formatMoney(num(r, 'insider_buy_7d') ?? 0)}
+                </span>
+              )}
               empty="No opportunistic insider purchases filed in the last 7 days."
               more="/screener?preset=insiders"
             />

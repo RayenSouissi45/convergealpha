@@ -190,6 +190,15 @@ export const PRESETS: Preset[] = [
     filters: [{ key: 'next_earnings', op: 'withinDays', days: 7 }],
   },
   {
+    id: 'opportunities',
+    label: 'Opportunities',
+    help: 'Stocks with a fresh positive event: confirmed (green) first, then possible (amber).',
+    needs: ['opp'],
+    phase: 8,
+    sort: { key: 'opp', desc: true },
+    filters: [{ key: 'opp', op: 'in', values: ['green', 'amber'] }],
+  },
+  {
     id: 'avoid',
     label: 'Avoid',
     help: 'Stocks with a SELL / RISK WARNING label.',

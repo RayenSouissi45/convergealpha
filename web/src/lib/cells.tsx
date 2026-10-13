@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Missing } from '../components/Missing'
 import { LabelBadge } from '../components/LabelBadge'
+import { OppBadge } from '../components/Opportunity'
+import { isOpp, OPP_TEXT } from './opportunity'
 import { Tip } from '../components/Tip'
 import type { Cell, ReliabilityBucket, ReliabilityTables, ScreenerRow } from '../types'
 import { COLUMN_BY_KEY, H_LONG, type ColumnKind, type HorizonKey } from './columns'
@@ -31,6 +33,8 @@ export function cellText(kind: ColumnKind, v: Cell): string {
     case 'bool':
     case 'zero':
       return v ? 'Yes' : 'No'
+    case 'opp':
+      return isOpp(v) ? OPP_TEXT[v].title : String(v)
     case 'date':
       return typeof v === 'string' ? formatDay(v.slice(0, 10)) : String(v)
     default:
@@ -73,6 +77,11 @@ export function renderCell(key: string, v: Cell, missingReason?: string, ctx: Ce
         ?
       </Tip>
     )
+  }
+  if (kind === 'opp') {
+    if (isOpp(v) && ctx.row) return <OppBadge ticker={ctx.row.ticker} color={v} compact />
+    if (isOpp(v)) return OPP_TEXT[v].title
+    return <Missing reason="No badge: no fresh event (last 7 days) and no big price jump." />
   }
   if (v === null || v === undefined) {
     return <Missing reason={missingReason ?? missingFor(key, col?.label)} />

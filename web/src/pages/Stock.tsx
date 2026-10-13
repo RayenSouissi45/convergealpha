@@ -35,12 +35,13 @@ import {
   type PlanSection,
 } from '../components/stock/decision'
 import { PatternsCard, type PatternsSection } from '../components/stock/patterns'
+import { OppBadge, OppWhy } from '../components/Opportunity'
 import { Badge, Card, PageHeader, Planned, Row } from '../components/ui'
 import { ZeroBadge } from '../components/Zero'
 import { renderCell } from '../lib/cells'
 import { stockFile, useSiteJson } from '../lib/data'
 import { formatAge, formatDay, formatMoney, formatPct, formatPrice, signClass } from '../lib/format'
-import type { Cell, StockFile } from '../types'
+import type { Cell, Opportunity, StockFile } from '../types'
 
 const PriceChart = lazy(() => import('../components/PriceChart'))
 
@@ -167,6 +168,7 @@ export default function Stock() {
   const price = typeof st.price === 'number' ? st.price : null
   const chg = typeof st.change_1d === 'number' ? st.change_1d : null
   const eligible = st.eligible === true
+  const opp = (s.opportunity as Opportunity | null | undefined) ?? null
 
   return (
     <>
@@ -192,10 +194,16 @@ export default function Stock() {
             <Badge tone="neutral">Not eligible for signals</Badge>
           </Tip>
         )}
+        {opp && <OppBadge ticker={s.ticker} color={opp.color} opp={opp} />}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
         {s.decision ? <DecisionCard d={s.decision as DecisionSection} /> : null}
+        {opp && (
+          <Card title="Opportunity" className="lg:col-span-2">
+            <OppWhy opp={opp} />
+          </Card>
+        )}
         {s.forecast ? <ForecastCard f={s.forecast as ForecastSection} /> : null}
         {s.families ? <FamiliesCard f={s.families as FamiliesSection} /> : null}
         <Card title="Price" className="lg:col-span-2">

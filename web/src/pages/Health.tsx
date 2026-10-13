@@ -85,6 +85,15 @@ function Models({ data }: { data: HealthData }) {
             '—'
           )}
         </Row>
+        <Row label={<Tip content="Every paper-trading order, fill and daily value is appended to a separate hash-chained ledger in the private data repo and checked at every build.">Trade ledger (paper money)</Tip>}>
+          {data.trade_ledger ? (
+            <Badge tone={data.trade_ledger.verified ? 'good' : 'bad'}>
+              {data.trade_ledger.verified ? 'verified' : 'BROKEN'} · {data.trade_ledger.entries} entries, {data.trade_ledger.new_today} new
+            </Badge>
+          ) : (
+            <Missing reason="Starts with the first daily build of the strategies (close of Oct 13, 2026)." />
+          )}
+        </Row>
         <Row label={<Tip content="Population stability index of each model input vs the last two years of training data. Above 0.25 = the inputs look different from what the model learned on.">Data drift (PSI)</Tip>}>
           {data.drift ? (data.drift.alerts.length ? <Badge tone="warn">Drift in {data.drift.alerts.join(', ')}</Badge> : <Badge tone="good">No input above 0.25</Badge>) : <Missing reason="Needs the trained model bundle." />}
         </Row>

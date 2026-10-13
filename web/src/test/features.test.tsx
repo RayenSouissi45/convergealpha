@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EXTRA_DOCS } from '../lib/columnDocs'
 import { COLUMNS, GROUP_ORDER } from '../lib/columns'
 import { resetScreenerCache, toRows } from '../lib/screener'
 import { resetOnlyZero } from '../lib/zero'
@@ -209,8 +210,10 @@ describe('columns explained', () => {
     renderAt('/columns')
     expect(await screen.findByRole('heading', { level: 1, name: 'Columns explained' })).toBeInTheDocument()
     for (const g of GROUP_ORDER) expect(screen.getByRole('heading', { level: 2, name: g })).toBeInTheDocument()
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(COLUMNS.length)
-    expect(screen.getAllByText('Common mistakes')).toHaveLength(COLUMNS.length)
+    // Every screener column plus every number on the Plan and Strategies pages.
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(COLUMNS.length + EXTRA_DOCS.length)
+    expect(screen.getAllByText('Common mistakes')).toHaveLength(COLUMNS.length + EXTRA_DOCS.length)
+    for (const g of ['Plan builder page', 'Strategies page']) expect(screen.getByRole('heading', { level: 2, name: g })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: 'Analyst target upside' })).toBeInTheDocument()
     expect(screen.getByText(/analysts’ average price target is 25% above today’s price/)).toBeInTheDocument()
   })

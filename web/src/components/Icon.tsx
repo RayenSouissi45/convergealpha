@@ -5,6 +5,7 @@ type Name = IconName | 'sun' | 'moon' | 'auto' | 'external' | 'chevron'
 const PATHS: Record<Name, string> = {
   today: 'M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5',
   picks: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
+  plan: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4',
   screener: 'M4 5h16M4 10h16M4 15h16M4 20h16M9 5v15',
   portfolio: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16',
   health: 'M3 12h4l2.5-6 4 12 2.5-6H21',

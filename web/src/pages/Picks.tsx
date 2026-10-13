@@ -1,5 +1,7 @@
 import { Link, useSearchParams } from 'react-router'
 import { LabelBadge } from '../components/LabelBadge'
+import { OppBadge } from '../components/Opportunity'
+import { isOpp } from '../lib/opportunity'
 import { Missing } from '../components/Missing'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
@@ -134,6 +136,12 @@ function PickCard({ p, place }: { p: Pick; place: number }) {
           {p.sector ? `${p.sector} · ` : ''}Next earnings: {p.next_earnings ? formatDay(p.next_earnings) : 'no date known'}
           {p.zero === false ? ' · not on finanzen.net zero' : ''}
         </p>
+        {isOpp(p.opp) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs">
+            <OppBadge ticker={p.ticker} color={p.opp} compact />
+            <span className="text-slate-600 dark:text-zinc-400">{p.opp_event}</span>
+          </div>
+        )}
         <div className="mt-3 grid grid-cols-3 gap-3">
           <ScoreBar id="safety" label="Safety" value={p.scores.safety} />
           <ScoreBar id="upside" label="Upside" value={p.scores.upside} />

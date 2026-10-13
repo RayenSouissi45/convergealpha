@@ -34,6 +34,9 @@ function useAvailableHeight(ref: React.RefObject<HTMLElement | null>, min = 320)
   return h
 }
 
+// Opportunity badges sort confirmed first: green, then amber, then red.
+const OPP_RANK: Record<string, number> = { green: 3, amber: 2, red: 1 }
+
 function sortValue(v: Cell): string | number | undefined {
   if (v === null || v === undefined) return undefined
   if (typeof v === 'boolean') return v ? 1 : 0
@@ -91,7 +94,7 @@ export function VirtualTable({
         const textual = col?.kind === 'text' || col?.kind === 'ticker' || col?.kind === 'label'
         return {
           id: key,
-          accessorFn: (r: ScreenerRow) => sortValue(r[key] ?? null),
+          accessorFn: (r: ScreenerRow) => (col?.kind === 'opp' ? OPP_RANK[String(r[key])] : sortValue(r[key] ?? null)),
           header: labels?.[key] ?? col?.label ?? key,
           size: widths?.[key] ?? col?.width ?? 96,
           sortUndefined: 'last' as const,
@@ -140,7 +143,7 @@ export function VirtualTable({
           {table.getHeaderGroups()[0]?.headers.map((h, i) => {
             const col = COLUMN_BY_KEY[h.column.id]
             const dir = h.column.getIsSorted()
-            const numeric = col && !['text', 'ticker', 'label'].includes(col.kind)
+            const numeric = col && !['text', 'ticker', 'label', 'opp'].includes(col.kind)
             const label = String(h.column.columnDef.header ?? h.column.id)
             return (
               <div
@@ -187,7 +190,7 @@ export function VirtualTable({
                 {row.getVisibleCells().map((cell, i) => {
                   const key = cell.column.id
                   const col = COLUMN_BY_KEY[key]
-                  const numeric = col && !['text', 'ticker', 'label'].includes(col.kind)
+                  const numeric = col && !['text', 'ticker', 'label', 'opp'].includes(col.kind)
                   const value = row.original[key] ?? null
                   return (
                     <div

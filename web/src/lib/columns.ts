@@ -19,6 +19,7 @@ export type ColumnKind =
   | 'forecast' // median forecast return with its 80% range (p10 to p90) as a second line
   | 'hit' // past hit rate of the "chance up" bucket, with its range and validation mark
   | 'zero' // buyable on finanzen.net zero: yes / no / not sure
+  | 'opp' // opportunity badge: green / amber / red, with a "Why?" panel
 
 export type ColumnGroup =
   | 'Basics'
@@ -85,6 +86,7 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'eligible', label: 'Eligible', group: 'Label & decision', kind: 'bool', help: 'Price ≥ $5 and ≥ $10M traded per day: only eligible stocks can get BUY labels.', phase: 1, width: 88 },
   { key: 'blocked', label: 'Blocked', group: 'Label & decision', kind: 'bool', help: 'An event (earnings soon, offering, merger…) blocks new entries.', phase: 3, width: 84 },
   { key: 'block_reason', label: 'Blocking event', group: 'Label & decision', kind: 'text', help: 'The first blocking event.', phase: 3, width: 200 },
+  { key: 'opp', label: 'Opportunity', group: 'Label & decision', kind: 'opp', help: 'Opportunity badge: confirmed (green), possible (amber) or hype / be careful (red). Tap “Why?”.', phase: 8, defaultVisible: true, width: 150 },
   { key: 'ev', label: 'Expected value', group: 'Label & decision', kind: 'pct', help: 'Expected gain of the 60-day trade after costs.', phase: 3, width: 96 },
   { key: 'p_hat', label: 'Chance trade works (p̂)', group: 'Label & decision', kind: 'prob', help: 'Chance the 60-day trade ends ahead of the S&P 500 after costs.', phase: 3, width: 112 },
   { key: 'gain_per_month', label: 'Gain per month', group: 'Label & decision', kind: 'pct', help: 'Median 6-month forecast divided by 6.', phase: 3, defaultVisible: true, width: 96 },
@@ -129,6 +131,7 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'adv_dollar', label: 'Dollar volume per day', group: 'Size & liquidity', kind: 'money', help: 'Average value traded per day (21 days).', phase: 1, width: 104 },
 
   { key: 'next_earnings', label: 'Next earnings', group: 'Events', kind: 'date', help: 'Next expected earnings report date.', phase: 2, width: 108 },
+  { key: 'opp_event', label: 'Opportunity event', group: 'Events', kind: 'text', help: 'The main fresh event behind the opportunity badge, with its date.', phase: 8, width: 190 },
   { key: 'days_to_earnings', label: 'Days to earnings', group: 'Events', kind: 'int', help: 'Trading days until the next report.', phase: 2, width: 96 },
 ]
 

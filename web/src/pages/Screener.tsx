@@ -1,6 +1,7 @@
 import type { SortingState } from '@tanstack/react-table'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { isOpp, OPP_TEXT } from '../lib/opportunity'
 import { Sheet } from '../components/Sheet'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
@@ -50,7 +51,7 @@ function FilterEditor({
 }) {
   const [key, setKey] = useState('')
   const numeric = available.filter((c) => !['text', 'ticker', 'bool', 'date', 'label'].includes(c.kind))
-  const categorical = available.filter((c) => ['text', 'label'].includes(c.kind) && c.key !== 'name')
+  const categorical = available.filter((c) => ['text', 'label', 'opp'].includes(c.kind) && c.key !== 'name' && c.key !== 'opp_event')
   const booleans = available.filter((c) => c.kind === 'bool')
 
   const update = (i: number, f: Filter | null) => {
@@ -140,7 +141,7 @@ function FilterEditor({
                         className={`min-h-9 rounded-full border px-3 text-xs ${on ? 'border-teal-600 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-200' : 'border-slate-300 dark:border-zinc-600'}`}
                       >
                         {on ? '✓ ' : ''}
-                        {v}
+                        {col?.kind === 'opp' && isOpp(v) ? OPP_TEXT[v].title : v}
                       </button>
                     )
                   })}

@@ -138,6 +138,30 @@ export default function About() {
           </p>
         </Card>
 
+        <Card title="Costs in euros">
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+            <li>finanzen.net zero sends orders to gettex. The app assumes 1 € per buy and 1 € per sell (change it on the Plan page; check your broker’s current price list).</li>
+            <li>Example: you put in 100 €. 1 € goes to the fee, so you get 99 € of stock. Selling costs 1 € again. So the stock must rise about 2% just to give you your 100 € back. This “break-even move” is shown everywhere.</li>
+            <li>On top, you pay a small spread (the gap between buying and selling prices), estimated from how much the stock trades each day.</li>
+            <li>US prices are turned into euros with the EUR/USD rate from FRED (updated about once a week). If the dollar falls, your US shares are worth fewer euros, even when the stock price does not move.</li>
+            <li>Whole shares only, like at the broker: a 400 € share does not fit into 200 €. Money that is left over stays as cash.</li>
+          </ul>
+        </Card>
+
+        <Card title="Plan, opportunities and strategies">
+          <div className="space-y-2 text-sm leading-relaxed">
+            <p>
+              <Link to="/plan" className="font-semibold underline">Plan</Link>: you choose how safe, how much upside, how long and how much money. The app shows its three best fits and “split over the top two” with the shares you can buy, the fees, the break-even move, the chance of ending with more money after costs, how often similar forecasts were right, and a middle, bad and good result in euros. GREEN only when everything lines up; GREY means “waiting is a valid choice”.
+            </p>
+            <p>
+              <strong>Opportunity badge</strong>: one badge joins the app’s event signals. GREEN “Confirmed opportunity” needs a fresh event (last 7 days) of a kind that passed the luck test in this stock’s history, at least 3 strong evidence families and a validated chance of rising above the usual rate. AMBER “Possible, not confirmed” = a fresh event without all of that. RED “Hype / be careful” = a big jump or loud news with weak evidence or a risk such as heavy short selling or a share offering. News alone is never green. Tap “Why?” for the plain explanation and the source.
+            </p>
+            <p>
+              <Link to="/strategies" className="font-semibold underline">Strategies</Link>: five rule-based strategies, each with 200 € of <strong>paper money</strong>, started on 13 Oct 2026. Every trading day they decide after the close and trade at the next opening price, with fees, spread and euros, and they explain every buy, sell and hold. They race against 200 € put into the S&P 500. Their rules were fixed before the start and are never tuned; a changed rule would start again from 200 € as a new version. Every order is kept in a tamper-proof ledger. Paper money only: past and live results do not guarantee future results.
+            </p>
+          </div>
+        </Card>
+
         <Card title="Data and privacy">
           <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
             <li>Free, official sources and APIs only (SEC EDGAR, FINRA, FRED and others). No scraping of sites that forbid it.</li>
