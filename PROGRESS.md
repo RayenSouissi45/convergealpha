@@ -142,6 +142,34 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
 - Screener file: 75 fields (was 59), 832 KB compressed (was 831 KB) thanks to per-field rounding;
   `picks.json` 11 KB compressed.
 
+### Checks run for Plan, opportunities and strategies (2026-10-13)
+
+- Tests: **135 pipeline** (adds: 100 € → 99 € of stock and the 2.02% break-even, euro conversion,
+  whole shares and leftover cash, FX "latest rate on or before the day", no look-ahead (future
+  prices change no decision; fills at the next open), minimum hold unless a stop, the switch rule,
+  each strategy's entries and exits on synthetic data, splits, the SPY yardstick, missed days caught
+  up from prices only, idempotent same-day re-runs, trade-ledger tamper detection, pinned
+  parameters and the "changed rules lock the strategy" check, opportunity colours incl. "news alone
+  is never green" and "a headline counts only when the company is its subject", plan.json
+  thresholds), **85 web unit** (cost model with the same reference values, slider mapping, period
+  mapping and mixing, the verdict thresholds, the anchored chance, the split, Plan and Strategies
+  pages, the "Why?" panel, Today's lists, Columns explained coverage) and **60 Playwright checks**
+  (Plan, Strategies and the Opportunities preset at phone and desktop size, no sideways scroll at
+  360 px on Plan, Strategies, Today, the Opportunities screener and a stock page, Plan
+  interactions, the "Why?" dialog, the bottom bar). ruff, strict mypy, oxlint, TypeScript clean;
+  CI green.
+- The event-pattern history comes from weekly run 38398872342 (holdout reused, log still 2 entries).
+- The whole build ran locally on a copy of the data repo (strategies started one day early in that
+  copy only, to see real decisions; the real data repo was not touched by it).
+- GitHub `daily` run 38407077313 (before the close, data as of Oct 12): green; FRED EUR/USD stored
+  (1.1259 $/€, dated Oct 2); 504 amber and 136 red badges, none green; plan.json 2,100 candidates;
+  strategies.json "waiting" with an empty, verified trade ledger.
+- Lighthouse, mobile, live site, `lighthouse` workflow (median of 3): **Plan 97, Strategies 99**,
+  Today 100, Picks 99, Screener 98, Stock 99; accessibility 100 and best practices 100 on all.
+- Looked at every new page in a 360 px phone browser (screenshots): fixed a floating-point
+  "55.00000000000001%", wrapped labels, long company names, an insider name shown as "Hill John C",
+  and "Give me a strategy" not applying the Balanced cost rule.
+
 ### Validation result (first weekly run)
 
 GitHub weekly run 38309891938, model `m-20261012-7ef7099b4d`, 264,766 stock-months

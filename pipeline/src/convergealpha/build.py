@@ -285,7 +285,11 @@ def paper_step(
     today = PE.Today(t, validated, base_up.get("1m"), why_not is None, why_not, inputs)
     status = None
     new: list[dict[str, Any]] = []
-    if price_coverage <= 0.5:
+    if fx_now is None:
+        log.warning("paper trading waits: no EUR/USD rate (FRED DEXUSEU) yet")
+        books = PE.replay(LG.read(d / PE.LEDGER), specs)
+        status = "waiting for the EUR/USD rate from FRED"
+    elif price_coverage <= 0.5:
         log.warning("paper trading waits: prices for only %.0f%% of stocks", 100 * price_coverage)
         books = PE.replay(LG.read(d / PE.LEDGER), specs)
         status = "waiting for good price data"
