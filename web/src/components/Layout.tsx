@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { formatAge, isStale } from '../lib/format'
 import { useHealth } from '../lib/health'
 import { useTheme, type ThemePref } from '../lib/theme'
@@ -155,12 +155,14 @@ function Footer() {
 }
 
 export function Layout() {
+  // The Forecast view shows 4 horizons x 3 columns: give the screener more room on wide screens.
+  const wide = useLocation().pathname.startsWith('/screener')
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
       <Banners />
       {/* Full-height main keeps the footer below the fold while data loads (no layout shift). */}
-      <main id="main" className="mx-auto min-h-dvh w-full max-w-5xl flex-1 px-4 pt-4">
+      <main id="main" className={`mx-auto min-h-dvh w-full flex-1 px-4 pt-4 ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
         <Outlet />
       </main>
       <Footer />

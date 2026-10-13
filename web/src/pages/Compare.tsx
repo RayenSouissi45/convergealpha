@@ -6,6 +6,8 @@ import { type DecisionSection, type FamiliesSection, type ForecastSection, type 
 import { Card, PageHeader } from '../components/ui'
 import { fetchSiteJson, stockFile } from '../lib/data'
 import { formatDay, formatMoney, formatPct, formatPctAbs, formatPrice } from '../lib/format'
+import { useBrokerList, useOnlyZero, zeroAvailability, zeroKeep } from '../lib/zero'
+import { ZeroBadge, ZeroToggle } from '../components/Zero'
 import type { StockFile } from '../types'
 
 type Getter = (s: StockFile) => ReactNode
@@ -63,7 +65,12 @@ export default function Compare() {
     }
   }, [key])
 
-  const loaded = tickers.map((t) => [t, stocks[t]] as const)
+  const [onlyZero] = useOnlyZero()
+  const zeroOk = zeroAvailability(useBrokerList()).ok
+  const zeroOf = (s: StockFile | 'missing' | undefined) => (s && s !== 'missing' ? ((s.zero as boolean | null | undefined) ?? null) : null)
+  const all = tickers.map((t) => [t, stocks[t]] as const)
+  const loaded = all.filter(([, s]) => zeroKeep(zeroOf(s), onlyZero && zeroOk))
+  const hidden = all.filter(([, s]) => !zeroKeep(zeroOf(s), onlyZero && zeroOk)).map(([t]) => t)
   return (
     <>
       <PageHeader title="Compare" subtitle="2–4 stocks side by side." />
@@ -80,6 +87,12 @@ export default function Compare() {
         </label>
         <button type="submit" className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">Compare</button>
       </form>
+      <div className="mb-3">
+        <ZeroToggle values={all.map(([, s]) => zeroOf(s))} />
+        {hidden.length > 0 && (
+          <p className="text-xs text-slate-500 dark:text-zinc-400">Hidden because they are not on finanzen.net zero: {hidden.join(', ')}.</p>
+        )}
+      </div>
       {tickers.length < 2 ? (
         <Card>
           <p className="text-sm text-slate-600 dark:text-zinc-400">Enter 2 to 4 tickers separated by commas.</p>
@@ -93,7 +106,10 @@ export default function Compare() {
                 <th scope="col" className="sticky left-0 bg-slate-50 p-2 text-left dark:bg-zinc-950"><span className="sr-only">Measure</span></th>
                 {loaded.map(([t]) => (
                   <th key={t} scope="col" className="min-w-36 p-2 text-left">
-                    <Link to={`/stock/${encodeURIComponent(t)}`} className="text-base underline">{t}</Link>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Link to={`/stock/${encodeURIComponent(t)}`} className="text-base underline">{t}</Link>
+                      <ZeroBadge value={zeroOf(stocks[t])} />
+                    </span>
                   </th>
                 ))}
               </tr>

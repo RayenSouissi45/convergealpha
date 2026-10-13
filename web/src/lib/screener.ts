@@ -102,6 +102,8 @@ export interface Preset {
   id: string
   label: string
   help: string
+  /** A view replaces the visible columns (the Forecast view). */
+  view?: 'forecast'
   /** Fields that must exist in screener.json for the preset to work. */
   needs: string[]
   phase: number
@@ -110,6 +112,16 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
+  {
+    id: 'forecast',
+    label: 'Forecast',
+    help: 'Expected change, chance of rising and how often the app was right, for 1 week, 1 month, 3 months and 6 months.',
+    needs: ['p_up_6m'],
+    phase: 3,
+    sort: { key: 'p_up_6m', desc: true },
+    filters: [],
+    view: 'forecast',
+  },
   {
     id: 'likely',
     label: 'Most likely to rise',

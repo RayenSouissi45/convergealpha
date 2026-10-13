@@ -1,13 +1,16 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-12T20:35:03Z",
+  "generated_at": "2026-10-13T08:30:01Z",
   "pipeline_version": "0.1.0",
-  "build_phase": 3,
+  "build_phase": 7,
   "status": "ok",
-  "status_detail": "Pipeline ran. 13 of 15 data sources live (build phase 3).",
+  "status_detail": "Pipeline ran. 14 of 16 data sources live (build phase 7).",
   "research_mode": true,
-  "validated": [],
-  "model_version": null,
+  "validated": [
+    "P(up) 1m",
+    "P(up) 6m"
+  ],
+  "model_version": "m-20261012-7ef7099b4d",
   "kill_switch": {
     "implemented": true,
     "active": false,
@@ -27,7 +30,7 @@
       "phase": 1,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:08:24Z",
       "as_of": "2026-10-12",
       "records": 5356,
       "coverage": null,
@@ -40,11 +43,11 @@
       "phase": 1,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 30,
-      "coverage": 1.0,
-      "detail": "30 of 30 stocks priced for 2026-10-09",
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 5355,
+      "coverage": 0.9998,
+      "detail": "5,355 of 5,356 stocks priced for 2026-10-12",
       "needs_secret": null
     },
     {
@@ -53,9 +56,9 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:08:24Z",
       "as_of": "2026-10-12",
-      "records": 30,
+      "records": 5291,
       "coverage": 1.0,
       "detail": "Industry codes for 100% of stocks",
       "needs_secret": "SEC_USER_AGENT"
@@ -66,11 +69,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 30,
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 2827,
       "coverage": 1.0,
-      "detail": "Snapshot ≤ 8 days old for 100% of stocks; consensus for 100%",
+      "detail": "Snapshot ≤ 8 days old for 100% of stocks; consensus for 53%",
       "needs_secret": null
     },
     {
@@ -79,11 +82,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 30,
-      "coverage": 1.0,
-      "detail": "EPS revision data for 100% of stocks",
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 3986,
+      "coverage": 0.7442,
+      "detail": "EPS revision data for 74% of stocks",
       "needs_secret": null
     },
     {
@@ -92,11 +95,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:11:47Z",
       "as_of": "2026-10-12",
-      "records": 22,
+      "records": 3551,
       "coverage": null,
-      "detail": "22 reports scheduled between 2026-10-02 and 2026-11-16",
+      "detail": "3551 reports scheduled between 2026-10-02 and 2026-11-16",
       "needs_secret": "FINNHUB_API_KEY"
     },
     {
@@ -105,11 +108,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 193256,
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 2011436,
       "coverage": null,
-      "detail": "193,256 open-market insider trades since 2010; opportunistic buys in last 90 days at 3 stocks",
+      "detail": "2,011,436 open-market insider trades since 2010; opportunistic buys in last 90 days at 807 stocks",
       "needs_secret": "SEC_USER_AGENT"
     },
     {
@@ -118,11 +121,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 23,
-      "coverage": 0.7667,
-      "detail": "Point-in-time ratios for 77% of stocks",
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 4682,
+      "coverage": 0.8742,
+      "detail": "Point-in-time quality ratios (US-GAAP XBRL) for 87% of stocks, 93% of eligible ones",
       "needs_secret": "SEC_USER_AGENT"
     },
     {
@@ -131,9 +134,9 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:08:24Z",
       "as_of": "2026-09-30",
-      "records": 7087,
+      "records": 8754,
       "coverage": null,
       "detail": "FINRA settlement 2026-09-30; 0 new file(s)",
       "needs_secret": null
@@ -144,11 +147,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 30,
-      "coverage": 1.0,
-      "detail": "Implied volatility for 30 candidates",
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 753,
+      "coverage": 0.1406,
+      "detail": "Implied volatility for 753 candidates",
       "needs_secret": null
     },
     {
@@ -157,7 +160,7 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:08:24Z",
       "as_of": "2026-10-09",
       "records": 16225,
       "coverage": null,
@@ -170,11 +173,11 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T16:23:04Z",
+      "last_success": "2026-10-13T03:11:47Z",
       "as_of": "2026-10-12",
-      "records": 439,
+      "records": 1354,
       "coverage": null,
-      "detail": "Headlines for 30 stocks (top candidates)",
+      "detail": "Headlines for 146 stocks (top candidates)",
       "needs_secret": "FINNHUB_API_KEY"
     },
     {
@@ -183,11 +186,24 @@
       "phase": 2,
       "status": "ok",
       "optional": false,
-      "last_success": "2026-10-12T20:35:03Z",
-      "as_of": "2026-10-09",
-      "records": 30,
-      "coverage": 1.0,
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-12",
+      "records": 5312,
+      "coverage": 0.9918,
       "detail": "Yahoo holders (top-holder position changes); 13F processing not built",
+      "needs_secret": null
+    },
+    {
+      "id": "brokers",
+      "name": "finanzen.net zero list (gettex shares, ESMA FIRDS)",
+      "phase": 2,
+      "status": "ok",
+      "optional": true,
+      "last_success": "2026-10-13T08:30:01Z",
+      "as_of": "2026-10-10",
+      "records": 2940,
+      "coverage": 0.5489,
+      "detail": "List dated 2026-10-10 (ESMA FIRDS reference data (gettex, MIC MUND/MUNC)): 2,940 of 5,356 stocks buyable, 1,984 of 2,461 eligible ones",
       "needs_secret": null
     },
     {
@@ -268,6 +284,13 @@
       "present": false
     },
     {
+      "name": "OPENFIGI_API_KEY",
+      "purpose": "Optional: faster ISIN-to-ticker mapping (broker list)",
+      "required": false,
+      "used_from_phase": null,
+      "present": false
+    },
+    {
       "name": "ANTHROPIC_API_KEY",
       "purpose": "Optional AI news event extraction",
       "required": false,
@@ -289,12 +312,121 @@
       "present": false
     }
   ],
-  "universe_count": 30,
-  "as_of": "2026-10-09",
-  "labels": {
-    "NO TRADE": 24,
-    "SELL / RISK WARNING": 6
+  "universe_count": 5356,
+  "as_of": "2026-10-12",
+  "ledger": {
+    "entries": 664,
+    "new_today": 0,
+    "outcomes": 0,
+    "verified": true
   },
-  "forecast_method": "fallback",
-  "drift": null
+  "actions_usage": null,
+  "plugins": [
+    {
+      "id": "danelfin",
+      "name": "Danelfin AI score",
+      "enabled": false,
+      "how": "API key (DANELFIN_API_KEY)",
+      "manual_file": false
+    },
+    {
+      "id": "zacks",
+      "name": "Zacks Rank",
+      "enabled": false,
+      "how": "manual CSV import only (no scraping)",
+      "manual_file": false
+    },
+    {
+      "id": "tipranks",
+      "name": "TipRanks Smart Score",
+      "enabled": false,
+      "how": "manual CSV import only (no scraping)",
+      "manual_file": false
+    },
+    {
+      "id": "seekingalpha",
+      "name": "Seeking Alpha Quant",
+      "enabled": false,
+      "how": "manual CSV import only (no scraping)",
+      "manual_file": false
+    },
+    {
+      "id": "morningstar",
+      "name": "Morningstar rating",
+      "enabled": false,
+      "how": "manual CSV import only (no scraping)",
+      "manual_file": false
+    }
+  ],
+  "brokers": {
+    "source": "ESMA FIRDS reference data (gettex, MIC MUND/MUNC)",
+    "list_date": "2026-10-10",
+    "files": [
+      "FULINS_C_20261010_01of01.zip",
+      "FULINS_E_20261010_01of02.zip",
+      "FULINS_E_20261010_02of02.zip"
+    ],
+    "downloaded_at": "2026-10-13T08:28:38+00:00",
+    "instruments": 8743,
+    "with_us_ticker": 7149,
+    "age_days": 2,
+    "stale": false,
+    "matched": 2940,
+    "matched_eligible": 1984,
+    "unknown": 34,
+    "stocks": 5356,
+    "eligible": 2461
+  },
+  "labels": {
+    "NO TRADE": 2249,
+    "SELL / RISK WARNING": 212
+  },
+  "forecast_method": "model",
+  "drift": {
+    "psi": {
+      "mom_1m": 0.147,
+      "mom_3m": 0.1081,
+      "mom_6m": 0.0222,
+      "mom_12_2": 0.0083,
+      "resid_mom": 0.1599,
+      "industry_mom": 0.4478,
+      "vol_63": 0.0225,
+      "atr_pct": 0.0139,
+      "dist_52w": 0.0731,
+      "beta": 0.1554,
+      "log_mcap": 0.0058,
+      "log_adv": 0.0034,
+      "insider_value": 0.0036,
+      "roic": 0.003,
+      "gp_assets": 0.0027,
+      "accruals": 0.004,
+      "fcf_yield": 0.0079,
+      "debt_ebitda": 0.0018,
+      "sue_srw": 0.0316,
+      "days_since_report": 2.3353,
+      "short_pct": 0.0981,
+      "f3h": 0.0163,
+      "f4h": 0.0224,
+      "f5h": 0.0392,
+      "f6h": 0.0079,
+      "disagreement_h": 0.0058,
+      "n_fam": 0.0001
+    },
+    "alerts": [
+      "days_since_report",
+      "industry_mom"
+    ]
+  },
+  "model_trained_at": "2026-10-12T21:31:26+00:00",
+  "model_metrics": {
+    "rows": 150262,
+    "auc_correct": 0.517171,
+    "brier_correct": 0.245109,
+    "brier_base": 0.247819,
+    "base_rate": 0.453302,
+    "coverage80_1w": 0.800009,
+    "coverage80_1m": 0.800009,
+    "coverage80_3m": 0.800009,
+    "coverage80_6m": 0.800009
+  }
 }

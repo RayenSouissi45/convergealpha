@@ -51,6 +51,48 @@ export interface Health {
   ledger?: { entries: number; new_today: number; outcomes: number; verified: boolean } | null
   drift?: { psi: Record<string, number> | null; alerts: string[] } | null
   actions_usage?: { month: string; runs: number; wall_minutes: number; billing: string } | null
+  brokers?: BrokerSummary | null
+}
+
+/** The finanzen.net zero list (gettex shares in ESMA FIRDS, or the owner's manual file). */
+export interface BrokerSummary {
+  source: string
+  list_date: string
+  instruments?: number
+  with_us_ticker?: number
+  age_days?: number
+  stale?: boolean
+  matched?: number
+  matched_eligible?: number
+  unknown?: number
+  stocks?: number
+  eligible?: number
+}
+
+/** "How often was it right?" bucket: past cases with a similar probability. */
+export interface ReliabilityBucket {
+  lo: number
+  hi: number
+  n: number
+  rate: number
+  wilson_lo: number
+  wilson_hi: number
+}
+
+export interface ReliabilityTables {
+  method?: string
+  years?: number[]
+  up: Record<string, ReliabilityBucket[]>
+}
+
+/** A stock's lookup result (stock pages, picks.json). */
+export interface Reliability {
+  rate: number
+  lo: number
+  hi: number
+  n: number | null
+  p_lo?: number
+  p_hi?: number
 }
 
 export type Cell = string | number | boolean | null
@@ -63,6 +105,8 @@ export interface ScreenerFile {
   count: number
   fields: string[]
   rows: Cell[][]
+  reliability?: ReliabilityTables | null
+  brokers?: BrokerSummary | null
 }
 
 export type ScreenerRow = Record<string, Cell> & { ticker: string }
@@ -119,4 +163,57 @@ export interface MarketFile {
   }
   macro?: Record<string, { label: string; value: number; date: string; change_3m: number }>
   [key: string]: unknown
+}
+
+/** picks.json: the Picks page (top 25 per tab). */
+export interface PickHorizon {
+  median: number | null
+  p10: number | null
+  p90: number | null
+  p_up: number | null
+  validated: boolean
+  reliability: Reliability | null
+}
+
+export interface Pick {
+  ticker: string
+  name: string | null
+  sector: string | null
+  label: string
+  next_earnings: string | null
+  zero: boolean | null
+  price: number | null
+  scores: { safety: number | null; upside: number | null; confidence: number | null; balanced: number | null }
+  rank: number | null
+  horizons: Record<'1w' | '1m' | '3m' | '6m', PickHorizon>
+  reasons: string[]
+  risk: string
+}
+
+export interface PicksFile {
+  schema_version: number
+  generated_at: string
+  as_of: string
+  research_mode: boolean
+  validated: string[]
+  weights: Record<string, Record<string, number>>
+  floor: number
+  top: number
+  min_sector: number
+  summary: {
+    eligible: number
+    sell: number
+    blocked: number
+    no_forecast: number
+    candidates: number
+    passing_floor: number
+    probability_source: string
+    reliability_available: boolean
+  }
+  brokers: BrokerSummary | null
+  race: { since: string | null; cumulative?: number; months?: number; max_drawdown?: number; points?: { date: string; excess: number }[] } | null
+  tabs: Record<'balanced' | 'safest' | 'upside' | 'likely', string[]>
+  /** The same tabs without stocks known to be unavailable on finanzen.net zero. */
+  tabs_zero?: Record<'balanced' | 'safest' | 'upside' | 'likely', string[]>
+  stocks: Record<string, Pick>
 }

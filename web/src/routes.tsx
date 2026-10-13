@@ -16,6 +16,8 @@ const Compare = lazy(() => import('./pages/Compare'))
 const Scorecard = lazy(() => import('./pages/Scorecard'))
 const BaselineRace = lazy(() => import('./pages/BaselineRace'))
 const Validation = lazy(() => import('./pages/Validation'))
+const Picks = lazy(() => import('./pages/Picks'))
+const Columns = lazy(() => import('./pages/Columns'))
 
 const wait = (el: React.ReactNode) => <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>{el}</Suspense>
 
@@ -26,7 +28,9 @@ export function AppRoutes() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Today />} />
+          <Route path="picks" element={wait(<Picks />)} />
           <Route path="screener" element={wait(<Screener />)} />
+          <Route path="columns" element={wait(<Columns />)} />
           <Route path="stock/:ticker" element={wait(<Stock />)} />
           <Route path="compare" element={wait(<Compare />)} />
           <Route path="portfolio" element={wait(<Portfolio />)} />

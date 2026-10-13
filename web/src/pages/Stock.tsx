@@ -36,6 +36,7 @@ import {
 } from '../components/stock/decision'
 import { PatternsCard, type PatternsSection } from '../components/stock/patterns'
 import { Badge, Card, PageHeader, Planned, Row } from '../components/ui'
+import { ZeroBadge } from '../components/Zero'
 import { renderCell } from '../lib/cells'
 import { stockFile, useSiteJson } from '../lib/data'
 import { formatAge, formatDay, formatMoney, formatPct, formatPrice, signClass } from '../lib/format'
@@ -174,6 +175,9 @@ export default function Stock() {
           <span className="flex flex-wrap items-baseline gap-x-3">
             <span>{s.ticker}</span>
             <span className="text-base font-normal text-slate-600 dark:text-zinc-400">{s.name}</span>
+            <span className="self-center">
+              <ZeroBadge value={s.zero as boolean | null | undefined} />
+            </span>
           </span>
         }
         subtitle={`${s.exchange}${s.is_adr ? ' · ADR' : ''}${s.sector ? ` · ${String(s.sector)}` : ''}${s.industry ? ` · ${String(s.industry)}` : ''} · prices as of ${formatDay(s.as_of)}`}

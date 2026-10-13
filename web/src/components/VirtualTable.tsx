@@ -1,5 +1,4 @@
 import {
-  flexRender,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
@@ -9,10 +8,12 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { COLUMN_BY_KEY, probabilityStatus } from '../lib/columns'
+import { COLUMN_DOCS, statusText } from '../lib/columnDocs'
+import { COLUMN_BY_KEY } from '../lib/columns'
 import { useHealth } from '../lib/health'
 import { renderCell } from '../lib/cells'
-import type { Cell, ScreenerRow } from '../types'
+import { ZeroBadge } from './Zero'
+import type { Cell, ReliabilityTables, ScreenerRow } from '../types'
 import { Tip } from './Tip'
 
 const ROW_HEIGHT = 44
@@ -39,16 +40,49 @@ function sortValue(v: Cell): string | number | undefined {
   return v
 }
 
+/** The (i) tooltip: plain name, meaning, formula, validation status and a link to the full page. */
+export function ColumnTip({ colKey, validated }: { colKey: string; validated: string[] }) {
+  const col = COLUMN_BY_KEY[colKey]
+  const doc = COLUMN_DOCS[colKey]
+  if (!col) return null
+  const content = doc ? (
+    <span className="block space-y-1">
+      <strong className="block">{doc.name}</strong>
+      <span className="block">{doc.what}</span>
+      <span className="block text-slate-300">How: {doc.how}</span>
+      <span className="block text-slate-300">{statusText(doc, validated).text}</span>
+      <Link to={`/columns#col-${colKey}`} className="block font-medium text-teal-300 underline">
+        Full explanation
+      </Link>
+    </span>
+  ) : (
+    col.help
+  )
+  return (
+    <Tip content={content} label={`About ${col.label}`} className="pointer-events-auto relative z-10 ml-0.5 inline-flex min-h-6 min-w-6 items-center justify-center align-middle text-slate-400 no-underline">
+      ⓘ
+    </Tip>
+  )
+}
+
 export function VirtualTable({
   rows,
   columns,
   sorting,
   onSortingChange,
+  widths,
+  labels,
+  reliability,
 }: {
   rows: ScreenerRow[]
   columns: string[]
   sorting: SortingState
   onSortingChange: (s: SortingState) => void
+  /** Per-column width overrides (e.g. the compact phone Forecast view). */
+  widths?: Record<string, number>
+  /** Per-column header overrides (e.g. without the horizon when only one is shown). */
+  labels?: Record<string, string>
+  reliability?: ReliabilityTables | null
 }) {
   const defs = useMemo<TColumnDef<ScreenerRow>[]>(
     () =>
@@ -58,14 +92,14 @@ export function VirtualTable({
         return {
           id: key,
           accessorFn: (r: ScreenerRow) => sortValue(r[key] ?? null),
-          header: col?.label ?? key,
-          size: col?.width ?? 96,
+          header: labels?.[key] ?? col?.label ?? key,
+          size: widths?.[key] ?? col?.width ?? 96,
           sortUndefined: 'last' as const,
           sortDescFirst: !textual,
           sortingFn: textual ? 'text' : 'basic',
         }
       }),
-    [columns],
+    [columns, widths, labels],
   )
 
   const table = useReactTable({
@@ -82,7 +116,6 @@ export function VirtualTable({
   const height = useAvailableHeight(scrollRef)
   const health = useHealth()
   const validated = health.state === 'ready' ? health.data.validated : []
-  const method = health.state === 'ready' ? health.data.forecast_method : undefined
   const model = table.getRowModel().rows
   const virtualizer = useVirtualizer({
     count: model.length,
@@ -108,30 +141,29 @@ export function VirtualTable({
             const col = COLUMN_BY_KEY[h.column.id]
             const dir = h.column.getIsSorted()
             const numeric = col && !['text', 'ticker', 'label'].includes(col.kind)
+            const label = String(h.column.columnDef.header ?? h.column.id)
             return (
               <div
                 key={h.id}
                 role="columnheader"
                 aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}
-                className={`flex h-11 shrink-0 items-center gap-1 px-2 text-xs font-semibold text-slate-600 dark:text-zinc-300 ${
+                className={`relative flex min-h-12 shrink-0 items-center px-2 py-1 text-xs leading-tight font-semibold text-slate-600 dark:text-zinc-300 ${
                   i === 0 ? 'sticky left-0 z-10 bg-slate-50 dark:bg-zinc-950' : ''
                 } ${numeric ? 'justify-end text-right' : ''}`}
                 style={{ width: h.getSize() }}
               >
+                {/* The whole cell sorts; the label wraps to two lines and is never cut off. */}
                 <button
                   type="button"
                   onClick={h.column.getToggleSortingHandler()}
-                  className="min-h-11 min-w-6 truncate"
-                  aria-label={`Sort by ${col?.label ?? h.column.id}`}
-                >
-                  {flexRender(h.column.columnDef.header, h.getContext())}
+                  className="absolute inset-0 cursor-pointer"
+                  aria-label={`Sort by ${COLUMN_DOCS[h.column.id]?.name ?? label}`}
+                />
+                <span className="pointer-events-none relative min-w-0 [overflow-wrap:anywhere]" data-header-label>
+                  {label}
                   <span aria-hidden="true">{dir === 'asc' ? ' ▲' : dir === 'desc' ? ' ▼' : ''}</span>
-                </button>
-                {col && (
-                  <Tip content={col.help + probabilityStatus(col.key, validated, method)} label={`About ${col.label}`} className="inline-flex min-h-6 min-w-6 items-center justify-center no-underline text-slate-400">
-                    ⓘ
-                  </Tip>
-                )}
+                  {col && <ColumnTip colKey={h.column.id} validated={validated} />}
+                </span>
               </div>
             )
           })}
@@ -169,22 +201,25 @@ export function VirtualTable({
                       {key === 'ticker' ? (
                         <Link
                           to={`/stock/${encodeURIComponent(row.original.ticker)}`}
-                          className="flex min-h-11 items-center text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+                          className="flex min-h-11 min-w-0 flex-col justify-center text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
                           aria-label={`${row.original.ticker}${eligible ? '' : ', not eligible for signals'}`}
                         >
-                          {row.original.ticker}
-                          {!eligible && (
-                            <span className="ml-1 text-[10px] font-normal text-slate-400" aria-hidden="true">
-                              n/e
-                            </span>
-                          )}
+                          <span className="truncate">{row.original.ticker}</span>
+                          <span className="flex items-center gap-1">
+                            <ZeroBadge value={row.original.zero} interactive={false} />
+                            {!eligible && (
+                              <span className="text-[10px] leading-4 font-normal text-slate-400" aria-hidden="true">
+                                n/e
+                              </span>
+                            )}
+                          </span>
                         </Link>
                       ) : key === 'name' ? (
                         <span className="truncate" title={String(value ?? '')}>
                           {value === null ? '—' : String(value)}
                         </span>
                       ) : (
-                        renderCell(key, value)
+                        renderCell(key, value, undefined, { row: row.original, reliability, validated })
                       )}
                     </div>
                   )

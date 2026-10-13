@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { Card, PageHeader } from '../components/ui'
 
 const LABELS: { label: string; meaning: string }[] = [
@@ -73,6 +74,28 @@ export default function About() {
           </ul>
         </Card>
 
+        <Card title="How often was it right?">
+          <div className="space-y-2 text-sm leading-relaxed">
+            <p>
+              A forecast says “58% chance up”. Is that honest? To check, the app looks back at its own
+              past forecasts. It groups them by their chance (for example all forecasts between 55%
+              and 58%) and counts how many of those stocks really went up.
+            </p>
+            <p>
+              The stock page then says, for each horizon, for example: “When the app said about 57%,
+              the stock was actually higher 54% of the time (20,626 cases, range 52.9%–54.3%).” If the two numbers are
+              close, the app was honest for such stocks. If the second is much lower, it was too
+              optimistic.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Only forecasts the models made before they saw the outcome are used (walk-forward, 2016–2023). The 2024–2026 holdout is never used for this.</li>
+              <li>Each group has at least 200 past cases. The range is the 95% Wilson interval.</li>
+              <li>The real uncertainty is wider than the range: cases overlap in time, and stocks move together.</li>
+              <li>A ✓ means that horizon also passed the holdout test (2024–2026). Without it, the horizon is still in research mode.</li>
+            </ul>
+          </div>
+        </Card>
+
         <Card title="Labels">
           <dl className="divide-y divide-slate-100 dark:divide-zinc-800">
             {LABELS.map((l) => (
@@ -103,6 +126,15 @@ export default function About() {
             October 2026, so the models do not use them yet; they are shown as information.
             Backtested excess returns are halved before being shown, because free data mostly
             lacks delisted stocks.
+          </p>
+        </Card>
+
+        <Card title="Columns and picks">
+          <p className="text-sm leading-relaxed">
+            Every screener column is explained in plain English on{' '}
+            <Link to="/columns" className="underline">Columns explained</Link>. The{' '}
+            <Link to="/picks" className="underline">Picks</Link> page mixes safety, upside and
+            confidence with weights fixed in advance; it is tracked live in the Baseline race.
           </p>
         </Card>
 

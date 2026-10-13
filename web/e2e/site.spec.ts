@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test'
 
 const PAGES: [string, string][] = [
   ['#/', 'Today'],
+  ['#/picks', 'Picks'],
   ['#/screener', 'Screener'],
+  ['#/screener?preset=forecast', 'Screener'],
+  ['#/columns', 'Columns explained'],
   ['#/stock/AAPL', 'AAPL Apple Inc. - Common Stock'],
   ['#/compare', 'Compare'],
   ['#/portfolio', 'My portfolio'],
@@ -95,7 +98,7 @@ test('6,000-row screener stays virtualized and scrolls to the end', async ({ pag
     await route.fulfill({ json: { ...base, rows, count: rows.length } })
   })
   await page.goto('#/screener')
-  await expect(page.getByText('6,000 shown')).toBeVisible()
+  await expect(page.getByText(/^6,000 shown/)).toBeVisible()
   const table = page.getByRole('table', { name: 'Stocks' })
   // Only a window of rows is in the DOM, not 6,000.
   expect(await table.getByRole('row').count()).toBeLessThan(80)
@@ -149,4 +152,57 @@ test('long company names never widen the page', async ({ page }) => {
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
     expect(scrollWidth, hash).toBeLessThanOrEqual(width)
   }
+})
+
+test('screener headers show their full names (wrapped, never cut off)', async ({ page }) => {
+  for (const hash of ['#/screener', '#/screener?preset=forecast']) {
+    await page.goto(hash)
+    await expect(page.getByRole('table', { name: 'Stocks' })).toBeVisible()
+    const cut = await page.locator('[data-header-label]').evaluateAll((els) =>
+      els
+        .filter((el) => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().height > 64)
+        .map((el) => el.textContent),
+    )
+    expect(cut, hash).toEqual([])
+  }
+})
+
+test('phone Forecast view never scrolls sideways; chips switch the horizon', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'phone layout')
+  await page.goto('#/screener?preset=forecast')
+  const table = page.getByRole('table', { name: 'Stocks' })
+  await expect(table).toBeVisible()
+  for (const h of ['1 week', '1 month', '3 months', '6 months']) {
+    await page.getByRole('group', { name: 'Forecast horizon' }).getByRole('button', { name: h }).tap()
+    const { sw, cw } = await table.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }))
+    expect(sw, h).toBeLessThanOrEqual(cw)
+    await expect(page.getByRole('columnheader')).toHaveCount(4)
+  }
+  // Narrowest common phone (360 px wide): still no sideways scroll.
+  await page.setViewportSize({ width: 360, height: 780 })
+  const { sw, cw } = await table.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }))
+  expect(sw).toBeLessThanOrEqual(cw)
+})
+
+test('the finanzen.net zero choice is remembered across pages and reloads', async ({ page }) => {
+  await page.goto('#/screener')
+  const box = page.getByRole('checkbox', { name: /Only stocks I can buy on finanzen\.net zero/ })
+  await expect(box).toBeVisible()
+  test.skip(await box.isDisabled(), 'no broker list in this data')
+  await box.check()
+  await page.goto('#/picks')
+  await expect(page.getByRole('checkbox', { name: /Only stocks I can buy/ })).toBeChecked()
+  await page.reload()
+  await expect(page.getByRole('checkbox', { name: /Only stocks I can buy/ })).toBeChecked()
+})
+
+test('picks: tabs, cards and the link to each stock page', async ({ page }) => {
+  await page.goto('#/picks')
+  await expect(page.getByText(/not guaranteed buys/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Most upside' }).click()
+  const first = page.getByRole('list', { name: 'Most upside picks' }).getByRole('listitem').first()
+  await expect(first).toBeVisible()
+  await first.getByRole('link').first().click()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page).toHaveURL(/#\/stock\//)
 })

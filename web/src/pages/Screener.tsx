@@ -1,13 +1,17 @@
 import type { SortingState } from '@tanstack/react-table'
 import { useDeferredValue, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Sheet } from '../components/Sheet'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { VirtualTable } from '../components/VirtualTable'
-import { COLUMNS, COLUMN_BY_KEY, GROUP_ORDER, type ColumnDef } from '../lib/columns'
+import { COLUMN_DOCS } from '../lib/columnDocs'
+import { COLUMNS, COLUMN_BY_KEY, forecastColumns, GROUP_ORDER, H_LONG, H_SHORT, HORIZONS, type ColumnDef, type HorizonKey } from '../lib/columns'
 import { formatDay, formatInt } from '../lib/format'
+import { PHONE, useMediaQuery } from '../lib/media'
 import { matches, PRESETS, searchMatches, useScreener, type Filter, type Preset } from '../lib/screener'
+import { useBrokerList, useOnlyZero, zeroAvailability, zeroKeep } from '../lib/zero'
+import { ZeroToggle } from '../components/Zero'
 import type { ScreenerRow } from '../types'
 
 const COLS_KEY = 'ca-screener-columns'
@@ -153,7 +157,7 @@ function FilterEditor({
             <optgroup key={label as string} label={label as string}>
               {(list as ColumnDef[]).map((c) => (
                 <option key={c.key} value={c.key}>
-                  {c.label}
+                  {COLUMN_DOCS[c.key]?.name ?? c.label}
                 </option>
               ))}
             </optgroup>
@@ -186,6 +190,9 @@ function ColumnChooser({
 }) {
   return (
     <div className="space-y-4">
+      <p className="text-sm">
+        <Link to="/columns" className="text-teal-700 underline dark:text-teal-400">Columns explained</Link>: what every column means, how it is calculated and how to read it.
+      </p>
       {GROUP_ORDER.map((g) => {
         const cols = COLUMNS.filter((c) => c.group === g && c.key !== 'ticker')
         if (!cols.length) return null
@@ -206,7 +213,7 @@ function ColumnChooser({
                       onChange={() => setVisible(on ? visible.filter((k) => k !== c.key) : [...visible, c.key])}
                     />
                     <span>
-                      {c.label}
+                      {COLUMN_DOCS[c.key]?.name ?? c.label}
                       {!has && <span className="ml-1 text-xs">(arrives in phase {c.phase})</span>}
                     </span>
                   </label>
@@ -220,14 +227,25 @@ function ColumnChooser({
   )
 }
 
+// 72 + 90 + 72 + 92 = 326 px: fits a 360 px phone (16 px gutters, 1 px table borders).
+const PHONE_FORECAST_WIDTHS: Record<string, number> = {
+  ticker: 72,
+  ...Object.fromEntries(HORIZONS.flatMap((h) => [[`med_${h}`, 90], [`p_up_${h}`, 72], [`hit_up_${h}`, 92]])),
+}
+
 export default function Screener() {
   const screener = useScreener()
   const [params, setParams] = useSearchParams()
   const presetId = params.get('preset')
   const preset = PRESETS.find((p) => p.id === presetId) ?? null
+  const forecastView = preset?.view === 'forecast'
+  const phone = useMediaQuery(PHONE)
+  const [horizon, setHorizon] = useState<HorizonKey>('6m')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [onlyEligible, setOnlyEligible] = useState(false)
+  const [onlyZero] = useOnlyZero()
+  const zeroOk = zeroAvailability(useBrokerList()).ok
   const [userFilters, setUserFilters] = useState<Filter[]>([])
   const [sorting, setSorting] = useState<SortingState>(preset ? [{ id: preset.sort.key, desc: preset.sort.desc }] : [{ id: 'adv_dollar', desc: true }])
   const [visible, setVisibleState] = useState<string[]>(() => loadColumns() ?? COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key))
@@ -243,18 +261,34 @@ export default function Screener() {
     if (p) next.set('preset', p.id)
     else next.delete('preset')
     setParams(next, { replace: true })
-    if (p) setSorting([{ id: p.sort.key, desc: p.sort.desc }])
+    if (p) setSorting([{ id: p.view === 'forecast' ? `p_up_${horizon}` : p.sort.key, desc: p.sort.desc }])
+  }
+
+  const pickHorizon = (h: HorizonKey) => {
+    setHorizon(h)
+    // Keep sorting by the same measure, now for the chosen horizon.
+    setSorting((s) => s.map((x) => ({ ...x, id: x.id.replace(/_(1w|1m|3m|6m)$/, `_${h}`) })))
   }
 
   const data = screener.state === 'ready' ? screener.data : null
   const fields = useMemo(() => data?.fields ?? new Set<string>(), [data])
   const available = COLUMNS.filter((c) => fields.has(c.key))
-  const shownColumns = ['ticker', ...visible.filter((k) => k !== 'ticker' && fields.has(k))]
-  // Columns a preset sorts or filters on are always shown.
-  for (const extra of preset ? [preset.sort.key, ...preset.filters.map((f) => f.key)] : []) {
-    if (fields.has(extra) && !shownColumns.includes(extra)) shownColumns.push(extra)
+  let shownColumns: string[]
+  if (forecastView) {
+    shownColumns = phone ? ['ticker', ...forecastColumns(horizon)] : ['ticker', 'name', ...HORIZONS.flatMap((h) => forecastColumns(h))]
+  } else {
+    shownColumns = ['ticker', ...visible.filter((k) => k !== 'ticker' && fields.has(k))]
+    // Columns a preset sorts or filters on are always shown.
+    for (const extra of preset ? [preset.sort.key, ...preset.filters.map((f) => f.key)] : []) {
+      if (fields.has(extra) && !shownColumns.includes(extra)) shownColumns.push(extra)
+    }
+    for (const s of sorting) if (fields.has(s.id) && !shownColumns.includes(s.id)) shownColumns.push(s.id)
   }
-  for (const s of sorting) if (fields.has(s.id) && !shownColumns.includes(s.id)) shownColumns.push(s.id)
+  // One horizon on a phone: the chips say which, so the headers can drop it.
+  const labels =
+    forecastView && phone
+      ? Object.fromEntries(forecastColumns(horizon).map((k) => [k, (COLUMN_BY_KEY[k]?.label ?? k).replace(/ (1W|1M|3M|6M)$/, '')]))
+      : undefined
 
   const filters = useMemo(() => {
     const all = [...userFilters]
@@ -263,10 +297,11 @@ export default function Screener() {
     return all.filter((f) => !(f.op === 'in' && f.values.length === 0))
   }, [userFilters, preset, onlyEligible, fields])
 
-  const rows = useMemo(() => {
+  const baseRows = useMemo(() => {
     if (!data) return []
     return data.rows.filter((r) => searchMatches(r, deferredQuery) && filters.every((f) => matches(r, f)))
   }, [data, deferredQuery, filters])
+  const rows = useMemo(() => baseRows.filter((r) => zeroKeep(r.zero, onlyZero && zeroOk)), [baseRows, onlyZero, zeroOk])
 
   return (
     <>
@@ -307,13 +342,18 @@ export default function Screener() {
             <button type="button" className={btn} onClick={() => setSheet('filters')}>
               Filters{userFilters.length ? ` (${userFilters.length})` : ''}
             </button>
-            <button type="button" className={btn} onClick={() => setSheet('columns')}>
-              Columns
-            </button>
+            {!forecastView && (
+              <button type="button" className={btn} onClick={() => setSheet('columns')}>
+                Columns
+              </button>
+            )}
             <label className="inline-flex min-h-11 items-center gap-2 text-sm">
               <input type="checkbox" className="size-6 accent-teal-700" checked={onlyEligible} onChange={(e) => setOnlyEligible(e.target.checked)} />
               Eligible only
             </label>
+          </div>
+          <div className="mb-1">
+            <ZeroToggle values={baseRows.map((r) => r.zero)} />
           </div>
           <div className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 pb-1" role="group" aria-label="Presets">
             {PRESETS.map((p) => {
@@ -333,15 +373,57 @@ export default function Screener() {
               )
             })}
           </div>
+          {forecastView && (
+            <>
+              <p className="mb-2 text-xs leading-relaxed text-slate-600 dark:text-zinc-400" data-testid="forecast-legend">
+                <strong>Expected change</strong>: the middle forecast, with the range 8 in 10 outcomes fall in · <strong>Chance up</strong>: chance the price is higher ·{' '}
+                <strong>How often right</strong>: how often similar past calls came true (✓ = passed the holdout test).
+              </p>
+              {phone && (
+                <div className="mb-2 flex gap-1.5" role="group" aria-label="Forecast horizon">
+                  {HORIZONS.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      aria-pressed={horizon === h}
+                      onClick={() => pickHorizon(h)}
+                      className={`min-h-11 flex-1 rounded-lg border text-sm font-semibold ${
+                        horizon === h ? 'border-teal-700 bg-teal-700 text-white dark:border-teal-500 dark:bg-teal-600' : 'border-slate-300 bg-white dark:border-zinc-600 dark:bg-zinc-900'
+                      }`}
+                      aria-label={H_LONG[h]}
+                    >
+                      {H_SHORT[h]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
           <p className="mb-2 text-xs text-slate-500 dark:text-zinc-400" aria-live="polite">
-            {formatInt(rows.length)} shown{preset ? ` · preset: ${preset.label}` : ''}
+            {formatInt(rows.length)} shown{preset ? ` · preset: ${preset.label}` : ''} ·{' '}
+            <Link to="/columns" className="underline">
+              What do the columns mean?
+            </Link>
           </p>
-          <VirtualTable rows={rows} columns={shownColumns} sorting={sorting} onSortingChange={setSorting} />
-          <Sheet open={sheet === 'filters'} title="Filters" onClose={() => setSheet(null)} footer={
-            <button type="button" className={btn} onClick={() => setUserFilters([])}>
-              Clear all filters
-            </button>
-          }>
+          <VirtualTable
+            rows={rows}
+            columns={shownColumns}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            widths={forecastView && phone ? PHONE_FORECAST_WIDTHS : undefined}
+            labels={labels}
+            reliability={data.file.reliability}
+          />
+          <Sheet
+            open={sheet === 'filters'}
+            title="Filters"
+            onClose={() => setSheet(null)}
+            footer={
+              <button type="button" className={btn} onClick={() => setUserFilters([])}>
+                Clear all filters
+              </button>
+            }
+          >
             <FilterEditor filters={userFilters} setFilters={setUserFilters} available={available} rows={data.rows} />
           </Sheet>
           <Sheet open={sheet === 'columns'} title="Columns" onClose={() => setSheet(null)}>

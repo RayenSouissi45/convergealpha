@@ -154,9 +154,9 @@ describe('screener', () => {
     stubFetch(ALL())
     renderAt('/screener')
     expect(await screen.findByText(/30 US stocks/)).toBeInTheDocument()
-    expect(screen.getByText('30 shown')).toBeInTheDocument()
+    expect(screen.getByText(/^30 shown/)).toBeInTheDocument()
     await userEvent.type(screen.getByRole('searchbox', { name: /search/i }), 'apple')
-    expect(await screen.findByText('1 shown')).toBeInTheDocument()
+    expect(await screen.findByText(/^1 shown/)).toBeInTheDocument()
   })
 
   it('applies a preset (filters + sort) when tapped', async () => {

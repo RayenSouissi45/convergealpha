@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { formatDay, formatMoney, formatPct, formatPctAbs, formatPrice } from '../../lib/format'
 import { holdingStatus, limitChecks, throttle, usePortfolio } from '../../lib/portfolio'
 import { useScreener } from '../../lib/screener'
-import type { ScreenerRow } from '../../types'
+import type { Reliability, ScreenerRow } from '../../types'
 import { positionShares } from '../../lib/sizing'
 import { LabelBadge } from '../LabelBadge'
 import { Missing } from '../Missing'
@@ -56,6 +56,8 @@ export interface ForecastSection {
   options_move: { '1w': number | null; '1m': number | null }
   analog: { n: number; up: number; rate: number; lo: number; hi: number; model_gap: number | null; text: string } | null
   sample_size: Record<string, number> | null
+  /** "How often was it right?" per horizon (models only; null with the fallback estimate). */
+  reliability?: Record<'1w' | '1m' | '3m' | '6m', { up: Reliability | null; beat: Reliability | null }> | null
 }
 
 export interface FamiliesSection {
@@ -211,6 +213,7 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
         </table>
       </div>
       <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">* research mode: this horizon has not passed the validation lab yet.</p>
+      <HowOftenRight f={f} isValid={isValid} />
       {(f.options_move['1w'] !== null || f.options_move['1m'] !== null) && (
         <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">
           Options-implied move: {f.options_move['1w'] !== null ? `±${formatPctAbs(f.options_move['1w']!)} in 1 week` : ''}
@@ -232,6 +235,64 @@ export function ForecastCard({ f }: { f: ForecastSection }) {
         )}
       </div>
     </Card>
+  )
+}
+
+const pctR = (v: number) => `${Math.round(v * 100)}%`
+/** Ranges are often narrow (thousands of cases): one decimal keeps "53.5%–54.1%" readable. */
+const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`
+
+function HowOftenRight({ f, isValid }: { f: ForecastSection; isValid: (k: string, kind: 'up' | 'beat') => boolean }) {
+  const keys = ['1w', '1m', '3m', '6m'] as const
+  return (
+    <div className="mt-3">
+      <h3 className="text-sm font-semibold">
+        <Tip content="The app’s own past record: its forecasts from 2016–2023, made before the outcome was known, grouped by their chance (at least 200 cases per group). The range is the 95% Wilson interval; the real uncertainty is wider because cases overlap in time. ✓ = this horizon also passed the holdout test (2024–2026). RESEARCH MODE = it has not.">
+          How often was it right?
+        </Tip>
+      </h3>
+      {!f.reliability ? (
+        <p className="mt-1 text-sm">
+          <Missing reason="The past record exists only for model forecasts, and arrives with the weekly model run." />
+        </p>
+      ) : (
+        <ul className="mt-1 divide-y divide-slate-100 text-sm dark:divide-zinc-800">
+          {keys.map((k) => {
+            const r = f.reliability?.[k]
+            const h = f.horizons?.[k]
+            const ok = isValid(k, 'up')
+            return (
+              <li key={k} className="flex items-start justify-between gap-3 py-2">
+                <div className="min-w-0">
+                  <span className="font-medium">{H_LABEL[k]}: </span>
+                  {r?.up && h ? (
+                    <>
+                      When the app said about {pctR(h.p_up)}, the stock was actually higher {pctR(r.up.rate)} of the time ({r.up.n !== null ? r.up.n.toLocaleString('en-US') : '?'} cases, range {pct1(r.up.lo)}–{pct1(r.up.hi)}).
+                    </>
+                  ) : (
+                    <Missing reason="No past group for this chance." />
+                  )}
+                  {r?.beat && h && (
+                    <span className="block text-xs text-slate-500 dark:text-zinc-400">
+                      Beat the S&P 500: said about {pctR(h.p_beat)}, happened {pctR(r.beat.rate)} of the time ({r.beat.n !== null ? r.beat.n.toLocaleString('en-US') : '?'} cases, {pct1(r.beat.lo)}–{pct1(r.beat.hi)}).
+                    </span>
+                  )}
+                </div>
+                {ok ? (
+                  <Tip content="This horizon passed the holdout test (2024–2026): better than the base rate and well calibrated." label="Validated" className="no-underline">
+                    <Badge tone="good">✓ Validated</Badge>
+                  </Tip>
+                ) : (
+                  <Tip content="This horizon has not passed the holdout test yet. Treat it as research, not a promise." label="Research mode" className="no-underline">
+                    <Badge tone="warn">RESEARCH MODE</Badge>
+                  </Tip>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 

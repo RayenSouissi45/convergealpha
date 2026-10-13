@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { Icon } from '../components/Icon'
 import { IntradayCard } from '../components/IntradayCard'
 import { MarketCard } from '../components/MarketCard'
 import { LabelBadge } from '../components/LabelBadge'
@@ -9,6 +10,8 @@ import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
 import { holdingStatus, usePortfolio } from '../lib/portfolio'
 import { useSiteJson } from '../lib/data'
 import { toRows, useScreener } from '../lib/screener'
+import { useBrokerList, useOnlyZero, zeroAvailability, zeroKeep } from '../lib/zero'
+import { ZeroBadge, ZeroToggle } from '../components/Zero'
 import type { ScreenerFile, ScreenerRow } from '../types'
 
 const num = (r: ScreenerRow, k: string) => (typeof r[k] === 'number' ? (r[k] as number) : null)
@@ -44,6 +47,9 @@ function StockList({
               <Link to={`/stock/${encodeURIComponent(r.ticker)}`} className="flex min-h-12 items-center justify-between gap-3 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800">
                 <span className="flex min-w-0 items-baseline gap-1.5">
                   <span className="shrink-0 font-semibold">{r.ticker}</span>
+                  <span className="shrink-0 self-center">
+                    <ZeroBadge value={r.zero} interactive={false} />
+                  </span>
                   <span className="min-w-0 truncate text-sm text-slate-500 dark:text-zinc-400">{String(r.name ?? '')}</span>
                 </span>
                 <span className="shrink-0 text-right text-sm tabular-nums">{metric(r)}</span>
@@ -67,7 +73,10 @@ export default function Today() {
   const needFull = portfolio.holdings.length > 0 || todayFile.state === 'missing' || todayFile.state === 'error'
   const screener = useScreener(needFull)
   const full = screener.state === 'ready' ? screener.data.rows : null
-  const rows = todayRows ?? full ?? []
+  const [onlyZero] = useOnlyZero()
+  const zeroOk = zeroAvailability(useBrokerList()).ok
+  const allRows = todayRows ?? full ?? []
+  const rows = allRows.filter((r) => zeroKeep(r.zero, onlyZero && zeroOk))
   const listState = todayRows ? 'ready' : needFull ? screener.state : 'loading'
   const byTicker = screener.state === 'ready' ? screener.data.byTicker : new Map<string, ScreenerRow>()
   const elig = rows.filter((r) => r.eligible === true)
@@ -92,6 +101,19 @@ export default function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle="What to look at after today's close." />
+      <Link
+        to="/picks"
+        className="mb-3 flex min-h-14 items-center justify-between gap-3 rounded-xl border border-teal-600/30 bg-teal-50 px-4 py-2.5 hover:bg-teal-100 dark:border-teal-400/30 dark:bg-teal-950 dark:hover:bg-teal-900"
+      >
+        <span className="min-w-0">
+          <span className="block font-semibold text-teal-900 dark:text-teal-100">Picks: the best-balanced suggestions</span>
+          <span className="block text-sm text-teal-900/80 dark:text-teal-100/80">Safety, upside and confidence together, with how often the app was right before.</span>
+        </span>
+        <Icon name="chevron" className="size-5 shrink-0 text-teal-700 dark:text-teal-300" />
+      </Link>
+      <div className="mb-3">
+        <ZeroToggle values={allRows.map((r) => r.zero)} noun="stocks in these lists" />
+      </div>
       <div className="grid gap-3 lg:grid-cols-2">
         <MarketCard />
         <IntradayCard />
