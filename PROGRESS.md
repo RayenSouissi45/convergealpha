@@ -185,6 +185,12 @@ and explain why. RESEARCH MODE badges stay on until something passes validation.
   "Trade ledger (paper money)" verified.
 - Re-run for the same day (GitHub `daily` run 38468293534): green, 0 new trade-ledger entries (still
   20, verified), the same orders: no double trades.
+- All-stocks versions, GitHub `daily` run 38474703708 (same evening, prices of 13 Oct): green;
+  trade ledger verified, 37 entries (+5 starts, 7 orders, 5 day records; the zero versions
+  untouched). Orders for the 14 Oct open: Balanced KSPI + PRTH, High risk TWST, Safest with upside
+  DEA + EPD, Confidence PRTH + STWD; Opportunity hunter in cash. The redesigned page was checked
+  live at 360 px (no sideways scroll); CI (pipeline 138 tests, web 90 unit + 62 browser checks)
+  green on 0be65fc.
 - Unfilled orders now read "Buy …" on the Strategies page; the ledger keeps its original past-tense
   text (decision 93).
 
