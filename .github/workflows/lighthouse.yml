@@ -1,7 +1,7 @@
 name: lighthouse
 
 # On demand: Lighthouse (mobile) for the live site's main pages, measured on a GitHub runner so the
-# score does not depend on how busy your own computer is. Results appear in the run summary.
+# score does not depend on how busy your own computer is. Results appear in the run summary and log.
 on:
   workflow_dispatch:
     inputs:
@@ -35,7 +35,7 @@ jobs:
             echo
             echo "| Page | Performance (median of $RUNS) | All runs | Accessibility | Best practices | LCP | TBT | CPU benchmark |"
             echo "|---|---|---|---|---|---|---|---|"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           for page in $PAGES; do
             for i in $(seq 1 "$RUNS"); do
               npx lighthouse "$SITE$page" --quiet --form-factor=mobile \
@@ -50,6 +50,6 @@ jobs:
               const mid = runs.sort((a, b) => s(a, "performance") - s(b, "performance"))[Math.floor(runs.length / 2)]
               const a = mid.audits
               console.log(`| \`${process.env.PAGE}\` | **${perf[Math.floor(perf.length / 2)]}** | ${perf.join(" / ")} | ${s(mid, "accessibility")} | ${s(mid, "best-practices")} | ${a["largest-contentful-paint"].displayValue} | ${a["total-blocking-time"].displayValue} | ${Math.round(mid.environment.benchmarkIndex)} |`)
-            ' >> "$GITHUB_STEP_SUMMARY"
+            ' | tee -a "$GITHUB_STEP_SUMMARY"
             rm -f lh-*.json
           done
