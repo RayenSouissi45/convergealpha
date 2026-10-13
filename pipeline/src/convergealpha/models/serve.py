@@ -210,6 +210,8 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         }
         if patterns
         else {},
+        # Every tested (stock or industry, event type, window): the opportunity badge's history.
+        "pattern_history": patterns.get("history") or {},
         "health": {
             "model_version": meta["version"],
             "model_trained_at": meta["trained_at"],

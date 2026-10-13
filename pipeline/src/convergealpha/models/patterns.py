@@ -103,7 +103,8 @@ def _events(h: History) -> pd.DataFrame:
 
 
 def _abnormal(h: History, ev: pd.DataFrame) -> pd.DataFrame:
-    """Return from the first tradable open after the event, minus the stock's base rate."""
+    """Return from the first tradable open after the event (`ret`), and the same minus the
+    stock's own average for that window in the same year (`abn`)."""
     p = h.panel
     idx = p.close.index
     opens, closes = p.open, p.close
@@ -125,8 +126,8 @@ def _abnormal(h: History, ev: pd.DataFrame) -> pd.DataFrame:
             if key not in base_cache:
                 col = fwd[r.ticker]
                 base_cache[key] = float(col[years == d.year].mean())
-            out.append((r.ticker, r.event, name, d, float(val) - base_cache[key]))
-    return pd.DataFrame(out, columns=["ticker", "event", "window", "date", "abn"])
+            out.append((r.ticker, r.event, name, d, float(val) - base_cache[key], float(val)))
+    return pd.DataFrame(out, columns=["ticker", "event", "window", "date", "abn", "ret"])
 
 
 def _test(x: np.ndarray) -> float:
@@ -184,21 +185,34 @@ def run(h: History, stocks: pd.DataFrame) -> dict[str, Any]:
     by_ticker: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(
         lambda: {"passed": [], "likely_luck": []}
     )
+    # Every test's result, so the opportunity badge can say what history shows for an event type
+    # even when the pattern did not pass (stock-level tests first, else the industry peers').
+    history: dict[str, dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
+        "stock": defaultdict(lambda: defaultdict(dict)),
+        "peers": defaultdict(lambda: defaultdict(dict)),
+    }
     for (scope, key, e, w, g), pv, qv in zip(tests, pvals, qvals, strict=True):
         halves_ok, holdout_ok = _robust(g)
+        passed = bool(qv <= FDR and halves_ok and holdout_ok is True)
         rec = {
             "event": e,
             "n": len(g),
             "horizon": w,
             "mean_excess": float(g["abn"].mean()),
             "hit_rate": float((g["abn"] > 0).mean()),
+            "mean_return": float(g["ret"].mean()),
+            "up_rate": float((g["ret"] > 0).mean()),
             "p_value": float(pv),
             "q_value": float(qv),
             "halves_ok": halves_ok,
             "holdout_ok": holdout_ok,
             "scope": scope,
         }
-        passed = qv <= FDR and halves_ok and holdout_ok is True
+        history[scope][str(key)][e][w] = {
+            k: round(v, 5) if isinstance(v, float) else v
+            for k, v in rec.items()
+            if k not in ("event", "horizon", "scope")
+        } | {"passed": passed}
         looks = pv < 0.05 and not passed
         if not (passed or looks):
             continue
@@ -217,6 +231,10 @@ def run(h: History, stocks: pd.DataFrame) -> dict[str, Any]:
             sum(1 for q, (_s, _k, _e, _w, g) in zip(qvals, tests, strict=True) if q <= FDR)
         ),
         "by_ticker": {t: {**v, "tested": n_tests, "method": METHOD} for t, v in by_ticker.items()},
+        "history": {s: {k: dict(v) for k, v in d.items()} for s, d in history.items()},
+        "groups": {
+            str(t): str(g) for t, g in stocks["industry_group"].dropna().items() if str(g) != "nan"
+        },
         "method": METHOD,
         "events": len(ev),
     }
