@@ -140,8 +140,9 @@ export default function About() {
 
         <Card title="Costs in euros">
           <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
-            <li>finanzen.net zero sends orders to gettex. The app assumes 1 € per buy and 1 € per sell (change it on the Plan page; check your broker’s current price list).</li>
-            <li>Example: you put in 100 €. 1 € goes to the fee, so you get 99 € of stock. Selling costs 1 € again. So the stock must rise about 2% just to give you your 100 € back. This “break-even move” is shown everywhere.</li>
+            <li>finanzen.net zero sends orders to gettex. The app uses its fee rule: 0 € for an order of 500 € or more, 1 € below (change it on the Plan page; check your broker’s current price list).</li>
+            <li>Example: you put in 100 €. 1 € goes to the fee, so you get 99 € of stock. Selling costs 1 € again. So the stock must rise about 2% just to give you your 100 € back. With 500 € or more, both orders are free and only the spread remains. This “break-even move” is shown everywhere.</li>
+            <li>Plan gives a euro limit price to type, warns when the US market is closed (wider spreads on gettex), and learns from your own logged fills: if they cost more than the estimate, its estimates become more careful.</li>
             <li>On top, you pay a small spread (the gap between buying and selling prices), estimated from how much the stock trades each day.</li>
             <li>US prices are turned into euros with the European Central Bank’s daily EUR/USD rate (the first version of the strategies keeps FRED’s rate, its recorded rule). If the dollar falls, your US shares are worth fewer euros, even when the stock price does not move.</li>
             <li>Whole shares only, like at the broker: a 400 € share does not fit into 200 €. Money that is left over stays as cash.</li>
@@ -160,6 +161,24 @@ export default function About() {
               <Link to="/strategies" className="font-semibold underline">Strategies</Link>: five rule-based strategies with <strong>paper money</strong>: version 1 with 200 € each from 13 Oct 2026, and version 2 with 5,000 € each from 14 Oct 2026 (free orders from 500 €, the tested sell rule). Every trading day they decide after the close and trade at the next opening price, with fees, spread and euros, and they explain every buy, sell and hold. Each version races against the same money put into the S&P 500. Each strategy runs twice with the same rules: once only on stocks you can buy on finanzen.net zero (the version to copy) and once on all stocks, so you see what the broker’s list changes. Their rules were fixed before the start and are never tuned; a changed rule starts as a new version, and the older versions keep running unchanged. Every order is kept in a tamper-proof ledger. Paper money only: past and live results do not guarantee future results.
             </p>
           </div>
+        </Card>
+
+        <Card title="Your money: goal, journal and German tax">
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+            <li><Link to="/plan/goal" className="font-semibold underline">Savings plan &amp; goal</Link>: 4,000 futures replayed from about 100 years of market history: your chance of reaching a goal, the monthly amount needed, and a core ETF + stock picks split that keeps every order free.</li>
+            <li><Link to="/portfolio" className="font-semibold underline">Portfolio</Link>: log your real trades in euros. The app works out holdings, results after German tax (2026 rules, FIFO), risk in plain numbers, your own written rules checked before every trade, a cooling-off after big moves, a review of your decisions, and your trades replayed into the S&P 500. Paper trades (for example a copied strategy) stay apart from real money and tax.</li>
+            <li>Every stock page answers seven questions before you buy, says why the stock moved today, how cheap it is for its sector and whether its finances look fragile.</li>
+          </ul>
+        </Card>
+
+        <Card title="Built to be checked">
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+            <li>Every forecast is published and later checked against what happened, losers included (<Link to="/scorecard" className="underline">Scorecard</Link>). The monthly forecast files are public.</li>
+            <li>Every day the fingerprints of the forecasts and of every sealed record are committed to the public code repository, where GitHub records the time.</li>
+            <li>Any paper-trading day from 15 Oct 2026 can be replayed exactly from its stored inputs and compared with the record.</li>
+            <li>Prices are checked before use (with a second source); problems go to a public incident log (<Link to="/health" className="underline">Health</Link>). A broken update is not published, and a worse model is not used.</li>
+            <li>Research questions are answered once, with rules fixed before the run, and every try is logged, failures included. The second clean exam is registered in advance: forecasts of 12 Oct–31 Dec 2026, judged once from 1 Jul 2027.</li>
+          </ul>
         </Card>
 
         <Card title="Data and privacy">
