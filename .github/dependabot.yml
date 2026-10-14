@@ -1,4 +1,5 @@
-# Weekly dependency updates, grouped so they arrive as a few pull requests (CI tests each one).
+# Weekly dependency updates: minor and patch versions grouped into one pull request per ecosystem,
+# major versions one by one (they can break the code; CI tests every pull request).
 version: 2
 updates:
   - package-ecosystem: pip
@@ -10,6 +11,7 @@ updates:
     groups:
       python:
         patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /web
     schedule:
@@ -19,6 +21,7 @@ updates:
     groups:
       web:
         patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
