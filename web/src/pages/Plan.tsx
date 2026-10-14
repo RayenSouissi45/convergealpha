@@ -6,6 +6,7 @@ import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { FeeSettings } from '../components/FeeSettings'
+import { PlanTabs } from '../components/PlanTabs'
 import { TaxSettings } from '../components/TaxSettings'
 import { ZeroBadge, ZeroToggle } from '../components/Zero'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
@@ -194,6 +195,7 @@ export default function Plan() {
   const header = (
     <>
       <PageHeader title="Plan" subtitle="Choose how safe, how much upside, how long and how much money. The app shows its best fits and what they could mean in euros, after costs." />
+      <PlanTabs />
       <div role="note" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-100">
         <strong>Research tool, not advice.</strong> Numbers marked RESEARCH MODE have not passed validation. Nothing here places an order.
       </div>

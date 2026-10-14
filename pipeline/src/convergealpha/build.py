@@ -582,6 +582,11 @@ def build(ctx: RunContext) -> int:
         {"as_of": day, "base_up": base_up, "counts": counts, "stocks": opp_export},
     )
     log.info("opportunity badges: %s", counts)
+    from convergealpha.sources import history as HIST
+
+    hist = HIST.load(paths.data)
+    if hist is not None and not hist.empty:
+        site.write_json_file(paths.site, "history.json", HIST.export(hist))
     fred = M.load_fred(paths.data)
     fx_series = CO.fx_series(fred)  # the first paper strategies' recorded rule (FRED)
     fx_now = CO.fx_on(fx_series, as_of)

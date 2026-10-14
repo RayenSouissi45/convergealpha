@@ -19,6 +19,7 @@ const Validation = lazy(() => import('./pages/Validation'))
 const Picks = lazy(() => import('./pages/Picks'))
 const Columns = lazy(() => import('./pages/Columns'))
 const Plan = lazy(() => import('./pages/Plan'))
+const Goal = lazy(() => import('./pages/Goal'))
 const Strategies = lazy(() => import('./pages/Strategies'))
 const StrategyDetail = lazy(() => import('./pages/StrategyDetail'))
 
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route index element={<Today />} />
           <Route path="picks" element={wait(<Picks />)} />
           <Route path="plan" element={wait(<Plan />)} />
+          <Route path="plan/goal" element={wait(<Goal />)} />
           <Route path="strategies" element={wait(<Strategies />)} />
           <Route path="strategies/:id" element={wait(<StrategyDetail />)} />
           <Route path="screener" element={wait(<Screener />)} />

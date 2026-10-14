@@ -219,7 +219,7 @@ test('picks: tabs, cards and the link to each stock page', async ({ page }) => {
 test('new pages fit a 360 px phone without sideways scrolling', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'phone layout')
   await page.setViewportSize({ width: 360, height: 780 })
-  for (const hash of ['#/plan', '#/strategies', '#/strategies/balanced', '#/strategies/high_risk?stocks=all', '#/', '#/screener?preset=opportunities', '#/stock/AAPL']) {
+  for (const hash of ['#/plan', '#/plan/goal', '#/strategies', '#/strategies/balanced', '#/strategies/high_risk?stocks=all', '#/', '#/screener?preset=opportunities', '#/stock/AAPL']) {
     await page.goto(hash)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     if (hash.startsWith('#/strategies')) {
@@ -290,4 +290,13 @@ test('strategies: switch to all stocks, open a strategy, compare both versions',
   await expect(page.getByText(/LIVE/).first()).toBeVisible()
   await page.getByRole('link', { name: '← All strategies' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Strategies' })).toBeVisible()
+})
+
+test('savings plan: the chance moves with the monthly amount', async ({ page }) => {
+  await page.goto('#/plan/goal')
+  const chance = page.getByTestId('goal-chance')
+  await expect(chance).toHaveText(/^\d+%$/)
+  const before = Number((await chance.textContent())!.replace('%', ''))
+  await page.getByRole('spinbutton', { name: 'Every month (€)' }).fill('400')
+  await expect.poll(async () => Number((await chance.textContent())!.replace('%', ''))).toBeGreaterThan(before)
 })

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,7 @@ import { COLUMNS } from '../lib/columns'
 import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
+import { resetGoal } from '../lib/goalSettings'
 import { byValue, liveOf, planned, statusOf, twinOf, withLive } from '../lib/strategies'
 import { AppRoutes } from '../routes'
 import type { Health, OpportunitiesFile, Opportunity, StrategiesFile, StrategiesLiveFile } from '../types'
@@ -16,6 +17,7 @@ import opportunities from './fixtures/opportunities.json'
 import plan from './fixtures/plan.json'
 import strategies from './fixtures/strategies.json'
 import strategiesLive from './fixtures/strategies_live.json'
+import history from './fixtures/history.json'
 
 function stubFetch(files: Record<string, unknown>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -47,6 +49,7 @@ beforeEach(() => {
   resetScreenerCache()
   resetOpportunities()
   resetSettings()
+  resetGoal()
   localStorage.clear()
 })
 
@@ -303,5 +306,27 @@ describe('live strategies during US trading hours', () => {
     expect(within(hr).getByText('€202.72')).toBeInTheDocument()
     expect(within(hr).getByText('LIVE')).toBeInTheDocument()
     expect(within(hr).getByText('Invested')).toBeInTheDocument()
+  })
+})
+
+describe('savings plan and goal', () => {
+  it('shows the chance of reaching the goal, the monthly amount needed and simpler choices', async () => {
+    stubFetch({ ...FILES(), 'history.json': history })
+    const user = userEvent.setup()
+    renderAt('/plan/goal')
+    expect(await screen.findByText(/Chance of reaching €20,000 \(today's euros\) in 10 years/)).toBeInTheDocument()
+    const before = screen.getByTestId('goal-chance').textContent
+    expect(before).toMatch(/^\d+%$/)
+    expect(screen.getByText(/For 8 in 10 futures:/)).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'All in safe interest' })).toBeInTheDocument()
+    expect(screen.getByText(/lasted 20 years in 9 of 10 futures/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Savings plan & goal' })).toHaveAttribute('aria-current', 'page')
+    // More every month: a higher chance.
+    const monthly = screen.getByRole('spinbutton', { name: 'Every month (€)' })
+    await user.clear(monthly)
+    await user.type(monthly, '300')
+    await waitFor(() => expect(Number(screen.getByTestId('goal-chance').textContent!.replace('%', ''))).toBeGreaterThan(Number(before!.replace('%', ''))))
+    await user.click(screen.getByRole('button', { name: 'Save this plan' }))
+    expect(screen.getByText(/^Saved /)).toBeInTheDocument()
   })
 })

@@ -261,6 +261,20 @@ def job_prepare(ctx: RunContext) -> int:
             log.error("fred failed: %s", e)
             ctx.record("macro", False, detail=f"Update failed: {type(e).__name__}")
     try:
+        from convergealpha.sources import history as HIST
+
+        hist = HIST.update(ctx.paths.data, key)
+        ctx.record(
+            "history",
+            hist is not None and not hist.empty,
+            as_of=str(hist["month"].iloc[-1]) if hist is not None and not hist.empty else None,
+            records=0 if hist is None else len(hist),
+            detail="US stock market and T-bills since 1926 (Kenneth R. French), inflation (FRED)",
+        )
+    except Exception as e:
+        log.error("history failed: %s", e)
+        ctx.record("history", False, detail=f"Update failed: {type(e).__name__}")
+    try:
         ecb = M.fetch_ecb_usd(date(2009, 1, 1))
         M.store_fred(ctx.paths.data, ecb)
         ctx.record(
