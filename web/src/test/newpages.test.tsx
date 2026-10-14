@@ -18,6 +18,8 @@ import plan from './fixtures/plan.json'
 import strategies from './fixtures/strategies.json'
 import strategiesLive from './fixtures/strategies_live.json'
 import history from './fixtures/history.json'
+import research from './fixtures/research.json'
+import experiments from './fixtures/experiments.json'
 
 function stubFetch(files: Record<string, unknown>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -328,5 +330,17 @@ describe('savings plan and goal', () => {
     await waitFor(() => expect(Number(screen.getByTestId('goal-chance').textContent!.replace('%', ''))).toBeGreaterThan(Number(before!.replace('%', ''))))
     await user.click(screen.getByRole('button', { name: 'Save this plan' }))
     expect(screen.getByText(/^Saved /)).toBeInTheDocument()
+  })
+})
+
+describe('research tested once', () => {
+  it('shows the chosen sell rule, its honest trade-off and the experiment log', async () => {
+    stubFetch({ ...FILES(), 'research.json': research, 'experiments.json': experiments })
+    renderAt('/validation')
+    expect(await screen.findByRole('heading', { name: /Sell rules and entry timing \(tested once, 2016-2023\)/ })).toBeInTheDocument()
+    expect(screen.getByText(/The trade-off, honestly/)).toBeInTheDocument()
+    expect(screen.getByText('chosen')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Entry methods' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Experiment log' })).toBeInTheDocument()
   })
 })

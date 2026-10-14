@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import type { ReliabilityPoint } from '../components/ReliabilityChart'
 import { Tip } from '../components/Tip'
+import { ExperimentsCard, ResearchCard } from '../components/ResearchCards'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { useSiteJson } from '../lib/data'
 import { formatDateTime, formatPct, formatPctAbs } from '../lib/format'
@@ -244,6 +245,10 @@ export default function Validation() {
           </Card>
         </div>
       )}
+      <div className="mt-3 space-y-3">
+        <ResearchCard />
+        <ExperimentsCard />
+      </div>
     </>
   )
 }

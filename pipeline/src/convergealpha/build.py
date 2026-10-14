@@ -587,6 +587,17 @@ def build(ctx: RunContext) -> int:
     hist = HIST.load(paths.data)
     if hist is not None and not hist.empty:
         site.write_json_file(paths.site, "history.json", HIST.export(hist))
+    # Research run once with a fixed protocol, and the log of every experiment (failures too).
+    from convergealpha.ledger import experiments as XP
+
+    research = paths.data / "validation" / "rules_research.json"
+    if research.is_file():
+        import json as _json
+
+        site.write_json_file(
+            paths.site, "research.json", _json.loads(research.read_text(encoding="utf-8"))
+        )
+    site.write_json_file(paths.site, "experiments.json", XP.export(paths.data))
     fred = M.load_fred(paths.data)
     fx_series = CO.fx_series(fred)  # the first paper strategies' recorded rule (FRED)
     fx_now = CO.fx_on(fx_series, as_of)

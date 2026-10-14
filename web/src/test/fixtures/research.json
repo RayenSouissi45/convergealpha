@@ -1,0 +1,818 @@
+{
+  "protocol": "rules-2016-2023-v1",
+  "protocol_digest": "1c814bb395d9",
+  "period": "2016-2023",
+  "signals": {
+    "model": 2877,
+    "control": 2726
+  },
+  "exits": {
+    "model": {
+      "atr_2": {
+        "n": 2877,
+        "mean": 0.015226,
+        "median": -0.045097,
+        "hit_rate": 0.339242,
+        "worst5": -0.163808,
+        "score": -0.066678,
+        "avg_days": 34.429962,
+        "stopped_share": 0.632603,
+        "recovered_after_stop": 0.285165
+      },
+      "atr_plan": {
+        "n": 2877,
+        "mean": 0.010262,
+        "median": -0.017998,
+        "hit_rate": 0.404588,
+        "worst5": -0.151837,
+        "score": -0.065656,
+        "avg_days": 23.396941,
+        "stopped_share": 0.652068,
+        "recovered_after_stop": 0.351279
+      },
+      "fixed_5_tp_6": {
+        "n": 2877,
+        "mean": 0.00393,
+        "median": 0.038282,
+        "hit_rate": 0.522767,
+        "worst5": -0.132589,
+        "score": -0.062365,
+        "avg_days": 14.475148,
+        "stopped_share": 0.468196,
+        "recovered_after_stop": 0.297699
+      },
+      "fixed_6_tp_8": {
+        "n": 2877,
+        "mean": 0.007458,
+        "median": 0.018007,
+        "hit_rate": 0.514772,
+        "worst5": -0.142885,
+        "score": -0.063984,
+        "avg_days": 19.85471,
+        "stopped_share": 0.463677,
+        "recovered_after_stop": 0.275112
+      },
+      "fixed_8": {
+        "n": 2877,
+        "mean": 0.017456,
+        "median": -0.064018,
+        "hit_rate": 0.417101,
+        "worst5": -0.170688,
+        "score": -0.067888,
+        "avg_days": 42.289538,
+        "stopped_share": 0.504345,
+        "recovered_after_stop": 0.221227
+      },
+      "hold_63": {
+        "n": 2877,
+        "mean": 0.031568,
+        "median": 0.02234,
+        "hit_rate": 0.559263,
+        "worst5": -0.377947,
+        "score": -0.157405,
+        "avg_days": 63.0,
+        "stopped_share": 0.0,
+        "recovered_after_stop": null
+      },
+      "time_21": {
+        "n": 2877,
+        "mean": 0.011572,
+        "median": 0.007546,
+        "hit_rate": 0.539798,
+        "worst5": -0.250737,
+        "score": -0.113797,
+        "avg_days": 21.0,
+        "stopped_share": 0.0,
+        "recovered_after_stop": null
+      },
+      "trail_10": {
+        "n": 2877,
+        "mean": 0.013936,
+        "median": -0.020548,
+        "hit_rate": 0.450122,
+        "worst5": -0.184307,
+        "score": -0.078217,
+        "avg_days": 36.840459,
+        "stopped_share": 0.686479,
+        "recovered_after_stop": 0.388354
+      }
+    },
+    "control": {
+      "atr_2": {
+        "n": 2726,
+        "mean": 0.008007,
+        "median": -0.049132,
+        "hit_rate": 0.337124,
+        "worst5": -0.18265,
+        "score": -0.083318,
+        "avg_days": 34.360968,
+        "stopped_share": 0.636831,
+        "recovered_after_stop": 0.256912
+      },
+      "atr_plan": {
+        "n": 2726,
+        "mean": 0.005489,
+        "median": -0.017183,
+        "hit_rate": 0.398386,
+        "worst5": -0.161556,
+        "score": -0.075289,
+        "avg_days": 23.598679,
+        "stopped_share": 0.657373,
+        "recovered_after_stop": 0.335938
+      },
+      "fixed_5_tp_6": {
+        "n": 2726,
+        "mean": 0.00512,
+        "median": 0.046319,
+        "hit_rate": 0.533015,
+        "worst5": -0.145497,
+        "score": -0.067628,
+        "avg_days": 14.277696,
+        "stopped_share": 0.456713,
+        "recovered_after_stop": 0.276305
+      },
+      "fixed_6_tp_8": {
+        "n": 2726,
+        "mean": 0.005751,
+        "median": 0.005021,
+        "hit_rate": 0.503668,
+        "worst5": -0.154838,
+        "score": -0.071668,
+        "avg_days": 19.679384,
+        "stopped_share": 0.473588,
+        "recovered_after_stop": 0.245546
+      },
+      "fixed_8": {
+        "n": 2726,
+        "mean": 0.010148,
+        "median": -0.067757,
+        "hit_rate": 0.41526,
+        "worst5": -0.188065,
+        "score": -0.083884,
+        "avg_days": 41.927366,
+        "stopped_share": 0.508437,
+        "recovered_after_stop": 0.19697
+      },
+      "hold_63": {
+        "n": 2726,
+        "mean": 0.022036,
+        "median": 0.015223,
+        "hit_rate": 0.54292,
+        "worst5": -0.430097,
+        "score": -0.193013,
+        "avg_days": 63.0,
+        "stopped_share": 0.0,
+        "recovered_after_stop": null
+      },
+      "time_21": {
+        "n": 2726,
+        "mean": 0.006988,
+        "median": 0.005993,
+        "hit_rate": 0.530448,
+        "worst5": -0.271888,
+        "score": -0.128956,
+        "avg_days": 21.0,
+        "stopped_share": 0.0,
+        "recovered_after_stop": null
+      },
+      "trail_10": {
+        "n": 2726,
+        "mean": 0.009678,
+        "median": -0.024414,
+        "hit_rate": 0.421864,
+        "worst5": -0.194891,
+        "score": -0.087768,
+        "avg_days": 37.011005,
+        "stopped_share": 0.679751,
+        "recovered_after_stop": 0.344846
+      }
+    },
+    "halves": {
+      "2016-2019": {
+        "atr_2": {
+          "n": 1318,
+          "mean": 0.01485,
+          "median": -0.037124,
+          "hit_rate": 0.374052,
+          "worst5": -0.150673,
+          "score": -0.060486,
+          "avg_days": 36.334598,
+          "stopped_share": 0.596358,
+          "recovered_after_stop": 0.288804
+        },
+        "atr_plan": {
+          "n": 1318,
+          "mean": 0.008635,
+          "median": -0.012987,
+          "hit_rate": 0.415781,
+          "worst5": -0.139273,
+          "score": -0.061002,
+          "avg_days": 25.681335,
+          "stopped_share": 0.627466,
+          "recovered_after_stop": 0.371221
+        },
+        "fixed_5_tp_6": {
+          "n": 1318,
+          "mean": 0.00626,
+          "median": 0.051569,
+          "hit_rate": 0.544765,
+          "worst5": -0.128974,
+          "score": -0.058227,
+          "avg_days": 18.316388,
+          "stopped_share": 0.443096,
+          "recovered_after_stop": 0.27911
+        },
+        "fixed_6_tp_8": {
+          "n": 1318,
+          "mean": 0.011005,
+          "median": 0.041223,
+          "hit_rate": 0.548558,
+          "worst5": -0.139192,
+          "score": -0.058591,
+          "avg_days": 25.263278,
+          "stopped_share": 0.424127,
+          "recovered_after_stop": 0.245081
+        },
+        "fixed_8": {
+          "n": 1318,
+          "mean": 0.019569,
+          "median": -0.006631,
+          "hit_rate": 0.485584,
+          "worst5": -0.16215,
+          "score": -0.061506,
+          "avg_days": 46.930197,
+          "stopped_share": 0.425645,
+          "recovered_after_stop": 0.183601
+        },
+        "hold_63": {
+          "n": 1318,
+          "mean": 0.026463,
+          "median": 0.028238,
+          "hit_rate": 0.582701,
+          "worst5": -0.34113,
+          "score": -0.144101,
+          "avg_days": 63.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "time_21": {
+          "n": 1318,
+          "mean": 0.007204,
+          "median": 0.007649,
+          "hit_rate": 0.549317,
+          "worst5": -0.20728,
+          "score": -0.096436,
+          "avg_days": 21.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "trail_10": {
+          "n": 1318,
+          "mean": 0.019532,
+          "median": -0.002525,
+          "hit_rate": 0.49393,
+          "worst5": -0.164534,
+          "score": -0.062735,
+          "avg_days": 44.429439,
+          "stopped_share": 0.553111,
+          "recovered_after_stop": 0.329218
+        }
+      },
+      "2020-2023": {
+        "atr_2": {
+          "n": 1559,
+          "mean": 0.015543,
+          "median": -0.056485,
+          "hit_rate": 0.309814,
+          "worst5": -0.171597,
+          "score": -0.070255,
+          "avg_days": 32.819756,
+          "stopped_share": 0.663246,
+          "recovered_after_stop": 0.282398
+        },
+        "atr_plan": {
+          "n": 1559,
+          "mean": 0.011639,
+          "median": -0.02144,
+          "hit_rate": 0.395125,
+          "worst5": -0.159126,
+          "score": -0.067924,
+          "avg_days": 21.465683,
+          "stopped_share": 0.672867,
+          "recovered_after_stop": 0.335558
+        },
+        "fixed_5_tp_6": {
+          "n": 1559,
+          "mean": 0.001959,
+          "median": 0.007489,
+          "hit_rate": 0.504169,
+          "worst5": -0.135362,
+          "score": -0.065722,
+          "avg_days": 11.22771,
+          "stopped_share": 0.489416,
+          "recovered_after_stop": 0.311927
+        },
+        "fixed_6_tp_8": {
+          "n": 1559,
+          "mean": 0.00446,
+          "median": -0.029431,
+          "hit_rate": 0.486209,
+          "worst5": -0.146187,
+          "score": -0.068633,
+          "avg_days": 15.282232,
+          "stopped_share": 0.497114,
+          "recovered_after_stop": 0.296774
+        },
+        "fixed_8": {
+          "n": 1559,
+          "mean": 0.01567,
+          "median": -0.07733,
+          "hit_rate": 0.359205,
+          "worst5": -0.176971,
+          "score": -0.072816,
+          "avg_days": 38.36626,
+          "stopped_share": 0.570879,
+          "recovered_after_stop": 0.244944
+        },
+        "hold_63": {
+          "n": 1559,
+          "mean": 0.035884,
+          "median": 0.013641,
+          "hit_rate": 0.539448,
+          "worst5": -0.403811,
+          "score": -0.166021,
+          "avg_days": 63.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "time_21": {
+          "n": 1559,
+          "mean": 0.015265,
+          "median": 0.007122,
+          "hit_rate": 0.531751,
+          "worst5": -0.279395,
+          "score": -0.124433,
+          "avg_days": 21.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "trail_10": {
+          "n": 1559,
+          "mean": 0.009205,
+          "median": -0.031161,
+          "hit_rate": 0.413085,
+          "worst5": -0.198891,
+          "score": -0.09024,
+          "avg_days": 30.424631,
+          "stopped_share": 0.79923,
+          "recovered_after_stop": 0.422953
+        }
+      }
+    },
+    "regimes": {
+      "Caution": {
+        "atr_2": {
+          "n": 690,
+          "mean": 0.03562,
+          "median": -0.068805,
+          "hit_rate": 0.391304,
+          "worst5": -0.170889,
+          "score": -0.049824,
+          "avg_days": 36.281159,
+          "stopped_share": 0.582609,
+          "recovered_after_stop": 0.276119
+        },
+        "atr_plan": {
+          "n": 690,
+          "mean": 0.023214,
+          "median": -0.014127,
+          "hit_rate": 0.442029,
+          "worst5": -0.16346,
+          "score": -0.058516,
+          "avg_days": 23.788406,
+          "stopped_share": 0.627536,
+          "recovered_after_stop": 0.353349
+        },
+        "fixed_5_tp_6": {
+          "n": 690,
+          "mean": 0.013219,
+          "median": 0.055748,
+          "hit_rate": 0.585507,
+          "worst5": -0.141151,
+          "score": -0.057357,
+          "avg_days": 8.586957,
+          "stopped_share": 0.411594,
+          "recovered_after_stop": 0.348592
+        },
+        "fixed_6_tp_8": {
+          "n": 690,
+          "mean": 0.015111,
+          "median": 0.064868,
+          "hit_rate": 0.556522,
+          "worst5": -0.157208,
+          "score": -0.063493,
+          "avg_days": 12.144928,
+          "stopped_share": 0.437681,
+          "recovered_after_stop": 0.307947
+        },
+        "fixed_8": {
+          "n": 690,
+          "mean": 0.036332,
+          "median": -0.075049,
+          "hit_rate": 0.408696,
+          "worst5": -0.173358,
+          "score": -0.050347,
+          "avg_days": 38.26087,
+          "stopped_share": 0.550725,
+          "recovered_after_stop": 0.257895
+        },
+        "hold_63": {
+          "n": 690,
+          "mean": 0.070124,
+          "median": 0.051233,
+          "hit_rate": 0.637681,
+          "worst5": -0.389291,
+          "score": -0.124522,
+          "avg_days": 63.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "time_21": {
+          "n": 690,
+          "mean": 0.023095,
+          "median": 0.022168,
+          "hit_rate": 0.573913,
+          "worst5": -0.267671,
+          "score": -0.11074,
+          "avg_days": 21.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "trail_10": {
+          "n": 690,
+          "mean": 0.029345,
+          "median": -0.015134,
+          "hit_rate": 0.475362,
+          "worst5": -0.191593,
+          "score": -0.066451,
+          "avg_days": 28.578261,
+          "stopped_share": 0.802899,
+          "recovered_after_stop": 0.424188
+        }
+      },
+      "Normal": {
+        "atr_2": {
+          "n": 1979,
+          "mean": 0.006766,
+          "median": -0.04177,
+          "hit_rate": 0.324912,
+          "worst5": -0.148745,
+          "score": -0.067607,
+          "avg_days": 34.335523,
+          "stopped_share": 0.64477,
+          "recovered_after_stop": 0.277429
+        },
+        "atr_plan": {
+          "n": 1979,
+          "mean": 0.004235,
+          "median": -0.017699,
+          "hit_rate": 0.39717,
+          "worst5": -0.134957,
+          "score": -0.063243,
+          "avg_days": 23.646286,
+          "stopped_share": 0.653866,
+          "recovered_after_stop": 0.344668
+        },
+        "fixed_5_tp_6": {
+          "n": 1979,
+          "mean": 0.000841,
+          "median": 0.001329,
+          "hit_rate": 0.500758,
+          "worst5": -0.12336,
+          "score": -0.060839,
+          "avg_days": 17.51238,
+          "stopped_share": 0.484588,
+          "recovered_after_stop": 0.258603
+        },
+        "fixed_6_tp_8": {
+          "n": 1979,
+          "mean": 0.004975,
+          "median": 0.003013,
+          "hit_rate": 0.504295,
+          "worst5": -0.132745,
+          "score": -0.061397,
+          "avg_days": 23.815563,
+          "stopped_share": 0.465892,
+          "recovered_after_stop": 0.239696
+        },
+        "fixed_8": {
+          "n": 1979,
+          "mean": 0.010123,
+          "median": -0.041367,
+          "hit_rate": 0.432036,
+          "worst5": -0.15962,
+          "score": -0.069687,
+          "avg_days": 45.016675,
+          "stopped_share": 0.469429,
+          "recovered_after_stop": 0.186222
+        },
+        "hold_63": {
+          "n": 1979,
+          "mean": 0.010894,
+          "median": 0.008312,
+          "hit_rate": 0.526023,
+          "worst5": -0.374031,
+          "score": -0.176121,
+          "avg_days": 63.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "time_21": {
+          "n": 1979,
+          "mean": 0.002106,
+          "median": 0.002539,
+          "hit_rate": 0.513896,
+          "worst5": -0.226511,
+          "score": -0.11115,
+          "avg_days": 21.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "trail_10": {
+          "n": 1979,
+          "mean": 0.0086,
+          "median": -0.020164,
+          "hit_rate": 0.447196,
+          "worst5": -0.174708,
+          "score": -0.078754,
+          "avg_days": 41.687216,
+          "stopped_share": 0.620515,
+          "recovered_after_stop": 0.345277
+        }
+      },
+      "Stress": {
+        "atr_2": {
+          "n": 208,
+          "mean": 0.028064,
+          "median": -0.078095,
+          "hit_rate": 0.302885,
+          "worst5": -0.23665,
+          "score": -0.090261,
+          "avg_days": 29.1875,
+          "stopped_share": 0.682692,
+          "recovered_after_stop": 0.380282
+        },
+        "atr_plan": {
+          "n": 208,
+          "mean": 0.024644,
+          "median": -0.041487,
+          "hit_rate": 0.350962,
+          "worst5": -0.225902,
+          "score": -0.088307,
+          "avg_days": 19.725962,
+          "stopped_share": 0.716346,
+          "recovered_after_stop": 0.402685
+        },
+        "fixed_5_tp_6": {
+          "n": 208,
+          "mean": 0.002499,
+          "median": 0.016967,
+          "hit_rate": 0.524038,
+          "worst5": -0.178352,
+          "score": -0.086677,
+          "avg_days": 5.110577,
+          "stopped_share": 0.5,
+          "recovered_after_stop": 0.519231
+        },
+        "fixed_6_tp_8": {
+          "n": 208,
+          "mean": 0.005697,
+          "median": -0.044891,
+          "hit_rate": 0.475962,
+          "worst5": -0.181046,
+          "score": -0.084826,
+          "avg_days": 7.745192,
+          "stopped_share": 0.528846,
+          "recovered_after_stop": 0.481818
+        },
+        "fixed_8": {
+          "n": 208,
+          "mean": 0.024613,
+          "median": -0.088276,
+          "hit_rate": 0.302885,
+          "worst5": -0.24264,
+          "score": -0.096707,
+          "avg_days": 29.706731,
+          "stopped_share": 0.682692,
+          "recovered_after_stop": 0.352113
+        },
+        "hold_63": {
+          "n": 208,
+          "mean": 0.100371,
+          "median": 0.07179,
+          "hit_rate": 0.615385,
+          "worst5": -0.384764,
+          "score": -0.092011,
+          "avg_days": 63.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "time_21": {
+          "n": 208,
+          "mean": 0.063414,
+          "median": 0.064551,
+          "hit_rate": 0.673077,
+          "worst5": -0.346037,
+          "score": -0.109605,
+          "avg_days": 21.0,
+          "stopped_share": 0.0,
+          "recovered_after_stop": null
+        },
+        "trail_10": {
+          "n": 208,
+          "mean": 0.013587,
+          "median": -0.035654,
+          "hit_rate": 0.394231,
+          "worst5": -0.235105,
+          "score": -0.103965,
+          "avg_days": 18.134615,
+          "stopped_share": 0.927885,
+          "recovered_after_stop": 0.559585
+        }
+      }
+    }
+  },
+  "entries": {
+    "model": {
+      "limit_1pct_skip_gap_3pct": {
+        "n": 2877,
+        "mean": 0.030424,
+        "median": 0.010216,
+        "hit_rate": 0.532847,
+        "worst5": -0.368967,
+        "score": -0.154059,
+        "filled": 0.947167
+      },
+      "next_open": {
+        "n": 2877,
+        "mean": 0.030245,
+        "median": 0.020113,
+        "hit_rate": 0.558568,
+        "worst5": -0.376362,
+        "score": -0.157937,
+        "filled": 1.0
+      },
+      "two_parts_5_days": {
+        "n": 2877,
+        "mean": 0.025798,
+        "median": 0.020327,
+        "hit_rate": 0.554745,
+        "worst5": -0.363727,
+        "score": -0.156065,
+        "filled": 1.0
+      },
+      "wait_for_3pct_dip": {
+        "n": 2877,
+        "mean": 0.01941,
+        "median": 0.0,
+        "hit_rate": 0.304136,
+        "worst5": -0.334897,
+        "score": -0.148038,
+        "filled": 0.556135
+      },
+      "wait_one_day": {
+        "n": 2877,
+        "mean": 0.029072,
+        "median": 0.0175,
+        "hit_rate": 0.547445,
+        "worst5": -0.372643,
+        "score": -0.15725,
+        "filled": 1.0
+      }
+    },
+    "halves": {
+      "2016-2019": {
+        "limit_1pct_skip_gap_3pct": {
+          "n": 1318,
+          "mean": 0.026529,
+          "median": 0.024638,
+          "hit_rate": 0.57739,
+          "worst5": -0.340047,
+          "score": -0.143494,
+          "filled": 0.971927
+        },
+        "next_open": {
+          "n": 1318,
+          "mean": 0.025547,
+          "median": 0.027283,
+          "hit_rate": 0.588771,
+          "worst5": -0.341152,
+          "score": -0.145029,
+          "filled": 1.0
+        },
+        "two_parts_5_days": {
+          "n": 1318,
+          "mean": 0.023414,
+          "median": 0.027521,
+          "hit_rate": 0.593323,
+          "worst5": -0.334751,
+          "score": -0.143961,
+          "filled": 1.0
+        },
+        "wait_for_3pct_dip": {
+          "n": 1318,
+          "mean": 0.012466,
+          "median": 0.0,
+          "hit_rate": 0.284522,
+          "worst5": -0.284629,
+          "score": -0.129848,
+          "filled": 0.490895
+        },
+        "wait_one_day": {
+          "n": 1318,
+          "mean": 0.025768,
+          "median": 0.025956,
+          "hit_rate": 0.584977,
+          "worst5": -0.339313,
+          "score": -0.143888,
+          "filled": 1.0
+        }
+      },
+      "2020-2023": {
+        "limit_1pct_skip_gap_3pct": {
+          "n": 1559,
+          "mean": 0.033717,
+          "median": 0.0,
+          "hit_rate": 0.495189,
+          "worst5": -0.39099,
+          "score": -0.161778,
+          "filled": 0.926235
+        },
+        "next_open": {
+          "n": 1559,
+          "mean": 0.034216,
+          "median": 0.009804,
+          "hit_rate": 0.533034,
+          "worst5": -0.402394,
+          "score": -0.166981,
+          "filled": 1.0
+        },
+        "two_parts_5_days": {
+          "n": 1559,
+          "mean": 0.027813,
+          "median": 0.009316,
+          "hit_rate": 0.52213,
+          "worst5": -0.38486,
+          "score": -0.164617,
+          "filled": 1.0
+        },
+        "wait_for_3pct_dip": {
+          "n": 1559,
+          "mean": 0.025281,
+          "median": 0.0,
+          "hit_rate": 0.320718,
+          "worst5": -0.367454,
+          "score": -0.158447,
+          "filled": 0.611289
+        },
+        "wait_one_day": {
+          "n": 1559,
+          "mean": 0.031864,
+          "median": 0.00915,
+          "hit_rate": 0.515715,
+          "worst5": -0.394831,
+          "score": -0.165551,
+          "filled": 1.0
+        }
+      }
+    }
+  },
+  "text": {
+    "exits": {
+      "hold_63": "No stop: sell after 63 trading days",
+      "time_21": "Sell after 21 trading days",
+      "fixed_6_tp_8": "Fixed stop −6%, take profit +8% (first Balanced strategy)",
+      "fixed_5_tp_6": "Fixed stop −5%, take profit +6% (first Safest strategy)",
+      "fixed_8": "Fixed stop −8%",
+      "atr_2": "Stop 2 × the stock's normal daily swing below (at most −8%)",
+      "atr_plan": "The app's position plan (swing-based stop, break-even, sell a third, trail)",
+      "trail_10": "Trailing stop 10% below the highest close"
+    },
+    "entries": {
+      "next_open": "Buy at the next opening price",
+      "limit_1pct_skip_gap_3pct": "Limit at most 1% above the signal; skip a 3%+ jump at the open",
+      "two_parts_5_days": "Half at the next open, half 5 trading days later",
+      "wait_for_3pct_dip": "Wait up to 10 days for a 3% dip, else stay out",
+      "wait_one_day": "Wait one day, buy at the following open"
+    }
+  },
+  "decision": {
+    "exit": "fixed_5_tp_6",
+    "exit_best_overall": "fixed_5_tp_6",
+    "exit_robust": true,
+    "entry": "next_open",
+    "entry_better_in_both_halves": []
+  },
+  "model_version": "m-20261012-ae47e893d0",
+  "signals_from": "walk-forward out-of-sample predictions 2016-2023"
+}
