@@ -90,3 +90,19 @@ describe('your trades vs the S&P 500', () => {
     expect(vsMarket([{ ...buy, date: '2026-09-01' }], spy)).toBeNull() // before the file starts
   })
 })
+
+describe('your exits vs the tested sell rule', () => {
+  it('sells at the next open after a 5% fall or a 6% rise, else after 63 days', async () => {
+    const { ruleExit } = await import('../lib/exits')
+    const days = Array.from({ length: 80 }, (_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`)
+    const flat = { t: days, o: days.map(() => 100), h: days.map(() => 101), l: days.map(() => 99), c: days.map(() => 100), v: days.map(() => 1) }
+    expect(ruleExit(flat, days[0]!)).toMatchObject({ ret: 0, why: '63 days', date: days[62] })
+    const up = { ...flat, c: days.map((_, i) => (i === 3 ? 107 : 100)), o: days.map((_, i) => (i === 4 ? 108 : 100)) }
+    expect(ruleExit(up, days[0]!)).toMatchObject({ why: 'take profit', date: days[4] })
+    expect(ruleExit(up, days[0]!)!.ret).toBeCloseTo(0.08)
+    const down = { ...flat, c: days.map((_, i) => (i === 2 ? 94 : 100)), o: days.map((_, i) => (i === 3 ? 90 : 100)) }
+    expect(ruleExit(down, days[0]!)).toMatchObject({ why: 'stop', date: days[3] })
+    expect(ruleExit(down, days[0]!)!.ret).toBeCloseTo(-0.1) // a gap below the stop counts
+    expect(ruleExit({ ...flat, t: days.slice(0, 10), o: flat.o.slice(0, 10), c: flat.c.slice(0, 10) }, days[0]!)!.why).toBe('still holding')
+  })
+})

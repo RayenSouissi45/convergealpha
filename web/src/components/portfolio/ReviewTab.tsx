@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { formatEur, formatEurSigned } from '../../lib/costs'
-import { signClass } from '../../lib/format'
 import { behaviour, decisionQuality, fifo, type Journal, type Quadrant } from '../../lib/journal'
 import { measuredCosts } from '../../lib/orderHelp'
+import { stockFile, useSiteJson } from '../../lib/data'
+import { ruleExit } from '../../lib/exits'
+import { formatDay, formatPct, signClass } from '../../lib/format'
+import type { Realized } from '../../lib/journal'
+import type { StockFile } from '../../types'
 import type { ScreenerRow } from '../../types'
 import { Badge, Card } from '../ui'
 
@@ -11,6 +15,56 @@ const QUAD: Record<Quadrant, { title: string; tone: 'good' | 'warn' | 'bad' | 'n
   unlucky: { title: 'Good decision, bad result', tone: 'neutral', text: 'Bad luck happens: the process was right.' },
   lucky: { title: 'Weak decision, good result', tone: 'warn', text: 'Luck: do not repeat the shortcut.' },
   mistake: { title: 'Weak decision, bad result', tone: 'bad', text: 'Learn from these first.' },
+}
+
+/** One closed trade against the tested sell rule (price change only). */
+function ExitRow({ r, buyDate }: { r: Realized; buyDate: string }) {
+  const res = useSiteJson<StockFile>(stockFile(r.ticker))
+  const yours = r.costEur > 0 ? r.proceedsEur / r.costEur - 1 : null
+  const daily = res.state === 'ready' ? res.data.chart?.daily : undefined
+  const rule = daily ? ruleExit(daily, buyDate) : null
+  return (
+    <li className="flex flex-wrap justify-between gap-x-3 py-1 tabular-nums">
+      <span>
+        <strong>{r.ticker}</strong> <span className="text-xs text-slate-600 dark:text-zinc-400">bought {formatDay(buyDate)}</span>
+      </span>
+      <span>
+        you <span className={signClass(yours)}>{yours === null ? '—' : formatPct(yours)}</span> (sold {formatDay(r.date)}) · rule{' '}
+        {rule ? (
+          <>
+            <span className={signClass(rule.ret)}>{formatPct(rule.ret)}</span> <span className="text-xs text-slate-600 dark:text-zinc-400">({rule.why}, {formatDay(rule.date)})</span>
+          </>
+        ) : res.state === 'loading' ? (
+          '…'
+        ) : (
+          '—'
+        )}
+      </span>
+    </li>
+  )
+}
+
+/** Your closed trades replayed with the sell rule tested once on 2016–2023. */
+function ExitsCard({ j }: { j: Journal }) {
+  const book = fifo(j.trades)
+  const dates = new Map(j.trades.map((t) => [t.id, t.date]))
+  const recent = [...book.realized].reverse().slice(0, 8)
+  return (
+    <Card title="What if you had sold by the tested rule?">
+      {recent.length === 0 ? (
+        <p className="text-sm text-slate-600 dark:text-zinc-400">Appears once you have sold something.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 text-sm dark:divide-zinc-800" aria-label="Your exits vs the rule">
+          {recent.map((r) => (
+            <ExitRow key={r.tradeId} r={r} buyDate={(r.fromTrades ?? []).map((id) => dates.get(id)).filter((d): d is string => !!d).sort()[0] ?? r.date} />
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
+        The rule: sell at the next open after a close 5% below the buy day's open or 6% above it, or after 63 trading days (tested once on 2016–2023, Validation page). Yours include fees and the euro; the rule's are the price change only. A few trades say little: look for a pattern over many.
+      </p>
+    </Card>
+  )
 }
 
 /** What trading costs you: fees as a share of your money per year, and your real fills vs the app's estimate. */
@@ -58,6 +112,7 @@ export function ReviewTab({ j, rows, total }: { j: Journal; rows: Map<string, Sc
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <CostsCard j={j} rows={rows} total={total} />
+      <ExitsCard j={j} />
       <Card title="This month">
         <ul className="space-y-1 text-sm">
           <li>
