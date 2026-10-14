@@ -112,6 +112,18 @@ def test_euro_conversion_whole_shares_and_leftover() -> None:
     assert C.switch_cost(100.0, 0.001, 0.003) == pytest.approx(0.02 + 0.002)
 
 
+def test_zero_fee_rule_free_from_500_euros_else_1_euro() -> None:
+    # Same reference values as the web tests (web/src/test/plan.test.ts).
+    small = C.buy(400, 50, 1.1, 0.001, C.ZERO_FEES)
+    assert small.fee == 1.0 and small.shares == math.floor(399 / (50 / 1.1 * 1.0005))
+    big = C.buy(600, 50, 1.1, 0.001, C.ZERO_FEES)
+    assert big.fee == 0.0 and big.shares == math.floor(600 / (50 / 1.1 * 1.0005))
+    assert C.round_trip_cost(600, 0.001, C.ZERO_FEES) == pytest.approx(0.001)
+    assert C.round_trip_cost(400, 0.001, C.ZERO_FEES) == pytest.approx(2 / 400 + 0.001)
+    # The first strategies keep a flat 1 € each way.
+    assert C.buy(600, 50, 1.1, 0.001).fee == 1.0
+
+
 def test_fx_uses_the_latest_rate_published_on_or_before_the_day() -> None:
     s = pd.Series([1.10, 1.12], index=pd.to_datetime(["2026-10-01", "2026-10-08"]))
     assert C.fx_on(s, pd.Timestamp("2026-10-07")) == (1.10, "2026-10-01")

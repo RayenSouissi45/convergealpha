@@ -3,8 +3,11 @@
 // mode): then the choices last for this visit.
 
 import { useSyncExternalStore } from 'react'
+import { formatEur, ZERO_FEES, type Fees } from './costs'
 
 export interface TradeSettings {
+  /** finanzen.net zero's rule (0 € from 500 €, 1 € below) or your own flat fee. */
+  feeRule: 'zero' | 'custom'
   feeBuy: number
   feeSell: number
   fractional: boolean
@@ -16,6 +19,7 @@ export interface TradeSettings {
 }
 
 export const DEFAULT_SETTINGS: TradeSettings = {
+  feeRule: 'zero',
   feeBuy: 1,
   feeSell: 1,
   fractional: false,
@@ -40,6 +44,7 @@ export function sanitize(raw: Partial<TradeSettings> | null | undefined): TradeS
   const d = DEFAULT_SETTINGS
   const r = raw ?? {}
   return {
+    feeRule: r.feeRule === 'custom' ? 'custom' : 'zero',
     feeBuy: clamp(r.feeBuy, 0, 50, d.feeBuy),
     feeSell: clamp(r.feeSell, 0, 50, d.feeSell),
     fractional: typeof r.fractional === 'boolean' ? r.fractional : d.fractional,
@@ -91,3 +96,17 @@ export function useTradeSettings(): [TradeSettings, (patch: Partial<TradeSetting
   )
   return [s, setSettings]
 }
+
+/** The fees your settings describe, for every euro calculation. */
+export function feesFrom(s: TradeSettings): Fees {
+  if (s.feeRule === 'zero') return { ...ZERO_FEES, fractional: s.fractional }
+  return { buy: s.feeBuy, sell: s.feeSell, fractional: s.fractional, freeFrom: null }
+}
+
+/** One line: the fee rule in use. */
+export function feeText(s: TradeSettings): string {
+  const shares = s.fractional ? 'fractional shares (simulation only)' : 'whole shares'
+  if (s.feeRule === 'zero') return `finanzen.net zero fees (free from ${formatEur(ZERO_FEES.freeFrom ?? 500, 0)}, else ${formatEur(ZERO_FEES.buy)}), ${shares}`
+  return `${formatEur(s.feeBuy)} per buy, ${formatEur(s.feeSell)} per sell, ${shares}`
+}
+

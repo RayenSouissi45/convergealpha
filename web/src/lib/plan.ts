@@ -3,7 +3,7 @@
 // from pipeline/src/convergealpha/decide/plan.py (THRESHOLDS); a test pins both.
 
 import type { HorizonKey } from './columns'
-import { breakEven, buy, result, roundTripEuros, type Buy, type Fees } from './costs'
+import { breakEven, buy, result, roundTripEuros, type Buy, type Fees, sellFeeFor } from './costs'
 import type { PlanFile, ReliabilityBucket } from '../types'
 
 export const H_DAYS: Record<HorizonKey, number> = { '1w': 5, '1m': 21, '3m': 63, '6m': 126 }
@@ -304,9 +304,9 @@ export function evaluate(r: PlanRow, amount: number, c: Context): Evaluation | n
   if (!d || r.price === null) return null
   const b = buy(amount, r.price, c.fx, r.spread, c.fees)
   if (b.shares <= 0) return null
-  const be = breakEven(b, r.spread, c.fees.sell)
+  const be = breakEven(b, r.spread, c.fees)
   const pProfit = chanceAbove(d, be)
-  const middle = result(b, d.med, r.spread, c.fees.sell)
+  const middle = result(b, d.med, r.spread, c.fees)
   const rel = relFor(r, c)
   const validated = isValidated(c)
   return {
@@ -315,10 +315,10 @@ export function evaluate(r: PlanRow, amount: number, c: Context): Evaluation | n
     breakEven: be,
     pProfit,
     middle,
-    bad: result(b, d.p10, r.spread, c.fees.sell),
-    good: result(b, d.p90, r.spread, c.fees.sell),
-    fees: b.fee + c.fees.sell,
-    costs: roundTripEuros(b, r.spread, c.fees.sell),
+    bad: result(b, d.p10, r.spread, c.fees),
+    good: result(b, d.p90, r.spread, c.fees),
+    fees: b.fee + sellFeeFor(b, c.fees),
+    costs: roundTripEuros(b, r.spread, c.fees),
     rel,
     validated,
     verdict: verdict({ pProfit, relLo: rel?.lo ?? null, middle, validated }),
@@ -356,7 +356,8 @@ export function evaluateSplit(r1: PlanRow, r2: PlanRow, amount: number, c: Conte
   }
   const q1 = anchored(d1)
   const q2 = anchored(d2)
-  const total = (u: number) => result(e1.buy, q1(u), r1.spread, c.fees.sell) + result(e2.buy, q2(u), r2.spread, c.fees.sell)
+  const total = (u: number) => result(e1.buy, q1(u), r1.spread, c.fees) + result(e2.buy, q2(u), r2.spread, c.fees)
+  const sellFees = sellFeeFor(e1.buy, c.fees) + sellFeeFor(e2.buy, c.fees)
   let lo = -0.5
   let hi = 1.5
   for (let i = 0; i < 60; i++) {
@@ -374,10 +375,10 @@ export function evaluateSplit(r1: PlanRow, r2: PlanRow, amount: number, c: Conte
     legs: [e1, e2],
     shares: e1.buy.shares + e2.buy.shares,
     leftover: e1.buy.leftover + e2.buy.leftover,
-    fees: e1.buy.fee + e2.buy.fee + 2 * c.fees.sell,
+    fees: e1.buy.fee + e2.buy.fee + sellFees,
     spent,
     // Break-even for the pair, as a share of the stock value bought (both legs move alike).
-    breakEven: value > 0 ? (spent + 2 * c.fees.sell) / (e1.buy.shares * e1.buy.midEur * (1 - r1.spread / 2) + e2.buy.shares * e2.buy.midEur * (1 - r2.spread / 2)) - 1 : NaN,
+    breakEven: value > 0 ? (spent + sellFees) / (e1.buy.shares * e1.buy.midEur * (1 - r1.spread / 2) + e2.buy.shares * e2.buy.midEur * (1 - r2.spread / 2)) - 1 : NaN,
     pProfit,
     middle,
     bad: e1.bad + e2.bad,

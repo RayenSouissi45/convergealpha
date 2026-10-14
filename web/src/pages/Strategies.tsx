@@ -5,12 +5,12 @@ import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } fr
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
-import { formatEur, formatShares } from '../lib/costs'
+import { formatEur, formatShares, sellFeeFor } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatPct, signClass } from '../lib/format'
 import { isOpp } from '../lib/opportunity'
 import { evaluate, evaluateSplit, mapPeriod, type Context, type PlanRow, type Verdict } from '../lib/plan'
-import { useTradeSettings } from '../lib/settings'
+import { feesFrom, feeText, useTradeSettings } from '../lib/settings'
 import { byValue, cardsFor, COLORS, linePoints, liveOf, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, withLive, type LiveCard, type Universe } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
 import { OutcomeLines, ValidTag, VerdictBox } from './Plan'
@@ -129,7 +129,7 @@ function GiveMeAStrategy({ f, u }: { f: StrategiesFile; u: Universe }) {
   if (!f.fx) return <p className="text-sm text-slate-600 dark:text-zinc-400">The EUR/USD rate is not available yet, so euro amounts cannot be computed.</p>
   const ctx: Context = {
     fx: f.fx.rate,
-    fees: { buy: settings.feeBuy, sell: settings.feeSell, fractional: settings.fractional },
+    fees: feesFrom(settings),
     mix: mapPeriod(30),
     reliability: { '1m': f.reliability_1m ?? [] },
     validated: f.validated,
@@ -146,7 +146,7 @@ function GiveMeAStrategy({ f, u }: { f: StrategiesFile; u: Universe }) {
       if (!e) return false
       if (s.id !== 'balanced') return true
       // Same formula as the pipeline: (buy fee + sell fee) / money invested + spread.
-      const roundTrip = (ctx.fees.buy + ctx.fees.sell) / e.buy.invested + x.spread
+      const roundTrip = (e.buy.fee + sellFeeFor(e.buy, ctx.fees)) / e.buy.invested + x.spread
       return (x.med_1m ?? -1) > roundTrip
     }
     const picks = list.filter(fits).slice(0, n)
@@ -173,7 +173,7 @@ function GiveMeAStrategy({ f, u }: { f: StrategiesFile; u: Universe }) {
         <input type="number" inputMode="decimal" min={1} step={10} value={amount} onChange={(e) => set({ amount: Number(e.target.value) || 1 })} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-base dark:border-zinc-600 dark:bg-zinc-800" />
       </label>
       <p className="text-xs text-slate-600 dark:text-zinc-400">
-        If each strategy started today with your money ({UNIVERSE_LABEL[u]}), held about 1 month. Fees {formatEur(settings.feeBuy)} / {formatEur(settings.feeSell)} (change them on <Link to="/plan" className="underline">Plan</Link>), {settings.fractional ? 'fractional shares (simulation only)' : 'whole shares'}. Best overall = the highest chance of more money after costs among the green or amber ones.
+        If each strategy started today with your money ({UNIVERSE_LABEL[u]}), held about 1 month. Costs: {feeText(settings)} (change them on <Link to="/plan" className="underline">Plan</Link>). Best overall = the highest chance of more money after costs among the green or amber ones.
       </p>
       {!best && <VerdictBox v={{ color: 'grey', title: 'No good opportunity now: waiting is a valid choice', why: [] }} />}
       <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">

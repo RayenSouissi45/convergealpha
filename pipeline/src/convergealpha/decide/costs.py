@@ -34,9 +34,17 @@ class Fees:
     buy: float = FEE_BUY_EUR
     sell: float = FEE_SELL_EUR
     fractional: bool = False
+    free_from: float | None = None  # orders worth at least this many euros pay no fee
 
 
-DEFAULT_FEES = Fees()
+DEFAULT_FEES = Fees()  # a flat 1 € each way: the rule the first paper strategies started with
+ZERO_FEE_FREE_FROM = 500.0  # finanzen.net zero, checked 2026-10-14: 0 € from 500 €, 1 € below
+ZERO_FEES = Fees(free_from=ZERO_FEE_FREE_FROM)
+
+
+def fee_for(fee: float, volume_eur: float, fees: Fees) -> float:
+    """The fee for an order worth `volume_eur` euros under this broker's rule."""
+    return 0.0 if fees.free_from is not None and volume_eur >= fees.free_from else fee
 
 
 @dataclass(frozen=True)
@@ -73,24 +81,32 @@ def buy(
     spread_frac: float,
     fees: Fees = DEFAULT_FEES,
 ) -> Buy:
-    """Buy as many shares as `amount` euros allow after the buy fee."""
+    """Buy as many shares as `amount` euros allow after the buy fee (none when the order is big
+    enough to be free at this broker)."""
     mid = to_eur(price_usd, fx_usd_per_eur)
     pay = mid * (1 + spread_frac / 2)
-    budget = amount - fees.buy
-    if budget <= 0 or not (pay > 0):
-        return Buy(amount, 0.0, mid, pay, 0.0, 0.0, amount, 0.0)
-    shares = budget / pay if fees.fractional else math.floor(budget / pay + 1e-9)
-    if shares <= 0:
-        return Buy(amount, 0.0, mid, pay, 0.0, 0.0, amount, 0.0)
+    none = Buy(amount, 0.0, mid, pay, 0.0, 0.0, amount, 0.0)
+    if amount <= 0 or not (pay > 0):
+        return none
+
+    def count(budget: float) -> float:
+        return budget / pay if fees.fractional else math.floor(budget / pay + 1e-9)
+
+    free = count(amount)
+    is_free = free > 0 and fee_for(fees.buy, free * pay, fees) == 0.0
+    fee = 0.0 if is_free else fees.buy
+    shares = free if is_free else count(amount - fee)
+    if amount - fee <= 0 or shares <= 0:
+        return none
     invested = shares * pay
     return Buy(
         amount=amount,
         shares=shares,
         mid_eur=mid,
         pay_eur=pay,
-        fee=fees.buy,
+        fee=fee,
         invested=invested,
-        leftover=amount - invested - fees.buy,
+        leftover=amount - invested - fee,
         spread_cost=shares * (pay - mid),
     )
 
@@ -120,7 +136,9 @@ def round_trip_cost(value_eur: float, spread_frac: float, fees: Fees = DEFAULT_F
     """Cost of buying and later selling a position worth `value_eur`, as a fraction of it."""
     if value_eur <= 0:
         return math.inf
-    return (fees.buy + fees.sell) / value_eur + spread_frac
+    return (
+        fee_for(fees.buy, value_eur, fees) + fee_for(fees.sell, value_eur, fees)
+    ) / value_eur + spread_frac
 
 
 def switch_cost(value_eur: float, spread_out: float, spread_in: float, fees: Fees = DEFAULT_FEES) -> float:  # fmt: skip
@@ -128,7 +146,8 @@ def switch_cost(value_eur: float, spread_out: float, spread_in: float, fees: Fee
     as a fraction of the position."""
     if value_eur <= 0:
         return math.inf
-    return (fees.sell + fees.buy) / value_eur + spread_out / 2 + spread_in / 2
+    both = fee_for(fees.sell, value_eur, fees) + fee_for(fees.buy, value_eur, fees)
+    return both / value_eur + spread_out / 2 + spread_in / 2
 
 
 def fx_series(fred: pd.DataFrame) -> pd.Series:

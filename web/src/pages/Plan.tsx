@@ -5,12 +5,13 @@ import { OppBadge } from '../components/Opportunity'
 import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
+import { FeeSettings } from '../components/FeeSettings'
 import { ZeroBadge, ZeroToggle } from '../components/Zero'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatInt, formatPct } from '../lib/format'
 import { evaluate, evaluateSplit, mapPeriod, rank, sliderMin, toPlanRows, type Context, type Evaluation, type PlanRow, type Rel, type SplitEvaluation, type Verdict } from '../lib/plan'
-import { useTradeSettings } from '../lib/settings'
+import { feesFrom, useTradeSettings } from '../lib/settings'
 import { useBrokerList, useOnlyZero, zeroAvailability } from '../lib/zero'
 import type { PlanFile } from '../types'
 
@@ -194,7 +195,7 @@ export default function Plan() {
   const f = fileOk ? res.data : null
   const ctx: Context | null =
     f && f.fx
-      ? { fx: f.fx.rate, fees: { buy: deferred.feeBuy, sell: deferred.feeSell, fractional: deferred.fractional }, mix: m, reliability: f.reliability, validated: f.validated }
+      ? { fx: f.fx.rate, fees: feesFrom(deferred), mix: m, reliability: f.reliability, validated: f.validated }
       : null
   const td = m.td
   // A filter and a sort over about 2,000 rows: cheap enough for every change.
@@ -242,26 +243,7 @@ export default function Plan() {
             Allow stocks that report earnings inside the period
           </label>
           <ZeroToggle values={rows.map((r) => r.zero)} noun="candidates" />
-          <details className="rounded-lg border border-slate-200 p-3 dark:border-zinc-700">
-            <summary className="min-h-11 cursor-pointer text-sm font-medium">
-              Costs: {formatEur(s.feeBuy)} per buy, {formatEur(s.feeSell)} per sell{s.fractional ? ', fractional shares (simulation only)' : ', whole shares'}
-            </summary>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <label className="text-xs text-slate-600 dark:text-zinc-400">
-                Fee per buy (€)
-                <input type="number" inputMode="decimal" min={0} step={0.5} value={s.feeBuy} onChange={(e) => set({ feeBuy: Number(e.target.value) })} className={input} />
-              </label>
-              <label className="text-xs text-slate-600 dark:text-zinc-400">
-                Fee per sell (€)
-                <input type="number" inputMode="decimal" min={0} step={0.5} value={s.feeSell} onChange={(e) => set({ feeSell: Number(e.target.value) })} className={input} />
-              </label>
-            </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">Default 1 € each way. Check your broker’s current price list: fees can depend on the order size.</p>
-            <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" className="size-6 accent-teal-700" checked={s.fractional} onChange={(e) => set({ fractional: e.target.checked })} />
-              Fractional shares (simulation only)
-            </label>
-          </details>
+          <FeeSettings />
         </div>
       </Card>
 

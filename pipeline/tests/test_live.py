@@ -96,14 +96,14 @@ def test_run_writes_the_live_file_and_never_the_ledger(tmp_path: Path) -> None:
     f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
     ledger_before = (tmp_path / "d" / E.LEDGER).read_text(encoding="utf-8")
     site = _site(tmp_path, f)
-    fake = lambda tks, d: {
-        t: L.Quote(
-            open=50.0 if t == "AAA" else 660.0,
-            last=51.0 if t == "AAA" else 661.0,
-            at="2026-10-14T15:00:00+00:00",
-        )
-        for t in tks
-    }  # noqa: E731
+
+    def fake(tks: list[str], d: date) -> dict[str, L.Quote]:
+        aaa = {"open": 50.0, "last": 51.0}
+        spy = {"open": 660.0, "last": 661.0}
+        return {
+            t: L.Quote(**(aaa if t == "AAA" else spy), at="2026-10-14T15:00:00+00:00") for t in tks
+        }  # type: ignore[arg-type]
+
     out = L.run(site, datetime(2026, 10, 14, 15, 0, tzinfo=UTC), quote_source=fake)
     assert out is not None and out["market"] == "open"
     live = json.loads((site / "strategies_live.json").read_text(encoding="utf-8"))

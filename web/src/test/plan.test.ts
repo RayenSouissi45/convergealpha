@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { breakEven, buy, result } from '../lib/costs'
+import { breakEven, buy, result, sellFeeFor, ZERO_FEES } from '../lib/costs'
 import { chanceAbove, cdf, dist, evaluate, evaluateSplit, mapPeriod, quantile, rank, sliderMin, THRESHOLDS, tradingDays, verdict, type Context, type PlanRow } from '../lib/plan'
 import { sanitize } from '../lib/settings'
 
@@ -143,5 +143,29 @@ describe('plan builder', () => {
 
   it('never trusts stored settings', () => {
     expect(sanitize({ safety: 99, upside: -3, days: 1000, amount: -5, feeBuy: Number.NaN })).toMatchObject({ safety: 10, upside: 1, days: 180, amount: 1, feeBuy: 1 })
+  })
+})
+
+describe('finanzen.net zero fee rule', () => {
+  it('is free from 500 € of order value and 1 € below, both ways', () => {
+    // $50 at 1.10 $/€ with a 0.1% spread: 45.4772... € a share.
+    const small = buy(400, 50, 1.1, 0.001, ZERO_FEES)
+    expect(small.fee).toBe(1)
+    expect(small.shares).toBe(Math.floor(399 / ((50 / 1.1) * 1.0005)))
+    const big = buy(600, 50, 1.1, 0.001, ZERO_FEES)
+    expect(big.fee).toBe(0)
+    expect(big.shares).toBe(Math.floor(600 / ((50 / 1.1) * 1.0005)))
+    // Selling a 500 €+ position is free too: break-even is the spread alone.
+    expect(breakEven(big, 0.001, ZERO_FEES)).toBeCloseTo(1.0005 / 0.9995 - 1, 10)
+    expect(sellFeeFor(big, ZERO_FEES)).toBe(0)
+    expect(sellFeeFor(small, ZERO_FEES)).toBe(1)
+    // A flat fee keeps the old numbers: 100 € in -> 99 € of stock.
+    expect(buy(100, 1, 1, 0, { buy: 1, sell: 1, fractional: true }).invested).toBeCloseTo(99)
+  })
+
+  it('charges the fee when a sale drops below 500 €', () => {
+    const b = buy(600, 50, 1.1, 0, ZERO_FEES)
+    expect(result(b, 0, 0, ZERO_FEES)).toBeCloseTo(b.shares * b.midEur - b.spent)
+    expect(result(b, -0.5, 0, ZERO_FEES)).toBeCloseTo(b.shares * b.midEur * 0.5 - 1 - b.spent)
   })
 })

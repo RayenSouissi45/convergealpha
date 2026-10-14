@@ -84,8 +84,11 @@ describe('Plan page', () => {
     const user = userEvent.setup()
     renderAt('/plan')
     await screen.findByRole('list', { name: 'Best fits' })
+    // finanzen.net zero's rule by default: free from 500 €, 1 € below.
+    expect(screen.getByText(/^Costs: finanzen\.net zero fees \(free from €500, else €1\.00\)/)).toBeInTheDocument()
     await user.click(screen.getByText(/^Costs:/))
-    expect(screen.getByText(/Check your broker’s current price list/)).toBeInTheDocument()
+    expect(screen.getByText(/check the broker's current price list/)).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'My own flat fee' }))
     const fee = screen.getByRole('spinbutton', { name: 'Fee per buy (€)' })
     await user.clear(fee)
     await user.type(fee, '5')
