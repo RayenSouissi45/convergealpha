@@ -59,6 +59,8 @@ jobs:
           gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name site-data --dir web/public/data \
             || echo "::warning::Could not get site-data from run $run_id; publishing without data."
 
+      - name: Safe-deploy gate (broken data is not published; the live site keeps its version)
+        run: node web/scripts/gate.mjs web/public/data
       - run: npm ci
         working-directory: web
       - run: npm run build

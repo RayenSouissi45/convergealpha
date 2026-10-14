@@ -150,6 +150,43 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         out[f"p10_{name}"] = np.minimum(out[f"p10_{name}"], out[f"median_{name}"])
         out[f"p90_{name}"] = np.maximum(out[f"p90_{name}"], out[f"median_{name}"])
 
+    # Sector / stock corrections adopted by the one-time research run (corrections-2016-2023-v1).
+    corrections = (
+        json.loads((d / "corrections.json").read_text(encoding="utf-8"))
+        if (d / "corrections.json").is_file()
+        else {}
+    )
+    if corrections:
+        from convergealpha.research import corrections as RCX
+
+        sectors = (
+            t["sector"].reindex(out.index)
+            if "sector" in t
+            else pd.Series(None, index=out.index, dtype=object)
+        )
+        tickers = pd.Series(out.index.astype(str), index=out.index)
+        for name, c in corrections.items():
+            if f"p_up_{name}" in out and c.get("sector"):
+                out[f"p_up_{name}"] = RCX.apply(
+                    out[f"p_up_{name}"].to_numpy(), sectors, tickers, c["sector"], c.get("stock")
+                )
+
+    # Learning from its own results: the chances corrected by a fixed rule from live outcomes.
+    live_cal: dict[str, Any] = {}
+    tr = getattr(ctx, "extras_tr", None)
+    if tr is not None:
+        try:
+            from convergealpha.ledger import report_card as RC
+            from convergealpha.models import live_calibration as LC
+
+            live_cal = LC.fit(RC.outcomes(ctx.paths.data, tr, pd.Timestamp(src.as_of), raw=True))
+            for name, c in live_cal.items():
+                if f"p_up_{name}" in out:
+                    out[f"p_up_raw_{name}"] = out[f"p_up_{name}"]
+                    out[f"p_up_{name}"] = LC.apply(out[f"p_up_{name}"].to_numpy(), c["shift"])
+        except Exception as e:  # never stops the forecasts; the correction is simply not applied
+            log.warning("live calibration skipped: %s", e)
+
     # Meta-model on today's top 5% by L1.
     if cal.meta is not None:
         mf = f.copy()
@@ -221,6 +258,8 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
             "model_version": meta["version"],
             "model_trained_at": meta["trained_at"],
             "model_metrics": meta.get("metrics"),
+            "live_calibration": live_cal or None,
+            "corrections": {h: sorted(c) for h, c in corrections.items()} or None,
         },
         "version": meta["version"],
     }

@@ -36,6 +36,17 @@ jobs:
           cache: pip
           cache-dependency-path: pipeline/pyproject.toml
       - run: pip install ./pipeline
+      - name: Get the model bundle the daily builds use now (for the gate)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow weekly.yml --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          mkdir -p "$RUNNER_TEMP/prev-models"
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name models --dir "$RUNNER_TEMP/prev-models" \
+              || echo "::warning::could not get the current bundle; the gate checks the new one alone"
+          fi
       - name: Refresh XBRL fundamentals (bulk file; only new facts are stored)
         run: python -m convergealpha bootstrap fundamentals --data data --cache "${{ runner.temp }}/cache"
         env:
@@ -48,8 +59,14 @@ jobs:
           OPENFIGI_API_KEY: ${{ secrets.OPENFIGI_API_KEY }}
       - name: Train and validate
         run: python -u -m convergealpha weekly --data data --models models-out --out site-validation
+      # A worse model is not published: the daily builds keep the last bundle that passed.
+      - name: Model gate
+        id: gate
+        continue-on-error: true
+        run: python -m convergealpha model-gate --data data --models models-out --previous "$RUNNER_TEMP/prev-models"
       - run: scripts/data-commit.sh data "weekly models + validation (run ${{ github.run_id }})"
-      - uses: actions/upload-artifact@v7
+      - if: steps.gate.outcome == 'success'
+        uses: actions/upload-artifact@v7
         with:
           name: models
           path: |
@@ -60,9 +77,15 @@ jobs:
           if-no-files-found: error
       # Scheduled workflows in public repos are disabled after 60 days without activity.
       - name: Keep the schedules alive
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for wf in daily.yml intraday.yml weekly.yml; do
             gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/enable" || echo "could not enable $wf"
           done
+      - name: Mark the run failed when the model gate failed (the daily builds keep the previous bundle)
+        if: steps.gate.outcome != 'success'
+        run: |
+          echo "::error::The new model failed the gate (see data/state/model_gate.json); it was not published."
+          exit 1

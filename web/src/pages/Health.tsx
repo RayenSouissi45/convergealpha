@@ -1,5 +1,6 @@
 import { Icon } from '../components/Icon'
 import { Missing } from '../components/Missing'
+import { DataQualityCard, IncidentsCard } from '../components/Reliability'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader, Row, type Tone } from '../components/ui'
 import { formatAge, formatDateTime, formatNewYork, isStale } from '../lib/format'
@@ -73,6 +74,28 @@ function Models({ data }: { data: HealthData }) {
             {`AUC ${m.auc_correct?.toFixed(3) ?? '—'} · Brier ${m.brier_correct?.toFixed(4) ?? '—'} vs ${m.brier_base?.toFixed(4) ?? '—'}`}
           </Row>
         )}
+        <Row label={<Tip content="Every week the new model is compared with the one in use on the same past years. If it is worse (Brier more than 2% worse, AUC 0.01 lower, ranges off, or less data), it is not used and the previous model stays.">Weekly model check</Tip>}>
+          {data.model_gate ? (
+            <Badge tone={data.model_gate.passed ? 'good' : 'warn'}>
+              {data.model_gate.passed ? 'passed' : 'failed: previous model kept'} · in use {data.model_gate.in_use ?? '—'}
+            </Badge>
+          ) : (
+            <Missing reason="Starts with the next weekly training (Saturday)." />
+          )}
+        </Row>
+        <Row label={<Tip content="The chances of rising are corrected by a fixed rule from the app's own live results (never from the 2024–2026 test years). It starts after 4 independent periods per horizon and gets half weight after 26.">Learning from its own results</Tip>}>
+          {data.live_calibration ? (
+            <span className="flex flex-col items-end gap-0.5 text-xs font-normal">
+              {Object.entries(data.live_calibration).map(([h, c]) => (
+                <span key={h}>
+                  {h}: {c.active ? `${c.shift >= 0 ? '+' : '−'}${Math.abs(c.shift).toFixed(3)} log-odds (weight ${Math.round(c.weight * 100)}%)` : `waiting (${c.periods} of 4 periods)`}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <Missing reason="Needs the trained model bundle." />
+          )}
+        </Row>
         <Row label={<Tip content="No new BUY labels if the live strategy falls 15% from its peak, its rolling 12-month excess is below −5%, or the data fails to update.">Kill switch</Tip>}>
           {data.kill_switch.implemented ? (data.kill_switch.active ? <Badge tone="bad">Active</Badge> : <Badge tone="good">Off</Badge>) : <Missing reason="Not computed in this run." />}
         </Row>
@@ -193,6 +216,8 @@ export default function Health() {
         <div className="grid gap-3 md:grid-cols-2">
           <Overview data={health.data} />
           <Models data={health.data} />
+          <DataQualityCard data={health.data} />
+          <IncidentsCard />
           <Sources data={health.data} />
           <Secrets data={health.data} />
         </div>

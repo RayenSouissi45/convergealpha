@@ -292,7 +292,7 @@ with the same reference values.
   − money spent. Round-trip cost of a position worth V = (buy fee + sell fee)/V + spread; cost of
   switching one position for another = (sell fee + buy fee)/V + spread_out/2 + spread_in/2.
 - Dividends (strategies only): credited to cash on the ex-date at 85% (15% US withholding tax with
-  a W-8BEN form). German taxes are not modelled.
+  a W-8BEN form). German taxes: section 19 (your own results); the paper strategies show results before tax.
 
 ## 16. Opportunity badge
 
@@ -483,7 +483,117 @@ amount (2-position strategies split it in half), shows costs, the opportunity co
 1-month Plan verdict, and marks as best overall the green or amber suggestion with the highest
 chance of ending with more money.
 
-## 19. Known biases and limits
+## 19. Your money: tax, goal and your own trade journal
+
+Everything here runs in the browser; your journal, rules and tax profile never leave it.
+
+**German tax (2026 rules, `web/src/lib/taxes.ts`, dated sources in the file).** Flat tax 25% plus
+5.5% solidarity surcharge (26.375%); with church tax the flat tax is (e − 4q)/(4 + k) (§ 32d EStG;
+e = income, q = foreign tax credited, k = 8% or 9%). Saver's allowance 1,000 € a year (2,000 € joint), used first.
+Equity ETFs (at least 51% stocks): 30% of gains and payouts are tax free; the yearly advance tax on
+funds (Vorabpauschale) uses the Basiszins (2026: 3.20%). US dividends: 15% withheld at source
+(W-8BEN), counted toward the German tax. Germany sells first-bought shares first (FIFO), so the app
+never lets you "choose" lots. Results are shown before and after tax where you act (Plan's middle
+result, sells, the yearly summary, the goal planner). Your bank's yearly tax statement is the
+official number.
+
+**Goal planner (`web/src/lib/goal.ts`).** 4,000 possible futures replayed from about 100 years of
+monthly US market history (Kenneth R. French Data Library: total market, 1-month T-bill rate,
+inflation), drawn in 12-month blocks so crashes and recoveries keep their real shape (seed fixed:
+the same plan always shows the same picture). Inputs: money now (minus emergency cash kept aside),
+monthly amount, years, the share in stocks (the rest earns the T-bill rate), the fund's yearly cost,
+"today's euros" (after inflation) and "be cautious" (stocks earn 2 points a year less than in
+history). Outputs: the chance of reaching the goal, the bad / middle / good outcome by year, the
+monthly amount needed for an 8-in-10 chance, simpler alternatives and the result after German tax.
+It is history replayed, not a forecast; US data in dollars stands in for a world ETF in euros.
+
+**Trade journal and portfolio (`web/src/lib/journal.ts`, `risk.ts`, `portfolio.ts`).** You log
+real trades (euros, fee, reason, "I'm wrong if…", the app's view at that moment). Holdings,
+average costs and realized results follow German FIFO. Your written rules (investment policy:
+goal, horizon, largest loss you accept, stocks, share per stock, trades per month, smallest order,
+cooling-off hours, only finanzen.net zero, no earnings within N days) are checked before every
+trade; the app warns, it never blocks. Cooling-off: a buy after +10% in a week or a ±7% day, a
+sale after −8% in a week, or 2+ trades within the cooling-off period suggests waiting. Risk: a
+bad month as the average loss in the worst 1 in 20 months (bell-curve CVaR from each stock's
+volatility, correlation 0.7 inside a cluster, 0.5 inside a sector, 0.3 otherwise, 0.8 in a
+crash), every stock −20% at once, the biggest holding gapping −20% overnight, sector and cluster
+concentration, and a before/after view of a planned trade. Drawdown brake: 10% below the peak =
+half-size new positions, 15% = no new buys. Review: trades and fees this month vs your limit,
+chasing and panic counts, winners sold earlier than losers, whether ignoring warnings paid off,
+and each closed trade scored as good/weak decision × good/bad result.
+
+## 20. Research run once (fixed protocols and the experiment log)
+
+A question about the past is answered by a protocol written in code before the run (its settings
+hashed into a digest); it may run once (`already_run` refuses a second run; an audit re-run does
+not record). Only 2016-2023 is used; the 2024-2026 holdout is never read. Every run, failures
+included, is appended to `ledger/experiments.jsonl` (hash-chained, published as experiments.json),
+so a lucky result cannot hide behind unreported tries.
+
+- `rules-2016-2023-v1` (sell rules and entry timing, `research/rules.py`): run 14 Oct 2026. Chosen:
+  −5% stop / +6% take-profit / 63 days (best score in both halves), entry at the next open. The
+  trade-off is published (section 18, version 2).
+- `corrections-2016-2023-v1` (sector and stock corrections of the chances of rising,
+  `research/corrections.py`): fit on 2016-2020, judged on 2021-2023; adopt only if the test Brier
+  improves by 0.2%+ and in 2 of 3 years. Run 14 Oct 2026: **nothing adopted**. Every correction made
+  the test years worse (1 week −0.19%, 1 month −0.16%, 3 months −0.34%, 6 months −0.74%); the
+  sector biases of 2016-2020 (e.g. Energy) reversed in 2021-2023. The weekly job refits only
+  adopted corrections, so none is applied.
+
+## 21. Reliability: checks, records and rollbacks
+
+- **Price checks before use (`quality.py`).** Every eligible stock (and every paper holding) is
+  checked each day: impossible values (≤ 0, high below low, close more than 1% outside the day's
+  range), a move of more than 50% without a recorded split, the same close for 5 days. Up to 55
+  stocks (flagged jumps first, then the strategies' holdings and orders, SPY and yesterday's top
+  picks) are compared with Finnhub's free quote: within 2% = confirmed (a confirmed jump is real
+  news, not bad data); 2-10% apart = a warning; more than 10% = wrong data. A failing stock is
+  blocked for new buys that day ("price data failed a check"); stored prices are never changed.
+- **Incident log (`ledger/incidents.py`).** Each build checks: a core source failed, under 90% of
+  stocks priced, a price check blocked stocks, ECB vs FRED gap above its limit, a ledger failed
+  verification, paper trading did not run normally, the kill switch, the fallback forecasts, a
+  model that failed the weekly gate. An incident is opened the first day and resolved the first
+  day it passes; quiet days are recorded too. Hash-chained, published in full (incidents.json,
+  Health).
+- **Safe deploy (`web/scripts/gate.mjs`).** Before the site is published, its data is compared with
+  the live site: unparsable files, missing core files, fewer than half the live site's stocks, or
+  data older than what is live stop the deploy, so the live site keeps its previous version.
+- **Weekly model gate (`models/gate.py`).** A new bundle is used only if, on the same 2016-2023
+  walk-forward years, its Brier score is at most 2% worse, its AUC at most 0.01 lower, each 80%
+  range holds 70-90% of outcomes, and its training data did not shrink by more than 10%.
+  Otherwise the weekly run fails and the daily builds keep downloading the last bundle that passed.
+- **Replay any day (`paper/replay.py`).** The table the strategies decide from is stored each day
+  with its SHA-256 in every day entry. `python -m convergealpha replay-paper --date YYYY-MM-DD`
+  rebuilds the books from the ledger, runs that day again with the stored inputs, prices and the
+  recorded EUR/USD rate, and compares every fill, order, value and reason with the ledger (floats
+  rounded as the ledger stores them). Possible for days from 15 Oct 2026.
+- **Public fingerprints.** Each day `commitment.json` holds the SHA-256 of the forecasts, of the
+  strategies' inputs and of this month's forecast archive, and the latest hash of every ledger; the
+  daily workflow appends it to the public repository's `ledger-heads` branch, where GitHub records
+  the time. A forecast or trade changed later would no longer match.
+- Dependabot proposes grouped dependency updates weekly (CI tests each one).
+
+## 22. Learning from its own results
+
+- **Live report card (`ledger/report_card.py`, Scorecard page).** Every eligible stock's chance of
+  rising, from every day's first forecast, is compared with its real total return once the
+  horizon has passed: how often stocks given 60%+ rose and stocks given 40% or less fell (95%
+  Wilson ranges), the Brier score against the usual up rate of 2016-2023, and the share that rose
+  per chance bucket. Losers count like winners. Forecasts of consecutive days overlap in time, so
+  the ranges are too narrow; the number of forecast days is shown with them. First results: 1 week
+  on 19 Oct 2026, 1 month on 10 Nov 2026. The monthly forecast archive is public
+  (`data/forecasts/YYYY-MM.json`, chances in thousandths).
+- **Live correction (`models/live_calibration.py`).** For each horizon, once at least 4 independent
+  periods have matured: gap = log-odds(share that rose) − log-odds(average chance given), weight =
+  periods / (periods + 26), shift = weight × gap capped at ±0.5 log-odds, applied to every chance
+  of that horizon (the order of stocks never changes). It is fitted on the model's chances before
+  the correction (stored as `p_up_raw_*`), so it cannot feed on itself, and only on live forecasts
+  (from 12 Oct 2026), never on the holdout.
+- **Drift actions.** When 3 or more model inputs drift (PSI above 0.25 against the last two years of
+  training data), the position plan sizes new positions at half, and the daily workflow starts the
+  weekly retraining early (if the model is more than 3 days old).
+
+## 23. Known biases and limits
 
 - **Survivorship bias**: free price history mostly lacks delisted stocks. Every backtested excess
   return is **halved** before it is shown, and the "+1%/yr over the best baseline" check uses the
@@ -491,5 +601,6 @@ chance of ending with more money.
 - **Short opinion history**: analyst snapshots start on 2026-10-12; F1 and F2 enter the models
   only when enough live history exists.
 - Yahoo data is unofficial and can change without notice; data-quality checks (split repair,
-  zero/negative prices, stale feeds) and the Health page show coverage every day.
+  impossible, jumping and frozen prices, a Finnhub cross-check; section 21) and the Health page
+  show coverage every day.
 - IFRS filers have no F6 (only US-GAAP XBRL is parsed).

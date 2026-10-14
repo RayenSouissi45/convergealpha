@@ -3,7 +3,8 @@ import { Link } from 'react-router'
 import { formatDay, formatMoney, formatPct, formatPctAbs, formatPrice } from '../../lib/format'
 import { formatEur } from '../../lib/costs'
 import { useFx } from '../../lib/fx'
-import { holdingStatus, limitChecks, throttle, usePortfolioView } from '../../lib/portfolio'
+import { driftBrake, holdingStatus, limitChecks, throttle, usePortfolioView } from '../../lib/portfolio'
+import { useHealth } from '../../lib/health'
 import { useScreener } from '../../lib/screener'
 import type { Reliability, ScreenerRow } from '../../types'
 import { positionShares } from '../../lib/sizing'
@@ -349,9 +350,11 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
   const equityEur = Number(equityInput) > 0 ? Number(equityInput) : null
   const equity = equityEur !== null && fx ? equityEur * fx.rate : null
   const t = throttle({ ...portfolio, equity: equity ?? portfolio.equity })
+  const health = useHealth()
+  const drift = driftBrake(health.state === 'ready' ? health.data.drift : null)
   const sizing =
     equity && p.p_lower !== null && p.payoff_b !== null
-      ? positionShares({ equity, entry: p.entry, exit: p.planned_exit, gap: p.gap_stress, pLower: p.p_lower, payoffB: p.payoff_b, tierMultiplier: p.tier_multiplier, advShares: p.adv_shares, throttle: t.factor })
+      ? positionShares({ equity, entry: p.entry, exit: p.planned_exit, gap: p.gap_stress, pLower: p.p_lower, payoffB: p.payoff_b, tierMultiplier: p.tier_multiplier, advShares: p.adv_shares, throttle: t.factor * drift.factor })
       : null
   const isBuy = label === 'BUY' || label === 'STRONG BUY — TOP CONVICTION'
   const rows = screener.state === 'ready' ? screener.data.byTicker : new Map()
@@ -401,6 +404,11 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
           </>
         ) : (
           <Row label="Shares">{equity ? <Missing reason="Needs a chance and payoff estimate for this stock." /> : 'Enter your account value'}</Row>
+        )}
+        {drift.text && (
+          <p role="note" className="my-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/60 dark:text-amber-100">
+            {drift.text}
+          </p>
         )}
         <Row label="Move stop to break-even after">{formatPrice(p.breakeven_after)}</Row>
         <Row label="Sell a third at">{`${formatPrice(p.sell_third_at)}, then trail at highest close − ${p.trail_atr_multiple} ATR`}</Row>

@@ -267,6 +267,10 @@ def decide(
     cols = pd.DataFrame.from_dict(out_cols, orient="index")
     for c in cols.columns:
         t[c] = cols[c].reindex(t.index)
+    if model is not None:  # the chances before the live correction, kept for the record
+        for k in HORIZON_NAMES.values():
+            if f"p_up_raw_{k}" in model:
+                t[f"p_up_raw_{k}"] = model[f"p_up_raw_{k}"].reindex(t.index)
     t["cluster"] = correlation_clusters(src.panel, t.index[elig].tolist()).reindex(t.index)
     # Insider buys filed in the last 7 days (Today page list).
     t["insider_buy_7d"] = _insider_7d(src, t, as_of)
@@ -331,6 +335,7 @@ def decide(
             "eligible",
         ]
         + [f"p_up_{k}" for k in HORIZON_NAMES.values()]
+        + [f"p_up_raw_{k}" for k in HORIZON_NAMES.values()]
         + [f"p_beat_{k}" for k in HORIZON_NAMES.values()]
     )
     snap = t[[c for c in snapshot_cols if c in t]].copy()

@@ -86,9 +86,9 @@ describe('health page', () => {
     expect(await screen.findByText(/data sources live/)).toBeInTheDocument()
     expect(screen.getByText('Daily prices (Yahoo Finance)')).toBeInTheDocument()
     expect(screen.getByText('SEC_USER_AGENT')).toBeInTheDocument()
-    // health.json is fetched once and shared by the whole app.
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/data\/health\.json$/)
+    // health.json is fetched once and shared by the whole app (the incident log is its own file).
+    const healthCalls = fetchMock.mock.calls.filter((c) => /data\/health\.json$/.test(String(c[0])))
+    expect(healthCalls).toHaveLength(1)
   })
 
   it('says plainly when the pipeline has not run yet', async () => {

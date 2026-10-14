@@ -604,3 +604,34 @@ def test_benchmark_buys_once_with_a_fraction_and_holds(tmp_path: Path) -> None:
 def test_max_drawdown() -> None:
     assert E.max_drawdown([200, 210, 189, 220]) == pytest.approx(189 / 210 - 1)
     assert E.max_drawdown([200, 201]) == 0.0
+
+
+# --------------------------------------------------------------------------- replay
+
+
+def test_a_past_day_replays_exactly_from_the_stored_inputs(tmp_path: Path) -> None:
+    from convergealpha.paper import replay as RP
+
+    pnl = panel({"AAA": [50.0] * 9 + [51.0, 49.0, 52.0], "BBB": [40.0] * 12, "SPY": [660.0] * 12})
+    t = table(
+        {"AAA": {"pick_balanced": 85.0}, "BBB": {}, "SPY": {"price": 660.0, "eligible": False}}
+    )
+    specs = (spec("balanced"), S.SPECS_V2[0], S.BENCHMARK_V2)
+    for i in (8, 9, 10):
+        d = DAYS[i]
+        rel, sha = RP.save_inputs(tmp_path, t, d, pd.Timestamp("2026-10-15 21:00"))
+        inputs = {"paper_inputs": rel, "paper_inputs_sha256": sha, "validated": VAL, "base_up_1m": 0.56, "why_not": None}  # fmt: skip
+        E.run(tmp_path, pnl, FX2, d, E.Today(t, VAL, 0.56, True, None, inputs), f"r{i}", specs)
+    out = RP.replay_day(tmp_path, pnl, "2026-10-15", specs)
+    assert out["mismatched"] == 0 and out["matched"] == 3, out
+    # A changed price shows up as a mismatch, naming what differs.
+    bad = panel({"AAA": [50.0] * 9 + [51.0, 47.0, 52.0], "BBB": [40.0] * 12, "SPY": [660.0] * 12})
+    out = RP.replay_day(tmp_path, bad, "2026-10-15", specs)
+    assert out["strategies"]["balanced-v1"]["status"] == "mismatch"
+    assert any("value_eur" in d for d in out["strategies"]["balanced-v1"]["differences"])
+    # An edited inputs file is caught by its SHA-256.
+    p = tmp_path / rel
+    df = pd.read_parquet(p)
+    df.loc[0, "price"] = 1.0
+    df.to_parquet(p)
+    assert RP.replay_day(tmp_path, pnl, "2026-10-15", specs)["strategies"]["balanced-v1"]["why"].endswith("(SHA-256 differs)")  # fmt: skip

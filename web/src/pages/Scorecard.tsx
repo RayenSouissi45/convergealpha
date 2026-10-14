@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Link } from 'react-router'
 import type { ReliabilityPoint } from '../components/ReliabilityChart'
 import { LabelBadge } from '../components/LabelBadge'
+import { CommitmentCard, LiveReportCard } from '../components/ReportCard'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { useSiteJson } from '../lib/data'
@@ -56,6 +57,8 @@ export default function Scorecard() {
     <>
       <PageHeader title="Scorecard" subtitle="Predicted vs what actually happened. Every prediction is recorded before its outcome." />
       <div className="space-y-3">
+        <LiveReportCard />
+        <CommitmentCard repoUrl={import.meta.env.VITE_REPO_URL} />
         {lg.state === 'ready' && (
           <Card title="Prediction ledger" aside={<Badge tone={lg.data.verified ? 'good' : 'bad'}>{lg.data.verified ? 'Hash chain verified' : 'Chain broken'}</Badge>}>
             <p className="text-sm">

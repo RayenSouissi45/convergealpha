@@ -189,6 +189,88 @@ def _cmd_research_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_research_corrections(args: argparse.Namespace) -> int:
+    import json
+
+    import pandas as pd
+
+    from convergealpha.ledger import experiments as X
+    from convergealpha.research import corrections as RC
+    from convergealpha.util.io import write_json
+
+    data = Path(args.data)
+    digest = RC.protocol_digest()
+    if X.already_run(data, RC.PROTOCOL_ID, digest) and not args.repeat_for_audit:
+        log.error("protocol %s (%s) already ran: a protocol is tested once", RC.PROTOCOL_ID, digest)
+        return 1
+    oos = pd.read_parquet(Path(args.models) / "oos_devval.parquet")
+    meta = Path(args.models) / "meta.json"
+    model_version = json.loads(meta.read_text(encoding="utf-8")).get("version") if meta.is_file() else None  # fmt: skip
+    res = {**RC.evaluate(oos), "model_version": model_version}
+    write_json(res, data / "validation" / "corrections_research.json", pretty=True)
+    if not args.repeat_for_audit:
+        X.record(
+            data,
+            {
+                "experiment": "sector and stock corrections of the chances of rising",
+                "question": "Does a small correction per sector (and per stock) make the chances of rising more accurate?",
+                "protocol_id": RC.PROTOCOL_ID,
+                "protocol_digest": digest,
+                "period": res["period"],
+                "model_version": model_version,
+                "status": "done",
+                "summary": {
+                    h: {"gain_sector": v["gain_sector"], "gain_stock": v["gain_stock"]}
+                    for h, v in res["horizons"].items()
+                },
+                "decision": res["decision"],
+            },
+        )
+    log.info("research corrections: %s", res["decision"])
+    return 0
+
+
+def _cmd_model_gate(args: argparse.Namespace) -> int:
+    import json
+
+    from convergealpha.models import gate as G
+    from convergealpha.util.io import write_json
+
+    new = json.loads((Path(args.models) / "meta.json").read_text(encoding="utf-8"))
+    prev_path = Path(args.previous) / "meta.json"
+    prev = json.loads(prev_path.read_text(encoding="utf-8")) if prev_path.is_file() else None
+    res = G.check(new, prev)
+    write_json(res, Path(args.data) / "state" / "model_gate.json", pretty=True)
+    for c in res["checks"]:
+        log.info("model gate %s: %s (%s)", c["check"], "ok" if c["ok"] else "FAILED", c["detail"])
+    if not res["passed"]:
+        log.error("model gate failed: %s is not published; the daily builds keep %s", res["new"], res["previous"])  # fmt: skip
+        return 1
+    return 0
+
+
+def _cmd_replay_paper(args: argparse.Namespace) -> int:
+    import json
+
+    from convergealpha.ledger import ledger as LG
+    from convergealpha.paper import engine as PE
+    from convergealpha.paper import replay as RP
+    from convergealpha.sources import prices as P
+
+    data = Path(args.data)
+    entries = LG.read(data / PE.LEDGER)
+    tickers = {str(e["ticker"]) for e in entries if e.get("ticker")}
+    for e in entries:
+        rel = (e.get("inputs") or {}).get("paper_inputs") if e.get("date") == args.date else None
+        if rel and (data / rel).is_file():
+            tickers |= set(RP.load_inputs(data, rel).index.astype(str))
+            break
+    panel = P.build_panel(P.load_rows(data, sorted(tickers)))
+    out = RP.replay_day(data, panel, args.date)
+    print(json.dumps(out, indent=2))
+    return 1 if out["mismatched"] else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv(REPO_ROOT / ".env")
     logutil.setup()
@@ -264,6 +346,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--models", default="models-out", help="model bundle with oos_devval.parquet")
     p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
     p.set_defaults(func=_cmd_research_rules)
+
+    p = sub.add_parser(
+        "research-corrections", help="test sector and stock corrections on 2016-2023 (once)"
+    )
+    common(p)
+    p.add_argument("--models", default="models-out", help="model bundle with oos_devval.parquet")
+    p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
+    p.set_defaults(func=_cmd_research_corrections)
+
+    p = sub.add_parser(
+        "model-gate", help="compare a new weekly model bundle with the one in use (rollback)"
+    )
+    common(p)
+    p.add_argument("--models", default="models-out", help="the new bundle")
+    p.add_argument("--previous", required=True, help="the bundle the daily builds use now")
+    p.set_defaults(func=_cmd_model_gate)
+
+    p = sub.add_parser(
+        "replay-paper", help="replay one day of paper trading and compare it with the ledger"
+    )
+    common(p)
+    p.add_argument("--date", required=True, help="YYYY-MM-DD")
+    p.set_defaults(func=_cmd_replay_paper)
 
     p = sub.add_parser("universe", help="refresh the stock universe only")
     common(p)

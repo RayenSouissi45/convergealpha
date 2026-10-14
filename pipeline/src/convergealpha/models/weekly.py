@@ -103,6 +103,13 @@ def run(ctx: RunContext, out_dir: Path) -> dict[str, Any]:
     oos.to_parquet(out_dir / "oos_devval.parquet", index=False)
     cal = T.calibrate(oos, cfg)
     T.fit_meta(oos, cal)
+    # Sector / stock corrections: only the horizons the one-time research run adopted.
+    research = ctx.paths.data / "validation" / "corrections_research.json"
+    if research.is_file():
+        from convergealpha.research import corrections as RCX
+
+        decision = json.loads(research.read_text(encoding="utf-8")).get("decision") or {}
+        write_json(RCX.refit(oos, cal.up, decision), out_dir / "corrections.json")
     # "How often was it right?" tables (dev + validation years only; not part of the config).
     from convergealpha.models import reliability as RL
 

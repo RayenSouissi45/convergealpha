@@ -79,6 +79,15 @@ export function throttle(p: PortfolioState): { factor: number; drawdown: number 
   return { factor: 1, drawdown: dd, text: 'Normal risk.' }
 }
 
+/** Drift brake: when 3 or more model inputs look different from what the model learned on
+ * (PSI above 0.25), new positions are sized at half until the next retraining. */
+export const DRIFT_ALERTS = 3
+export function driftBrake(drift: { alerts: string[] } | null | undefined): { factor: number; text: string | null } {
+  const n = drift?.alerts.length ?? 0
+  if (n >= DRIFT_ALERTS) return { factor: 0.5, text: `The market looks different from what the model learned on (${n} inputs drifted): new positions at half size until it is retrained.` }
+  return { factor: 1, text: null }
+}
+
 // ---------------------------------------------------------------- holding labels
 
 export type HoldingLabel = 'HOLD' | 'ROTATE' | 'SELL / RISK WARNING'

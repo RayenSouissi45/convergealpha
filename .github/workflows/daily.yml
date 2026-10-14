@@ -134,8 +134,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      contents: read
-      actions: read
+      contents: write  # only to append the day's fingerprints to the ledger-heads branch
+      actions: write  # to start an early retraining when the inputs drifted
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
@@ -174,6 +174,25 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       - if: ${{ !inputs.tickers }}
         run: scripts/data-commit.sh data "build (run ${{ github.run_id }})"
+      - name: Retrain early when many model inputs drifted (the weekly job runs again)
+        if: ${{ !inputs.tickers }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(jq '(.drift.alerts // []) | length' site-data/health.json)
+          trained=$(jq -r '.model_trained_at // empty' site-data/health.json)
+          if [ "$n" -ge 3 ] && [ -n "$trained" ] && [ $(( $(date +%s) - $(date -d "$trained" +%s) )) -gt 259200 ]; then
+            gh workflow run weekly.yml --repo "$GITHUB_REPOSITORY" && echo "::notice::$n model inputs drifted: early retraining started"
+          else
+            echo "drift alerts: $n; no early retraining"
+          fi
+      - name: Publish today's fingerprints (public, timestamped by GitHub)
+        if: ${{ !inputs.tickers }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/publish-heads.sh site-data/commitment.json
       # The site JSON is public anyway (it is the website). deploy.yml reuses it for code-only
       # redeploys between daily runs.
       - uses: actions/upload-artifact@v7

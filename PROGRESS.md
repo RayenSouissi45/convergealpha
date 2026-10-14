@@ -343,6 +343,18 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 106. All five version 2 strategies use the sell rule chosen by protocol rules-2016-2023-v1 (−5% / +6% / 63 days): it was fixed before the run and tested once on 2016–2023; its cost (a lower average trade) is shown on Validation and in METHODOLOGY.
 107. Up to 8 stocks for Balanced, Safe upside and Confidence, 4 for the two high-risk ideas: more stocks spread the risk of one bad pick; the high-risk ideas keep fewer, larger positions by design.
 108. The page shows version 2 by default once it has started, with version 1 one tap away; links carry `?v=1` only when it differs from the default, so old links still work.
+109. Prices are checked before use (impossible, +/-50% without a split, frozen 5 days) only for eligible stocks and the strategies' holdings: on real data the frozen check flagged dozens of $10 SPAC shells that can never get a signal.
+110. A failing stock is blocked for new buys ("price data failed a check") instead of being dropped or repaired: stored prices stay untouched and the reason is visible.
+111. The second source is Finnhub's free quote for at most 55 stocks a day (jumps first, then holdings, orders and top picks), inside its 60-calls-a-minute limit; a confirmed jump is real news and is not blocked.
+112. The incident log records quiet days too, so "no incident" is a fact in the record rather than a missing line.
+113. The deploy gate compares new site data with the live site; it also stops an older intraday run from overwriting a newer daily build (a real race between the two workflows).
+114. The weekly model gate fails the weekly run rather than publishing a worse bundle; the daily builds already take the latest successful run, so the rollback needs no new mechanism.
+115. Exact replay stores the strategies' inputs at full precision (not the float32 scores snapshot) and compares with the ledger's 6-decimal rounding; days before 15 Oct cannot be replayed (inputs were not stored).
+116. Daily fingerprints go to a separate `ledger-heads` branch of the public repo (GitHub timestamps them); main stays clean and CI does not run on it.
+117. The live report card counts every eligible stock every day, losers included, and says that overlapping windows make its ranges too narrow instead of hiding it.
+118. The live correction shifts only the overall level (log-odds) per horizon, starts after 4 independent periods and needs 26 for half weight; per-stock live corrections would chase noise with this little data.
+119. Sector and stock corrections were tested once (fit 2016-2020, judged 2021-2023) and rejected by the fixed rule: they made every horizon worse. The failed try stays in the experiment log; nothing is applied.
+120. Drift with 3+ inputs above PSI 0.25 halves new position sizes and starts the weekly training early (at most when the model is 3+ days old); a single drifting input only shows on Health.
 
 ## Questions for the owner
 

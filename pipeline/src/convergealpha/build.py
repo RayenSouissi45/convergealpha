@@ -23,6 +23,7 @@ from convergealpha.sources import macro as M
 from convergealpha.sources import prices as P
 from convergealpha.sources import sec_meta as S
 from convergealpha.sources import yahoo as Y
+from convergealpha.util.io import read_json
 from convergealpha.util.log import get
 
 if TYPE_CHECKING:
@@ -268,6 +269,94 @@ def fx_check(fred: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def quality_step(
+    ctx: RunContext, panel: P.Panel, as_of: pd.Timestamp, t: pd.DataFrame
+) -> dict[str, Any]:
+    """Today's prices checked before anything uses them; failing stocks are blocked for new
+    buys. The second source (Finnhub) is asked about what matters most."""
+    from convergealpha import quality as Q
+    from convergealpha.config import SPY, secret
+    from convergealpha.ledger import ledger as LG
+    from convergealpha.paper import engine as PE
+    from convergealpha.paper import strategies as PS
+
+    must: list[str] = [SPY]
+    try:
+        books = PE.replay(LG.read(ctx.paths.data / PE.LEDGER), PS.ALL_SPECS)
+        must += sorted({tk for b in books.values() for tk in (*b.positions, *(o.ticker for o in b.pending))})  # fmt: skip
+    except Exception as e:
+        log.warning("price check: could not read the paper holdings: %s", e)
+    ranked: list[str] = []
+    try:
+        snaps = sorted((ctx.paths.data / "snapshots").glob("*/*/scores.parquet"))
+        snaps = [s for s in snaps if s.parent.name < as_of.strftime("%Y%m%d")]
+        for f in reversed(snaps[-5:]):
+            prev = pd.read_parquet(f)
+            if "pick_rank" in prev:
+                ranked = prev.dropna(subset=["pick_rank"]).sort_values("pick_rank")["ticker"].astype(str).head(25).tolist()  # fmt: skip
+                break
+    except Exception as e:
+        log.warning("price check: could not read yesterday's picks: %s", e)
+    key = secret("FINNHUB_API_KEY", ctx.env)
+    # Only stocks that can get a signal (eligible) and what the strategies hold matter here: tiny
+    # SPAC shells sit at the same price for weeks and are not eligible anyway.
+    eligible = [str(x) for x in t.index[t["eligible"].astype(bool)]]
+    report = Q.run(
+        panel.close,
+        panel.high,
+        panel.low,
+        as_of,
+        list(dict.fromkeys([*eligible, *must])),
+        Q.split_days(panel.split_events),
+        must,
+        ranked,
+        Q.finnhub_quotes(key) if key else None,
+    )
+    n = Q.apply(t, report)
+    if n:
+        log.warning("price check: %d stock(s) blocked for new buys today", n)
+    return report.export()
+
+
+def commitment(
+    ctx: RunContext, day: str, snapshot_paths: dict[str, Path], health: dict[str, Any]
+) -> dict[str, Any]:
+    """Today's fingerprints: the SHA-256 of the forecasts and the head of every sealed ledger.
+    The daily workflow also commits this file to the public repository, so the time it was
+    published is recorded by GitHub, outside the app's control."""
+    import subprocess
+    from datetime import UTC
+
+    from convergealpha.ledger import ledger as LG
+
+    d = ctx.paths.data
+    heads = {}
+    for f in sorted((d / "ledger").glob("*.jsonl")):
+        es = LG.read(f)
+        heads[f.stem] = {"entries": len(es), "head": es[-1]["hash"] if es else None}
+    try:
+        data_commit = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10, check=False).stdout.strip() or None  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        data_commit = None
+    month = ctx.paths.site / "forecasts" / f"{day[:7]}.json"
+    return {
+        "date": day,
+        "generated_at": ctx.now.astimezone(UTC).isoformat(timespec="seconds"),
+        "code_commit": ctx.env.get("GITHUB_SHA"),
+        "data_commit_before_build": data_commit,
+        "model_version": health.get("model_version"),
+        "snapshots": {
+            k: {"path": str(v.relative_to(d)).replace(chr(92), "/"), "sha256": LG.file_sha256(v)}
+            for k, v in snapshot_paths.items()
+        },
+        "forecast_archive": {
+            "path": f"forecasts/{day[:7]}.json",
+            "sha256": LG.file_sha256(month) if month.is_file() else None,
+        },
+        "ledgers": heads,
+    }
+
+
 def paper_step(
     ctx: RunContext,
     panel: P.Panel,
@@ -308,6 +397,20 @@ def paper_step(
         "scores_sha256": LG.file_sha256(snap) if snap else None,
         "model_version": (extra.get("health") or {}).get("model_version"),
     }
+    try:
+        # The exact table the strategies decide from, so any day can be replayed and checked.
+        from convergealpha.paper import replay as RP
+
+        rel, sha = RP.save_inputs(d, t, as_of, ctx.now)
+        inputs |= {
+            "paper_inputs": rel,
+            "paper_inputs_sha256": sha,
+            "validated": list(validated),
+            "base_up_1m": base_up.get("1m"),
+            "why_not": why_not,
+        }
+    except Exception:
+        log.exception("could not store the paper-trading inputs; the day cannot be replayed")
     today = PE.Today(t, validated, base_up.get("1m"), why_not is None, why_not, inputs)
     status = None
     new: list[dict[str, Any]] = []
@@ -349,7 +452,7 @@ def paper_step(
     )
     log.info("paper trading: %d new ledger entries (%d in total), chain %s", len(new), n, "ok" if ok else "BROKEN")  # fmt: skip
     last = max((b.last_day or "" for b in books.values()), default="") or None
-    return {"verified": ok, "detail": why, "entries": n, "new_today": len(new), "last_day": last}
+    return {"verified": ok, "detail": why, "entries": n, "new_today": len(new), "last_day": last, "status": status}  # fmt: skip
 
 
 def _reliability_meta(extra: dict[str, Any]) -> dict[str, Any] | None:
@@ -532,6 +635,11 @@ def build(ctx: RunContext) -> int:
         )
     t["eligible"] = t["eligible"].fillna(False).astype(bool)
     record_coverage(ctx, t, src)
+    try:
+        data_quality: dict[str, Any] | None = quality_step(ctx, panel, as_of, t)
+    except Exception:
+        log.exception("price check failed; nothing was blocked")
+        data_quality = None
 
     regime, _reg_hist = compute_regime(ctx, panel)
 
@@ -812,8 +920,7 @@ def build(ctx: RunContext) -> int:
 
     ctx.save()
     states_all = H.load_states(paths.data)
-    H.write_health(
-        paths.site,
+    health = H.build_health(
         ctx.now,
         ctx.env,
         states_all,
@@ -826,9 +933,41 @@ def build(ctx: RunContext) -> int:
             "brokers": zero_summary,
             "trade_ledger": paper_info,
             "fx_check": fx_check(fred),
+            "data_quality": data_quality,
+            "model_gate": read_json(paths.data / "state" / "model_gate.json", None),
             **extra.get("health", {}),
         },
     )
+    try:
+        from datetime import UTC
+
+        from convergealpha.ledger import incidents as INC
+
+        found = INC.detect(health)
+        INC.record(paths.data, day, found, ctx.now.astimezone(UTC).isoformat(timespec="seconds"))
+        inc = INC.export(paths.data)
+        site.write_json_file(paths.site, "incidents.json", inc)
+        health["incidents"] = {k: inc[k] for k in ("verified", "days_checked", "days_with_open_incident", "since")} | {"open": len(inc["open"])}  # fmt: skip
+    except Exception:
+        log.exception("incident log failed")
+    from convergealpha.util.io import write_json
+
+    try:
+        # The live report card (every forecast vs what happened) and the public forecast archive.
+        from convergealpha.ledger import report_card as RC
+
+        site.write_json_file(paths.site, "report_card.json", RC.export(paths.data, panel.tr, as_of, base_up))  # fmt: skip
+        for month, payload in RC.archive(paths.data).items():
+            site.write_json_file(paths.site, f"forecasts/{month}.json", payload)
+    except Exception:
+        log.exception("report card failed")
+    try:
+        site.write_json_file(
+            paths.site, "commitment.json", commitment(ctx, day, snapshot_paths, health)
+        )
+    except Exception:
+        log.exception("commitment failed")
+    write_json(health, paths.site / "health.json", pretty=True)
     log.info(
         "build done: %d stocks exported for %s in %.0fs", len(t), as_of.date(), time.time() - t0
     )

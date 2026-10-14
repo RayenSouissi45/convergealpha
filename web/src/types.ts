@@ -54,6 +54,44 @@ export interface Health {
   brokers?: BrokerSummary | null
   trade_ledger?: { verified: boolean; detail: string; entries: number; new_today: number; last_day: string | null } | null
   fx_check?: { latest: Partial<Record<'ECB_USD' | 'DEXUSEU', { rate: number; date: string }>>; max_gap_30d: number | null; ok: boolean | null; limit: number } | null
+  /** Today's price checks (impossible, jumps, frozen, a second source). */
+  data_quality?: DataQuality | null
+  incidents?: { verified: boolean; days_checked: number; days_with_open_incident: number; since: string | null; open: number } | null
+  /** The weekly model gate: a worse new model is not used (the previous one stays). */
+  model_gate?: { checked_at: string; new: string | null; previous: string | null; passed: boolean; in_use: string | null; checks: { check: string; ok: boolean; detail: string }[] } | null
+  /** Learning from its own results: the fixed-rule correction per horizon. */
+  live_calibration?: Record<string, { shift: number; weight: number; periods: number; n: number; active: boolean; said?: number; rose?: number }> | null
+}
+
+export interface DataQuality {
+  checked: number
+  cross_checked: number
+  confirmed: number
+  second_source: string | null
+  counts: Record<string, number>
+  blocked: number
+  issues: { ticker: string; kind: string; detail: string; blocks: boolean }[]
+}
+
+export interface IncidentEvent {
+  incident: string
+  status: 'open' | 'resolved'
+  date: string
+  title: string
+  severity?: string | null
+  detail?: string | null
+  opened?: string | null
+}
+
+/** incidents.json: every problem the build noticed, append-only and sealed. */
+export interface IncidentsFile {
+  verified: boolean
+  detail: string
+  days_checked: number
+  days_with_open_incident: number
+  since: string | null
+  open: IncidentEvent[]
+  events: IncidentEvent[]
 }
 
 /** The finanzen.net zero list (gettex shares in ESMA FIRDS, or the owner's manual file). */
