@@ -53,6 +53,7 @@ export interface Health {
   actions_usage?: { month: string; runs: number; wall_minutes: number; billing: string } | null
   brokers?: BrokerSummary | null
   trade_ledger?: { verified: boolean; detail: string; entries: number; new_today: number; last_day: string | null } | null
+  fx_check?: { latest: Partial<Record<'ECB_USD' | 'DEXUSEU', { rate: number; date: string }>>; max_gap_30d: number | null; ok: boolean | null; limit: number } | null
 }
 
 /** The finanzen.net zero list (gettex shares in ESMA FIRDS, or the owner's manual file). */

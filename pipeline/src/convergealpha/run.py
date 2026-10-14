@@ -261,6 +261,19 @@ def job_prepare(ctx: RunContext) -> int:
             log.error("fred failed: %s", e)
             ctx.record("macro", False, detail=f"Update failed: {type(e).__name__}")
     try:
+        ecb = M.fetch_ecb_usd(date(2009, 1, 1))
+        M.store_fred(ctx.paths.data, ecb)
+        ctx.record(
+            "ecb_fx",
+            not ecb.empty,
+            as_of=pd.Timestamp(ecb["date"].max()).strftime("%Y-%m-%d") if not ecb.empty else None,
+            records=len(ecb),
+            detail="EUR/USD reference rate (European Central Bank), daily",
+        )
+    except Exception as e:
+        log.error("ecb failed: %s", e)
+        ctx.record("ecb_fx", False, detail=f"Update failed: {type(e).__name__}")
+    try:
         written = M.update_short_interest(ctx.paths.data, today, today - timedelta(days=75))
         si = M.load_short_interest(ctx.paths.data)
         last = si["settlement"].max() if not si.empty else None

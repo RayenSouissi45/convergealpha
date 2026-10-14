@@ -157,6 +157,33 @@ def fx_series(fred: pd.DataFrame) -> pd.Series:
     return fred[FX_SERIES].dropna().astype(float).sort_index()
 
 
+USER_FX_SERIES = "ECB_USD"  # daily ECB reference rate, for your own calculations
+
+
+def user_fx_series(fred: pd.DataFrame) -> tuple[pd.Series, str, str]:
+    """The rate for your own euro calculations: the ECB's daily reference rate, else FRED's.
+    (series, its id, its source). The first paper strategies keep FRED (their recorded rule)."""
+    if fred is not None and not fred.empty and USER_FX_SERIES in fred:
+        s = fred[USER_FX_SERIES].dropna().astype(float).sort_index()
+        if not s.empty:
+            return s, USER_FX_SERIES, "ECB"
+    return fx_series(fred), FX_SERIES, "FRED"
+
+
+def fx_gap(fred: pd.DataFrame, days: int = 30) -> float | None:
+    """Largest relative gap between the ECB and FRED rates on the same dates in the last `days`
+    days (a cross-check: both are official reference rates taken a few hours apart)."""
+    if fred is None or fred.empty or USER_FX_SERIES not in fred or FX_SERIES not in fred:
+        return None
+    both = fred[[USER_FX_SERIES, FX_SERIES]].dropna()
+    both = (
+        both[both.index >= both.index.max() - pd.Timedelta(days=days)] if not both.empty else both
+    )
+    if both.empty:
+        return None
+    return float((both[USER_FX_SERIES] / both[FX_SERIES] - 1).abs().max())
+
+
 def fx_on(series: pd.Series, day: pd.Timestamp) -> tuple[float, str] | None:
     """The latest published rate dated on or before `day`: (rate, its date)."""
     if series.empty:

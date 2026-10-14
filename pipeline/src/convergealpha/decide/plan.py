@@ -61,6 +61,7 @@ def export(
     reliability: dict[str, Any] | None,
     base_rates: dict[str, float],
     fx: tuple[float, str] | None,
+    fx_source: tuple[str, str] = (C.FX_SERIES, "FRED"),
 ) -> dict[str, Any]:
     keep = t["pick_safety"].notna() if "pick_safety" in t else pd.Series(False, index=t.index)
     c = t[keep]
@@ -103,7 +104,7 @@ def export(
         "research_mode": True,
         "validated": list(validated),
         "horizons": {HORIZON_NAMES[h]: h for h in HORIZONS},
-        "fx": {"rate": fx[0], "date": fx[1], "series": C.FX_SERIES, "source": "FRED"}
+        "fx": {"rate": fx[0], "date": fx[1], "series": fx_source[0], "source": fx_source[1]}
         if fx
         else None,
         "base_up": {k: round(v, 4) for k, v in base_rates.items()},

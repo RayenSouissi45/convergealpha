@@ -112,6 +112,34 @@ def test_euro_conversion_whole_shares_and_leftover() -> None:
     assert C.switch_cost(100.0, 0.001, 0.003) == pytest.approx(0.02 + 0.002)
 
 
+def test_ecb_rate_parsed_and_preferred_for_your_numbers_fred_kept_for_the_first_strategies() -> (
+    None
+):
+    from convergealpha.sources import macro as M
+
+    csv = "\n".join(
+        [
+            "KEY,FREQ,CURRENCY,TIME_PERIOD,OBS_VALUE",
+            "EXR.D.USD.EUR.SP00.A,D,USD,2026-10-12,1.1201",
+            "EXR.D.USD.EUR.SP00.A,D,USD,2026-10-13,1.1188",
+        ]
+    )
+    ecb = M.parse_ecb_csv(csv)
+    assert list(ecb["value"]) == [1.1201, 1.1188] and set(ecb["series"]) == {"ECB_USD"}
+    fred = pd.DataFrame(
+        {"ECB_USD": [1.1201, 1.1188], "DEXUSEU": [1.1193, np.nan]},
+        index=pd.to_datetime(["2026-10-12", "2026-10-13"]),
+    )
+    s, sid, src = C.user_fx_series(fred)
+    assert (sid, src) == ("ECB_USD", "ECB") and C.fx_on(s, pd.Timestamp("2026-10-13")) == (
+        1.1188,
+        "2026-10-13",
+    )
+    assert C.fx_on(C.fx_series(fred), pd.Timestamp("2026-10-13")) == (1.1193, "2026-10-12")
+    assert C.fx_gap(fred) == pytest.approx(1.1201 / 1.1193 - 1)
+    assert C.user_fx_series(fred.drop(columns=["ECB_USD"]))[2] == "FRED"
+
+
 def test_zero_fee_rule_free_from_500_euros_else_1_euro() -> None:
     # Same reference values as the web tests (web/src/test/plan.test.ts).
     small = C.buy(400, 50, 1.1, 0.001, C.ZERO_FEES)

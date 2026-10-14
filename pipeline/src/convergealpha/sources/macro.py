@@ -55,6 +55,39 @@ def fetch_fred(api_key: str, start: date) -> pd.DataFrame:
     return out
 
 
+# The European Central Bank's euro reference rate: taken at 14:15 Frankfurt time every TARGET
+# working day and published around 16:00, free and without a key. Stored next to the FRED series.
+ECB_URL = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A"
+ECB_SERIES = "ECB_USD"  # US dollars per euro
+
+
+def parse_ecb_csv(text: str) -> pd.DataFrame:
+    df = pd.read_csv(io.StringIO(text))
+    if df.empty or "TIME_PERIOD" not in df or "OBS_VALUE" not in df:
+        return pd.DataFrame(columns=["date", "value", "realtime_start", "series"])
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df["TIME_PERIOD"], errors="coerce"),
+            "value": pd.to_numeric(df["OBS_VALUE"], errors="coerce"),
+        }
+    ).dropna()
+    out = out[out["value"] > 0]
+    out["realtime_start"] = out["date"].dt.strftime("%Y-%m-%d")
+    out["series"] = ECB_SERIES
+    return out.reset_index(drop=True)
+
+
+def fetch_ecb_usd(start: date) -> pd.DataFrame:
+    r = http.get(
+        http.make_session(),
+        ECB_URL,
+        params={"format": "csvdata", "startPeriod": start.isoformat()},
+        timeout=60,
+    )
+    assert r is not None
+    return parse_ecb_csv(r.text)
+
+
 def fred_path(data_dir: Path) -> Path:
     return data_dir / "macro" / "fred.parquet"
 

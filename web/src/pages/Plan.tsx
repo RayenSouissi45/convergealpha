@@ -253,7 +253,7 @@ export default function Plan() {
         </p>
         {f?.fx && (
           <p className="text-xs text-slate-600 dark:text-zinc-400">
-            Prices in euros at {f.fx.rate.toFixed(4)} US dollars per euro (FRED {f.fx.series}, {formatDay(f.fx.date)}; published about weekly). The results assume this rate stays the same: a currency move can add or remove a few percent.
+            Prices in euros at {f.fx.rate.toFixed(4)} US dollars per euro ({f.fx.source === 'ECB' ? 'European Central Bank reference rate' : `FRED ${f.fx.series}, published about weekly`}, {formatDay(f.fx.date)}). The results assume this rate stays the same: a currency move can add or remove a few percent.
           </p>
         )}
       </div>

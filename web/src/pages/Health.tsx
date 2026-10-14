@@ -94,6 +94,17 @@ function Models({ data }: { data: HealthData }) {
             <Missing reason="Starts with the first daily build of the strategies (close of Oct 13, 2026)." />
           )}
         </Row>
+        <Row label={<Tip content="The euro rate from the European Central Bank (daily, used for your own numbers) checked against the US central bank's FRED rate (used by the first paper strategies). Both are official; they are taken a few hours apart, so a gap above 0.5% is a warning.">EUR/USD cross-check</Tip>}>
+          {data.fx_check?.latest?.ECB_USD ? (
+            <Badge tone={data.fx_check.ok === false ? 'warn' : 'good'}>
+              ECB {data.fx_check.latest.ECB_USD.rate.toFixed(4)} ({data.fx_check.latest.ECB_USD.date})
+              {data.fx_check.latest.DEXUSEU ? ` · FRED ${data.fx_check.latest.DEXUSEU.rate.toFixed(4)} (${data.fx_check.latest.DEXUSEU.date})` : ''}
+              {data.fx_check.max_gap_30d !== null ? ` · largest gap ${(data.fx_check.max_gap_30d * 100).toFixed(2)}%` : ''}
+            </Badge>
+          ) : (
+            <Missing reason="Starts with the next daily build (European Central Bank rate)." />
+          )}
+        </Row>
         <Row label={<Tip content="Population stability index of each model input vs the last two years of training data. Above 0.25 = the inputs look different from what the model learned on.">Data drift (PSI)</Tip>}>
           {data.drift ? (data.drift.alerts.length ? <Badge tone="warn">Drift in {data.drift.alerts.join(', ')}</Badge> : <Badge tone="good">No input above 0.25</Badge>) : <Missing reason="Needs the trained model bundle." />}
         </Row>

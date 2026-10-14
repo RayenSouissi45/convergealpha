@@ -244,6 +244,30 @@ def ledger_step(
     }
 
 
+FX_GAP_LIMIT = 0.005  # ECB and FRED are both official rates taken hours apart: 0.5% is a warning
+
+
+def fx_check(fred: pd.DataFrame) -> dict[str, Any]:
+    """Health: the ECB and FRED EUR/USD rates checked against each other."""
+    from convergealpha.decide import costs as CO
+
+    gap = CO.fx_gap(fred)
+    latest = {}
+    for sid in (CO.USER_FX_SERIES, CO.FX_SERIES):
+        if fred is not None and not fred.empty and sid in fred and fred[sid].notna().any():
+            s = fred[sid].dropna()
+            latest[sid] = {
+                "rate": round(float(s.iloc[-1]), 5),
+                "date": s.index[-1].strftime("%Y-%m-%d"),
+            }
+    return {
+        "latest": latest,
+        "max_gap_30d": None if gap is None else round(gap, 5),
+        "ok": None if gap is None else gap <= FX_GAP_LIMIT,
+        "limit": FX_GAP_LIMIT,
+    }
+
+
 def paper_step(
     ctx: RunContext,
     panel: P.Panel,
@@ -559,8 +583,10 @@ def build(ctx: RunContext) -> int:
     )
     log.info("opportunity badges: %s", counts)
     fred = M.load_fred(paths.data)
-    fx_series = CO.fx_series(fred)
+    fx_series = CO.fx_series(fred)  # the first paper strategies' recorded rule (FRED)
     fx_now = CO.fx_on(fx_series, as_of)
+    user_fx, user_fx_id, user_fx_src = CO.user_fx_series(fred)  # ECB daily, for your own numbers
+    user_fx_now = CO.fx_on(user_fx, as_of)
     if "label" in t:
         pick_scores, pick_summary = PK.compute(t, validated)
         for k in ("safety", "upside", "confidence", "balanced"):
@@ -598,7 +624,16 @@ def build(ctx: RunContext) -> int:
         site.write_json_file(
             paths.site,
             "plan.json",
-            PLAN.export(t, day, ctx.now, validated, extra.get("reliability"), base_up, fx_now),
+            PLAN.export(
+                t,
+                day,
+                ctx.now,
+                validated,
+                extra.get("reliability"),
+                base_up,
+                user_fx_now,
+                (user_fx_id, user_fx_src),
+            ),
         )
 
     # ---- exports
@@ -769,6 +804,7 @@ def build(ctx: RunContext) -> int:
             "plugins": PL.status(paths.data, ctx.env),
             "brokers": zero_summary,
             "trade_ledger": paper_info,
+            "fx_check": fx_check(fred),
             **extra.get("health", {}),
         },
     )
