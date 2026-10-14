@@ -355,6 +355,13 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 118. The live correction shifts only the overall level (log-odds) per horizon, starts after 4 independent periods and needs 26 for half weight; per-stock live corrections would chase noise with this little data.
 119. Sector and stock corrections were tested once (fit 2016-2020, judged 2021-2023) and rejected by the fixed rule: they made every horizon worse. The failed try stays in the experiment log; nothing is applied.
 120. Drift with 3+ inputs above PSI 0.25 halves new position sizes and starts the weekly training early (at most when the model is 3+ days old); a single drifting input only shows on Health.
+121. Plan shows a euro limit price to type on finanzen.net zero (price + half the spread + 1%, rounded up to the cent): it caps what a jump at the open can cost, the rule the stock page already used in dollars.
+122. Outside 15:30-22:00 German time Plan warns that gettex quotes US shares with wider spreads; the spread is shown as a range (estimate, and 3x for a thin day).
+123. "Buy in parts" is explained, not pushed: free while each part is 500 EUR+, lowers the risk of one bad day, but the one-time 2016-2023 test found no way of buying better than the next open.
+124. Your real costs come from your journal (fill vs the app's price when you logged it, 5+ buys); if they exceed the estimate, Plan multiplies spreads by that factor (at most 3x), so estimates get more careful, never less.
+125. Idle cash shows what the ECB deposit rate (FRED ECBDFR) would pay in a call-money account; the paper strategies keep earning nothing on cash (their recorded rule).
+126. Strategy pages show fees per year and the value after German tax (26.375%, before the allowance); results stay before tax everywhere else because the allowance is personal.
+127. The goal planner adds a core ETF + picks split: the picks share is saved until one free 500 EUR order, so small monthly amounts never pay fees.
 
 ## Questions for the owner
 

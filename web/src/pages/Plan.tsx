@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, type ReactNode } from 'react'
+import { useDeferredValue, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { LabelBadge } from '../components/LabelBadge'
 import { OppBadge } from '../components/Opportunity'
@@ -16,7 +16,9 @@ import { evaluate, evaluateSplit, mapPeriod, rank, sliderMin, toPlanRows, type C
 import { feesFrom, taxFrom, useTradeSettings } from '../lib/settings'
 import { taxOnGain } from '../lib/taxes'
 import { useBrokerList, useOnlyZero, zeroAvailability } from '../lib/zero'
-import type { PlanFile } from '../types'
+import { useJournal } from '../lib/journal'
+import { amountAdvice, limitPriceEur, measuredCosts, spreadRange, usSession } from '../lib/orderHelp'
+import type { MarketFile, PlanFile } from '../types'
 
 
 const VERDICT_STYLE: Record<Verdict['color'], string> = {
@@ -104,7 +106,19 @@ export function OutcomeLines({ e, amount, validated }: { e: Pick<Evaluation, 'br
   )
 }
 
-function StockCard({ r, e, place, amount }: { r: PlanRow; e: Evaluation; place: number; amount: number }) {
+/** How to place it on finanzen.net zero: the limit to type, and the spread as a range. */
+function OrderHelp({ r, fx, amount }: { r: PlanRow; fx: number; amount: number }) {
+  if (r.price === null) return null
+  const limit = limitPriceEur(r.price, fx, r.spread)
+  const sp = spreadRange(amount, r.spread)
+  return (
+    <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+      <Tip content="A limit order fills only at this price or better, so a sudden jump at the open cannot make you pay much more than planned. It is today's price in euros plus half the spread and 1% room, rounded up to the cent.">On finanzen.net zero</Tip>: limit order at <strong className="tabular-nums">{formatEur(limit)}</strong>, valid for the day. Spread cost about {formatEur(sp.typical)} (up to {formatEur(sp.bad)} on a thin day).
+    </p>
+  )
+}
+
+function StockCard({ r, e, place, amount, fx }: { r: PlanRow; e: Evaluation; place: number; amount: number; fx: number }) {
   return (
     <li className="min-w-0">
       <Card>
@@ -139,6 +153,7 @@ function StockCard({ r, e, place, amount }: { r: PlanRow; e: Evaluation; place: 
         <div className="mt-2">
           <OutcomeLines e={{ ...e, shares: e.buy.shares, leftover: e.buy.leftover }} amount={amount} validated={e.validated} />
         </div>
+        <OrderHelp r={r} fx={fx} amount={amount} />
       </Card>
     </li>
   )
@@ -185,10 +200,22 @@ const PERIODS: [string, number][] = [
 
 export default function Plan() {
   const res = useSiteJson<PlanFile>('plan.json')
+  const market = useSiteJson<MarketFile>('market.json')
+  const [journal] = useJournal()
+  const [now] = useState(() => new Date())
+  const session = usSession(now)
   const [s, set] = useTradeSettings()
   const [onlyZero] = useOnlyZero()
   const zeroOk = zeroAvailability(useBrokerList()).ok
-  const rows = useMemo(() => (res.state === 'ready' ? toPlanRows(res.data) : []), [res])
+  const baseRows = useMemo(() => (res.state === 'ready' ? toPlanRows(res.data) : []), [res])
+  // When your own fills cost more than the estimate, Plan counts the spread more carefully.
+  const measured = useMemo(() => {
+    const spreads = new Map(baseRows.map((r) => [r.ticker, r.spread]))
+    return measuredCosts(journal, (tk) => spreads.get(tk) ?? null)
+  }, [baseRows, journal])
+  const rows = useMemo(() => (measured.factor > 1 ? baseRows.map((r) => ({ ...r, spread: r.spread * measured.factor })) : baseRows), [baseRows, measured.factor])
+  const advice = amountAdvice(s.amount)
+  const regime = market.state === 'ready' ? market.data.regime : null
   const deferred = useDeferredValue(s)
   const m = mapPeriod(deferred.days)
 
@@ -249,6 +276,13 @@ export default function Plan() {
             Amount in euros
             <input type="number" inputMode="decimal" min={1} step={10} value={s.amount} onChange={(e) => set({ amount: Number(e.target.value) || 1 })} className={`${input} mt-1`} />
           </label>
+          <div className="-mt-2 text-xs text-slate-600 dark:text-zinc-400">
+            <p>{advice.text}</p>
+            <details>
+              <summary className="min-h-9 cursor-pointer content-center font-medium text-teal-700 dark:text-teal-400">Buy all at once or in parts?</summary>
+              <p className="pb-1">{advice.partsText}</p>
+            </details>
+          </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
             <input type="checkbox" className="size-6 accent-teal-700" checked={s.allowEarnings} onChange={(e) => set({ allowEarnings: e.target.checked })} />
             Allow stocks that report earnings inside the period
@@ -263,6 +297,19 @@ export default function Plan() {
         <p>
           <strong>Forecast used:</strong> {m.text} <ValidTag ok={usedValidated} />
         </p>
+        {regime && (
+          <p>
+            <strong>Market mood:</strong> {regime.state}.{' '}
+            {regime.state === 'Stress'
+              ? 'No new BUY labels while the market is under stress; waiting is the plan.'
+              : regime.state === 'Caution'
+                ? 'Stricter rules for new BUY labels; smaller, safer choices make more sense.'
+                : 'Normal rules.'}{' '}
+            <span className="text-xs text-slate-600 dark:text-zinc-400">{regime.reasons.slice(0, 2).join('; ')}</span>
+          </p>
+        )}
+        <p className={`text-xs ${session.open ? 'text-slate-600 dark:text-zinc-400' : 'text-amber-800 dark:text-amber-300'}`}>{session.text}</p>
+        {measured.n > 0 && <p className="text-xs text-slate-600 dark:text-zinc-400">Your real costs: {measured.text}</p>}
         {f?.fx && (
           <p className="text-xs text-slate-600 dark:text-zinc-400">
             Prices in euros at {f.fx.rate.toFixed(4)} US dollars per euro ({f.fx.source === 'ECB' ? 'European Central Bank reference rate' : `FRED ${f.fx.series}, published about weekly`}, {formatDay(f.fx.date)}). The results assume this rate stays the same: a currency move can add or remove a few percent.
@@ -301,7 +348,7 @@ export default function Plan() {
           ) : (
             <ol className="grid grid-cols-1 gap-3 lg:grid-cols-2" aria-label="Best fits">
               {picks.map(({ r, e }, i) => (
-                <StockCard key={r.ticker} r={r} e={e} place={i + 1} amount={s.amount} />
+                <StockCard key={r.ticker} r={r} e={e} place={i + 1} amount={s.amount} fx={f.fx!.rate} />
               ))}
             </ol>
           )}

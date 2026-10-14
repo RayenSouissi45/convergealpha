@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { formatEur, formatEurSigned } from '../../lib/costs'
 import { signClass } from '../../lib/format'
 import { behaviour, decisionQuality, fifo, type Journal, type Quadrant } from '../../lib/journal'
+import { measuredCosts } from '../../lib/orderHelp'
+import type { ScreenerRow } from '../../types'
 import { Badge, Card } from '../ui'
 
 const QUAD: Record<Quadrant, { title: string; tone: 'good' | 'warn' | 'bad' | 'neutral'; text: string }> = {
@@ -11,7 +13,39 @@ const QUAD: Record<Quadrant, { title: string; tone: 'good' | 'warn' | 'bad' | 'n
   mistake: { title: 'Weak decision, bad result', tone: 'bad', text: 'Learn from these first.' },
 }
 
-export function ReviewTab({ j }: { j: Journal }) {
+/** What trading costs you: fees as a share of your money per year, and your real fills vs the app's estimate. */
+function CostsCard({ j, rows, total }: { j: Journal; rows: Map<string, ScreenerRow>; total: number }) {
+  const [now] = useState(() => new Date())
+  const year = String(now.getFullYear())
+  const fees = j.trades.filter((t) => t.date.startsWith(year)).reduce((s, t) => s + t.feeEur, 0)
+  const start = new Date(now.getFullYear(), 0, 1)
+  const days = Math.max(30, (now.getTime() - start.getTime()) / 86400000)
+  const perYear = total > 0 ? ((fees / total) * 365) / days : null
+  const m = measuredCosts(j, (tk) => {
+    const s = rows.get(tk)?.spread
+    return typeof s === 'number' ? s : null
+  })
+  return (
+    <Card title="What trading costs you">
+      <ul className="space-y-1.5 text-sm">
+        <li>
+          Fees this year: <strong className="tabular-nums">{formatEur(fees)}</strong>
+          {perYear !== null && (
+            <>
+              {' '}
+              — about <strong className={perYear > 0.005 ? 'text-amber-800 dark:text-amber-300' : ''}>{(perYear * 100).toFixed(2)}% of your money a year</strong>
+              {perYear > 0.005 ? ': more than a broad ETF costs. Fewer, bigger orders (500 €+ is free) help.' : '.'}
+            </>
+          )}
+        </li>
+        <li>{m.text}</li>
+      </ul>
+      <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">The spread is not a fee you see: it is inside the price. Your fills are compared with the app's last price, so a single trade also contains that day's move; the average over 5 or more buys is what counts.</p>
+    </Card>
+  )
+}
+
+export function ReviewTab({ j, rows, total }: { j: Journal; rows: Map<string, ScreenerRow>; total: number }) {
   const [now] = useState(() => new Date())
   const month = now.toISOString().slice(0, 7)
   const b = behaviour(j, now)
@@ -23,6 +57,7 @@ export function ReviewTab({ j }: { j: Journal }) {
   const limit = j.rules.maxTradesPerMonth
   return (
     <div className="grid gap-3 lg:grid-cols-2">
+      <CostsCard j={j} rows={rows} total={total} />
       <Card title="This month">
         <ul className="space-y-1 text-sm">
           <li>

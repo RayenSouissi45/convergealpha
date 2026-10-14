@@ -1,4 +1,4 @@
-import { lazy, Suspense, useDeferredValue, type ReactNode } from 'react'
+import { lazy, Suspense, useDeferredValue, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { PlanTabs } from '../components/PlanTabs'
 import { TaxSettings } from '../components/TaxSettings'
@@ -91,6 +91,35 @@ function Inputs({ g, set }: { g: GoalSettings; set: (p: Partial<GoalSettings>) =
   )
 }
 
+/** Core and satellite: most of the money in a broad ETF savings plan (free on finanzen.net zero),
+ * a small share saved until one stock order reaches the free 500 €. */
+function CoreAndPicks({ monthly, start }: { monthly: number; start: number }) {
+  const [share, setShare] = useState(20)
+  const picks = (monthly * share) / 100
+  const core = monthly - picks
+  const months = picks > 0 ? Math.ceil(Math.max(0, 500 - Math.min(500, (start * share) / 100)) / picks) : null
+  return (
+    <Card title="Core ETF + stock picks">
+      <label className="block text-sm font-medium" htmlFor="goal-picks">
+        Share for stock picks: <span className="tabular-nums">{share}%</span>
+      </label>
+      <input id="goal-picks" type="range" min={0} max={30} step={5} value={share} onChange={(e) => setShare(Number(e.target.value))} className="h-11 w-full accent-teal-700" />
+      <ul className="mt-1 space-y-1 text-sm">
+        <li>
+          <strong className="tabular-nums">{formatEur(core, 0)}</strong> a month into a broad stock ETF as a savings plan (free on finanzen.net zero).
+        </li>
+        <li>
+          <strong className="tabular-nums">{formatEur(picks, 0)}</strong> a month saved for stock picks
+          {months === null ? '.' : months === 0 ? ': you can place one free 500 € order now.' : `: one free 500 € order about every ${months} month${months === 1 ? '' : 's'}.`}
+        </li>
+      </ul>
+      <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
+        The ETF keeps most of your money close to the market at almost no cost; the picks are where the app's research is used, and they are still in RESEARCH MODE. Picks should be money you can leave alone for years. Check that your ETF is offered as a free savings plan at your broker.
+      </p>
+    </Card>
+  )
+}
+
 export default function Goal() {
   const [g, set] = useGoalSettings()
   const [ts] = useTradeSettings()
@@ -178,6 +207,7 @@ export default function Goal() {
               You pay in {formatEur(paidIn, 0)}. Middle outcome after German tax when you sell: about {eur0(taxed)} in euros of that year (30% of an equity ETF's gain is tax free; {formatEur(taxFrom(ts).allowanceLeft, 0)} allowance).
             </p>
           </Card>
+          <CoreAndPicks monthly={d.monthly} start={start} />
           {goal > 0 && (
             <Card title="Small changes, big effect">
               <ul className="space-y-1 text-sm" aria-label="What if">

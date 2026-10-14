@@ -71,6 +71,11 @@ describe('Plan page', () => {
     expect(within(first).getByText('Bad case (1 in 10)')).toBeInTheDocument()
     expect(screen.getByText(/Uses the 1-month forecast/)).toBeInTheDocument()
     expect(screen.getByText(/US dollars per euro \(FRED DEXUSEU/)).toBeInTheDocument()
+    // How to place it on finanzen.net zero, and what the amount supports.
+    expect(within(first).getByText(/limit order at/)).toBeInTheDocument()
+    expect(within(first).getByText(/Spread cost about €/)).toBeInTheDocument()
+    expect(screen.getByText(/The US market is (open|closed)/)).toBeInTheDocument()
+    expect(screen.getByText(/can be bought with free orders|one stock gets a free order|every order pays the 1 € fee/)).toBeInTheDocument()
   })
 
   it('maps a period between horizons and says so', async () => {
@@ -164,6 +169,8 @@ describe('Strategies page', () => {
     expect(screen.getByRole('heading', { name: 'finanzen.net zero vs all stocks' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Show the All stocks version' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Trade history (0)' })).toBeInTheDocument()
+    expect(screen.getByText('Fees per year')).toBeInTheDocument()
+    expect(screen.getByText('After German tax')).toBeInTheDocument()
   })
 
   it('the all-stocks page shows holdings, exit levels and the trade history', async () => {
@@ -398,6 +405,10 @@ describe('savings plan and goal', () => {
     expect(screen.getByRole('cell', { name: 'All in safe interest' })).toBeInTheDocument()
     expect(screen.getByText(/lasted 20 years in 9 of 10 futures/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Savings plan & goal' })).toHaveAttribute('aria-current', 'page')
+    // Core ETF + picks: 20% of the default 200 € a month = 40 € saved toward one free 500 € order.
+    const core = screen.getByRole('heading', { name: 'Core ETF + stock picks' }).closest('section')!
+    expect(within(core).getByText(/a month saved for stock picks/)).toBeInTheDocument()
+    expect(within(core).getByText(/one free 500 € order (about every \d+ months?|now)/)).toBeInTheDocument()
     // More every month: a higher chance.
     const monthly = screen.getByRole('spinbutton', { name: 'Every month (€)' })
     await user.clear(monthly)

@@ -7,13 +7,28 @@ import { holdingStatus, journalHoldings, throttle } from '../../lib/portfolio'
 import { exposures, maxStocks, overlapWarnings, summary } from '../../lib/risk'
 import { taxFrom, useTradeSettings } from '../../lib/settings'
 import { taxOnGain } from '../../lib/taxes'
-import type { ScreenerRow } from '../../types'
+import { useSiteJson } from '../../lib/data'
+import type { MarketFile, ScreenerRow } from '../../types'
 import { LabelBadge } from '../LabelBadge'
 import { Tip } from '../Tip'
 import { Badge, Card } from '../ui'
 
 const input = 'mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-base dark:border-zinc-600 dark:bg-zinc-800'
 const eur = (v: number | null, d = 2) => (v === null ? '—' : formatEur(v, d))
+
+/** Cash waiting for a buy can earn interest in the meantime (call-money accounts follow the ECB
+ * deposit rate). Shown so idle money is a choice, not an accident. */
+function IdleCash({ cash }: { cash: number | null }) {
+  const market = useSiteJson<MarketFile>('market.json')
+  const rate = market.state === 'ready' ? market.data.macro?.ECBDFR : undefined
+  if (!cash || cash < 100 || !rate) return null
+  const year = (cash * rate.value) / 100
+  return (
+    <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
+      Your {formatEur(cash, 0)} in cash earns nothing at the broker. At the ECB deposit rate ({rate.value.toFixed(2)}%, {formatDay(rate.date)}), a free call-money account would pay about <strong>{formatEur(year, 0)} a year</strong> (before tax) while you wait for a buy.
+    </p>
+  )
+}
 
 function PositionCard({ p, rows, fx, j }: { p: Position; rows: Map<string, ScreenerRow>; fx: number | null; j: Journal }) {
   const [settings] = useTradeSettings()
@@ -148,6 +163,7 @@ export function HoldingsTab({ j, setJ, ps, rows, fx }: { j: Journal; setJ: (j: J
             Cash at the broker (€), optional
             <input className={input} type="number" inputMode="decimal" min={0} step={50} value={j.cashEur ?? ''} onChange={(e) => setJ({ ...j, cashEur: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} />
           </label>
+          <IdleCash cash={j.cashEur} />
         </Card>
         <Card title="Risk in plain numbers">
           <ul className="space-y-1.5 text-sm">

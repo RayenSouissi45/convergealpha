@@ -59,7 +59,7 @@ export default function Portfolio() {
       {tab === 'holdings' && <HoldingsTab j={j} setJ={setJ} ps={ps} rows={rows} fx={fx?.rate ?? null} />}
       {tab === 'log' && <LogTradeTab key={params.toString()} j={j} setJ={setJ} ps={ps} rows={rows} fx={fx?.rate ?? null} />}
       {tab === 'journal' && <JournalTab j={j} setJ={setJ} />}
-      {tab === 'review' && <ReviewTab j={j} />}
+      {tab === 'review' && <ReviewTab j={j} rows={rows} total={total} />}
       {tab === 'taxes' && <TaxTab j={j} ps={ps} />}
       {tab === 'rules' && <RulesTab j={j} setJ={setJ} />}
     </>

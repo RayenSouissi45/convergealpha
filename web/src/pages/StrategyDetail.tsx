@@ -31,6 +31,20 @@ function Stat({ label, help, children }: { label: string; help: string; children
   )
 }
 
+function feesPerYear(s: StrategyCard): string {
+  const capital = s.capital ?? 200
+  if (s.fees === null || !s.series.length) return '—'
+  const days = (Date.parse(s.series.at(-1)![0]) - Date.parse(s.start ?? s.series[0]![0])) / 86400000
+  const share = s.fees / capital
+  return days >= 30 ? `${((share * 365) / days * 100).toFixed(2)}%` : `${(share * 100).toFixed(2)}% so far`
+}
+
+function afterTax(s: StrategyCard): string {
+  if (s.value === null) return '—'
+  const gain = s.value - (s.capital ?? 200)
+  return formatEur(gain > 0 ? s.value - gain * 0.26375 : s.value)
+}
+
 function Summary({ s }: { s: StrategyCard }) {
   const st = statusOf(s)
   return (
@@ -51,13 +65,15 @@ function Summary({ s }: { s: StrategyCard }) {
         <StatusBadge s={s} /> <span>{st.text}</span>
       </p>
       {s.locked && <p className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200">{s.locked}</p>}
-      <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 sm:grid-cols-6 dark:border-zinc-800">
+      <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 sm:grid-cols-4 dark:border-zinc-800">
         <Stat label="Cash" help="Money not in stocks, in euros.">{eurOrDash(s.cash)}</Stat>
         <Stat label="In stocks" help="Value of the stocks it holds at the last close, in euros.">{formatEur(investedEur(s))}</Stat>
         <Stat label="Fees paid" help={`All buy and sell fees so far (${s.fee_rule === 'zero' ? 'finanzen.net zero: 0 € for orders of 500 € or more, 1 € below' : '1 € each way'}). The spread is inside the prices.`}>{eurOrDash(s.fees)}</Stat>
         <Stat label="Trades" help="Buys and sells that filled.">{s.trades}</Stat>
         <Stat label="Win rate" help="Share of sold positions that made money after fees and spread.">{s.win_rate === null ? '—' : `${Math.round(s.win_rate * 100)}%`}</Stat>
         <Stat label="Worst drop" help="The largest fall from a previous high of the total value, in %.">{pctOrDash(s.max_drawdown)}</Stat>
+        <Stat label="Fees per year" help="Fees paid so far as a share of the start money, scaled to a year once it has run 30 days. A broad ETF costs about 0.2% a year.">{feesPerYear(s)}</Stat>
+        <Stat label="After German tax" help="The value if everything were sold today and the gain taxed at 26.375% (25% + solidarity surcharge, no church tax), before your yearly allowance. Losses are not taxed.">{afterTax(s)}</Stat>
       </dl>
     </Card>
   )

@@ -22,6 +22,8 @@ FRED_SERIES = {
     "BAMLH0A0HYM2": "High-yield credit spread",
     "T10Y2Y": "10-year minus 2-year Treasury",
     "DFF": "Fed funds rate",
+    # What cash in euros can earn (call-money accounts follow it): idle cash on Portfolio.
+    "ECBDFR": "ECB deposit rate",
     # Euro amounts for the Plan builder and the paper-trading strategies. Published about weekly.
     "DEXUSEU": "EUR/USD (US dollars per euro)",
 }
