@@ -4,6 +4,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { formatEur, ZERO_FEES, type Fees } from './costs'
+import { TAX_RULES, type ChurchRate, type Filing, type TaxProfile } from './taxes'
 
 export interface TradeSettings {
   /** finanzen.net zero's rule (0 € from 500 €, 1 € below) or your own flat fee. */
@@ -16,6 +17,11 @@ export interface TradeSettings {
   upside: number
   days: number
   allowEarnings: boolean
+  /** German tax profile (stays in this browser). */
+  taxFiling: Filing
+  taxChurch: ChurchRate
+  /** Allowance still unused this year, in euros. */
+  allowanceLeft: number
 }
 
 export const DEFAULT_SETTINGS: TradeSettings = {
@@ -28,6 +34,9 @@ export const DEFAULT_SETTINGS: TradeSettings = {
   upside: 5,
   days: 30,
   allowEarnings: false,
+  taxFiling: 'single',
+  taxChurch: 0,
+  allowanceLeft: TAX_RULES.allowance.single,
 }
 
 const KEY = 'ca-trade-settings'
@@ -53,6 +62,9 @@ export function sanitize(raw: Partial<TradeSettings> | null | undefined): TradeS
     upside: Math.round(clamp(r.upside, 1, 10, d.upside)),
     days: Math.round(clamp(r.days, 5, 180, d.days)),
     allowEarnings: typeof r.allowEarnings === 'boolean' ? r.allowEarnings : d.allowEarnings,
+    taxFiling: r.taxFiling === 'joint' ? 'joint' : 'single',
+    taxChurch: r.taxChurch === 0.08 || r.taxChurch === 0.09 ? r.taxChurch : 0,
+    allowanceLeft: clamp(r.allowanceLeft, 0, TAX_RULES.allowance[r.taxFiling === 'joint' ? 'joint' : 'single'], d.allowanceLeft),
   }
 }
 
@@ -110,3 +122,8 @@ export function feeText(s: TradeSettings): string {
   return `${formatEur(s.feeBuy)} per buy, ${formatEur(s.feeSell)} per sell, ${shares}`
 }
 
+
+/** Your tax profile for every after-tax number. */
+export function taxFrom(s: TradeSettings): TaxProfile {
+  return { filing: s.taxFiling, church: s.taxChurch, allowanceLeft: s.allowanceLeft }
+}

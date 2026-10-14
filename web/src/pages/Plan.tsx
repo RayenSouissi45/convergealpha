@@ -6,12 +6,14 @@ import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { FeeSettings } from '../components/FeeSettings'
+import { TaxSettings } from '../components/TaxSettings'
 import { ZeroBadge, ZeroToggle } from '../components/Zero'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatInt, formatPct } from '../lib/format'
 import { evaluate, evaluateSplit, mapPeriod, rank, sliderMin, toPlanRows, type Context, type Evaluation, type PlanRow, type Rel, type SplitEvaluation, type Verdict } from '../lib/plan'
-import { feesFrom, useTradeSettings } from '../lib/settings'
+import { feesFrom, taxFrom, useTradeSettings } from '../lib/settings'
+import { taxOnGain } from '../lib/taxes'
 import { useBrokerList, useOnlyZero, zeroAvailability } from '../lib/zero'
 import type { PlanFile } from '../types'
 
@@ -63,6 +65,8 @@ function Line({ label, help, children }: { label: string; help: string; children
 
 /** The numbers every suggestion shows (Plan and "Give me a strategy"). */
 export function OutcomeLines({ e, amount, validated }: { e: Pick<Evaluation, 'breakEven' | 'pProfit' | 'middle' | 'bad' | 'good' | 'rel'> & { shares: number; leftover: number; fees: number }; amount: number; validated: boolean }) {
+  const [settings] = useTradeSettings()
+  const tax = taxOnGain(e.middle, taxFrom(settings))
   return (
     <dl>
       <Line label="Shares you can buy" help="Whole shares (a fraction only with the simulation setting). The price includes half the estimated spread.">
@@ -84,6 +88,11 @@ export function OutcomeLines({ e, amount, validated }: { e: Pick<Evaluation, 'br
       <Line label="Middle result" help="If the stock ends at the middle forecast: half of the outcomes are expected better, half worse. After fees and spread.">
         {formatEur(amount + e.middle)} <span className="text-xs">({formatEurSigned(e.middle)})</span>
       </Line>
+      {e.middle > 0 && (
+        <Line label="Middle result after German tax" help="The middle gain after the tax on it (25% plus solidarity surcharge, plus church tax if set), once your allowance left this year is used up. Losses are not taxed. Set your tax profile on the Plan page.">
+          {formatEur(amount + tax.net)} <span className="text-xs">(tax {formatEur(tax.tax)})</span>
+        </Line>
+      )}
       <Line label="Bad case (1 in 10)" help="Only 1 in 10 outcomes is expected worse than this (the 10th percentile forecast). It can be worse: this is not a maximum loss.">
         {formatEur(amount + e.bad)} <span className="text-xs">({formatEurSigned(e.bad)})</span>
       </Line>
@@ -244,6 +253,7 @@ export default function Plan() {
           </label>
           <ZeroToggle values={rows.map((r) => r.zero)} noun="candidates" />
           <FeeSettings />
+          <TaxSettings />
         </div>
       </Card>
 
