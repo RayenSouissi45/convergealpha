@@ -351,10 +351,51 @@ export interface StrategyCard {
   cash: number | null
   holdings: StrategyHolding[]
   /** Orders waiting for the next open; shares and euros are estimates from the last close. */
-  pending: { side: 'buy' | 'sell'; ticker: string; name: string | null; reason: string; date: string; fill_on: string; est_shares?: number | null; est_eur?: number | null }[]
+  pending: { side: 'buy' | 'sell'; ticker: string; name: string | null; reason: string; date: string; fill_on: string; est_shares?: number | null; est_eur?: number | null; spread?: number | null }[]
   history: StrategyEvent[]
   notes: string[]
   series: [string, number][]
+}
+
+/** strategies_live.json: a live estimate during US trading hours (never written to the ledger). */
+export interface LiveHolding {
+  ticker: string
+  shares: number
+  price_usd: number
+  value_eur: number
+  entry_usd: number | null
+  cost_eur: number | null
+  move: number | null
+  day_move: number | null
+  gain_eur: number | null
+  bought_today: boolean
+  live: boolean
+}
+
+export interface LiveEstimate {
+  key: string
+  value: number
+  pct: number
+  vs_benchmark?: number | null
+  day_change_eur: number | null
+  cash: number
+  holdings: LiveHolding[]
+  filled_today: { side: 'buy' | 'sell'; ticker: string; shares: number; open_usd: number; amount_eur: number; note?: string }[]
+  waiting: { side: 'buy' | 'sell'; ticker: string }[]
+  all_priced: boolean
+}
+
+export interface StrategiesLiveFile {
+  generated_at: string
+  official_as_of: string | null
+  market: 'pre-open' | 'open' | 'closed'
+  fx: number
+  source: string
+  prices_at?: string | null
+  priced?: string
+  note?: string
+  strategies: Record<string, LiveEstimate>
+  benchmark: LiveEstimate | null
 }
 
 export interface StrategySuggestion {

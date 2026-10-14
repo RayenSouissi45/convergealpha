@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router'
 import type { Tone } from '../components/ui'
-import type { StrategiesFile, StrategyCard, StrategySuggestion } from '../types'
+import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
 import { formatDay } from './format'
 
 /** Which stocks a strategy may buy: only those on finanzen.net zero (the version you can copy),
@@ -100,3 +100,73 @@ export function cashReason(s: StrategyCard): string {
 
 /** Euros now in stocks (at the last close). */
 export const investedEur = (s: StrategyCard) => s.holdings.reduce((a, h) => a + (h.value_eur ?? 0), 0)
+
+/** The live estimate, only when it belongs to these official numbers and trading has started. */
+export function liveOf(f: StrategiesFile, live: StrategiesLiveFile | null | undefined): StrategiesLiveFile | null {
+  if (!live || live.official_as_of !== f.as_of || live.market === 'pre-open') return null
+  if (Object.keys(live.strategies).length === 0 && !live.benchmark) return null
+  return live
+}
+
+const NY_TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })
+
+/** "11:05 AM" in New York time. */
+export const nyTime = (iso: string) => NY_TIME.format(new Date(iso))
+
+export type LiveCard = StrategyCard & { live?: boolean }
+
+/** The official card with today's live estimate laid over it: value, holdings at their latest
+ * price, orders filled at today's open. The sealed ledger only changes after the close. */
+export function withLive(s: StrategyCard, live: StrategiesLiveFile | null): LiveCard {
+  const e = live ? (s.benchmark ? live.benchmark : live.strategies[s.key]) : null
+  if (!e) return s
+  const p = s.params as { stop?: number | null; take_profit?: number | null; trailing?: number | null; max_hold?: number | null }
+  const holdings = e.holdings.map((h) => {
+    const old = s.holdings.find((x) => x.ticker === h.ticker)
+    if (old) return { ...old, close_usd: h.price_usd, value_eur: h.value_eur, stock_move: h.move, gain_eur: h.gain_eur }
+    const order = s.pending.find((o) => o.ticker === h.ticker && o.side === 'buy')
+    const entry = h.entry_usd ?? h.price_usd
+    return {
+      ticker: h.ticker,
+      name: order?.name ?? null,
+      shares: h.shares,
+      entry_date: order?.fill_on ?? '',
+      entry_usd: entry,
+      cost_eur: h.cost_eur ?? h.value_eur,
+      close_usd: h.price_usd,
+      value_eur: h.value_eur,
+      stock_move: h.move,
+      gain_eur: h.gain_eur,
+      days_held: 1,
+      levels: {
+        stop_usd: p.stop ? entry * (1 - p.stop) : null,
+        take_profit_usd: p.take_profit ? entry * (1 + p.take_profit) : null,
+        trailing_usd: p.trailing ? Math.max(entry, h.price_usd) * (1 - p.trailing) : null,
+        max_hold_days: p.max_hold ?? null,
+        days_left: p.max_hold ? p.max_hold - 1 : null,
+      },
+    }
+  })
+  const waiting = new Set(e.waiting.map((w) => `${w.side}:${w.ticker}`))
+  return {
+    ...s,
+    live: true,
+    value: e.value,
+    pct: e.pct,
+    vs_benchmark: s.benchmark ? null : (e.vs_benchmark ?? s.vs_benchmark),
+    cash: e.cash,
+    holdings,
+    pending: s.pending.filter((o) => waiting.has(`${o.side}:${o.ticker}`)),
+  }
+}
+
+/** A strategy's line: its official daily values, plus today's live value while trading. */
+export function linePoints(f: StrategiesFile, s: LiveCard, live: StrategiesLiveFile | null): [string, number][] {
+  const pts: [string, number][] = [[f.start, f.capital], ...s.series.filter(([d]) => d !== f.start)]
+  const at = live?.prices_at ?? live?.generated_at
+  if (s.live && at && s.value !== null) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(at))
+    if (today > (pts.at(-1)?.[0] ?? '')) pts.push([today, s.value])
+  }
+  return pts
+}

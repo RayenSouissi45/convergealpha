@@ -165,6 +165,14 @@ def run(site_dir: Path, now: datetime, env: dict[str, str]) -> dict[str, Any]:
                     }
                 )
 
+    # Live estimate of the paper strategies (never written to the trade ledger).
+    try:
+        from convergealpha.paper import live
+
+        live.run(site_dir, now, fallback=live.finnhub_quotes(key) if key else None)
+    except Exception:
+        log.exception("live strategies failed; the page shows the last official numbers")
+
     out = {
         "generated_at": now.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "checked": len(tickers),

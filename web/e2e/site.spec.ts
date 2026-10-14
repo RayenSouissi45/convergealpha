@@ -285,7 +285,9 @@ test('strategies: switch to all stocks, open a strategy, compare both versions',
   await expect(page.getByRole('list', { name: 'Holdings' })).toContainText('COHU')
   await page.getByRole('link', { name: 'Show the Only finanzen.net zero version' }).click()
   await expect(page).not.toHaveURL(/stocks=all/)
-  await expect(page.getByRole('list', { name: 'Orders for the next open' })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Only finanzen.net zero' })).toBeChecked()
+  // The fixtures include a live estimate: the waiting buy filled at today's open.
+  await expect(page.getByText(/LIVE/).first()).toBeVisible()
   await page.getByRole('link', { name: '← All strategies' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Strategies' })).toBeVisible()
 })

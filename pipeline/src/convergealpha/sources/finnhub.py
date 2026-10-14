@@ -61,6 +61,19 @@ def earnings_calendar(s: Any, start: date, end: date) -> pd.DataFrame:
     return df.drop_duplicates(["ticker", "date"])
 
 
+def quote(s: Any, ticker: str) -> dict[str, float] | None:
+    """Latest price (c), today's open (o), previous close (pc) and the time (t, Unix seconds).
+    Free tier; None when Finnhub does not know the ticker (it answers zeros)."""
+    try:
+        d = _get(s, "/quote", symbol=ticker)
+    except http.HttpError as e:
+        log.warning("finnhub quote %s: %s", ticker, e)
+        return None
+    if not isinstance(d, dict) or not d.get("c"):
+        return None
+    return {k: float(d[k]) for k in ("c", "o", "pc", "t") if isinstance(d.get(k), (int, float))}
+
+
 def recommendation_trends(s: Any, tickers: Sequence[str]) -> pd.DataFrame:
     rows = []
     for t in tickers:

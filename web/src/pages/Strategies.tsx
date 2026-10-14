@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router'
 import { OppBadge } from '../components/Opportunity'
-import { Dot, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
+import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
@@ -11,8 +11,8 @@ import { formatDay, formatPct, signClass } from '../lib/format'
 import { isOpp } from '../lib/opportunity'
 import { evaluate, evaluateSplit, mapPeriod, type Context, type PlanRow, type Verdict } from '../lib/plan'
 import { useTradeSettings } from '../lib/settings'
-import { byValue, cardsFor, COLORS, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, type Universe } from '../lib/strategies'
-import type { StrategiesFile, StrategyCard, StrategySuggestion } from '../types'
+import { byValue, cardsFor, COLORS, linePoints, liveOf, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, withLive, type LiveCard, type Universe } from '../lib/strategies'
+import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
 import { OutcomeLines, ValidTag, VerdictBox } from './Plan'
 import type { ChartSeries } from '../components/StrategyChart'
 
@@ -23,8 +23,9 @@ const pts = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : '−'}
 const detailLink = (id: string, u: Universe) => `/strategies/${id}${u === 'all' ? '?stocks=all' : ''}`
 
 /** One strategy at a glance: value, return, what the money is in. The whole tile opens its page. */
-function Tile({ s, rank, f, u }: { s: StrategyCard; rank: number; f: StrategiesFile; u: Universe }) {
-  const twin = twinOf(f, s)
+function Tile({ s, rank, f, u, live }: { s: LiveCard; rank: number; f: StrategiesFile; u: Universe; live: StrategiesLiveFile | null }) {
+  const t0 = twinOf(f, s)
+  const twin = t0 ? withLive(t0, live) : null
   return (
     <li className="min-w-0">
       <Link
@@ -39,7 +40,10 @@ function Tile({ s, rank, f, u }: { s: StrategyCard; rank: number; f: StrategiesF
           </span>
           <span className="shrink-0 text-right tabular-nums">
             <span className="block text-lg leading-6 font-semibold">{s.value === null ? '—' : formatEur(s.value)}</span>
-            <span className={`block text-sm ${signClass(s.pct)}`}>{s.pct === null ? '—' : formatPct(s.pct)}</span>
+            <span className={`block text-sm ${signClass(s.pct)}`}>
+              {s.live && <span className="mr-1 text-[10px] font-semibold tracking-wide text-emerald-700 dark:text-emerald-400">LIVE</span>}
+              {s.pct === null ? '—' : formatPct(s.pct)}
+            </span>
           </span>
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -61,7 +65,7 @@ function Tile({ s, rank, f, u }: { s: StrategyCard; rank: number; f: StrategiesF
   )
 }
 
-function Benchmark({ b }: { b: StrategyCard }) {
+function Benchmark({ b }: { b: LiveCard }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 px-3.5 py-2.5 text-sm dark:border-zinc-700">
       <span className="flex min-w-0 items-center gap-2">
@@ -226,6 +230,7 @@ function GiveMeAStrategy({ f, u }: { f: StrategiesFile; u: Universe }) {
 
 export default function Strategies() {
   const res = useSiteJson<StrategiesFile>('strategies.json')
+  const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
   const [u, setU] = useUniverse()
   const [show, setShow] = useState(false)
   const header = (
@@ -249,11 +254,13 @@ export default function Strategies() {
     )
   }
   const f = res.data
-  const cards = cardsFor(f, u)
+  const live = liveOf(f, liveRes.state === 'ready' ? liveRes.data : null)
+  const cards = cardsFor(f, u).map((s) => withLive(s, live))
+  const bench = f.benchmark ? withLive(f.benchmark, live) : null
   const ranked = byValue(cards)
   const series: ChartSeries[] = [
-    ...cards.map((s) => ({ key: s.id, name: s.name, color: COLORS[s.id] ?? 'var(--viz-axis)', points: [[f.start, f.capital] as [string, number], ...s.series.filter(([d]) => d !== f.start)] })),
-    ...(f.benchmark ? [{ key: 'sp500', name: 'S&P 500', color: 'var(--viz-ref)', dashed: true, points: [[f.start, f.capital] as [string, number], ...f.benchmark.series.filter(([d]) => d !== f.start)] }] : []),
+    ...cards.map((s) => ({ key: s.id, name: s.name, color: COLORS[s.id] ?? 'var(--viz-axis)', points: linePoints(f, s, live) })),
+    ...(bench ? [{ key: 'sp500', name: 'S&P 500', color: 'var(--viz-ref)', dashed: true, points: linePoints(f, bench, live) }] : []),
   ]
   return (
     <>
@@ -273,6 +280,7 @@ export default function Strategies() {
           </Tip>
         </span>
       </div>
+      {live && <LiveLine live={live} />}
       {f.status === 'waiting' && (
         <p className="mb-3 text-sm">
           First decisions at the close of {day(f.start)} (after 16:15 New York time); first orders fill at the next official opening price.
@@ -282,12 +290,12 @@ export default function Strategies() {
       <UniverseSwitch u={u} set={setU} f={f} />
       <ol className="grid grid-cols-1 gap-2.5 md:grid-cols-2" aria-label="Strategies by value">
         {ranked.map((s, i) => (
-          <Tile key={s.key} s={s} rank={i + 1} f={f} u={u} />
+          <Tile key={s.key} s={s} rank={i + 1} f={f} u={u} live={live} />
         ))}
       </ol>
-      {f.benchmark && (
+      {bench && (
         <div className="mt-2.5">
-          <Benchmark b={f.benchmark} />
+          <Benchmark b={bench} />
         </div>
       )}
       <div className="mt-4 grid gap-3">

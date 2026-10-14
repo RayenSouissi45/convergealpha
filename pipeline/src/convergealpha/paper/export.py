@@ -95,6 +95,7 @@ def strategy_card(
                 "stock_move": _f(rec.get("stock_move")),
                 "gain_eur": _f(float(rec.get("value_eur") or 0) - p.cost_eur, 2),
                 "days_held": p.days_held,
+                "spread": _f(p.spread, 5),
                 "levels": {k: _f(v) for k, v in E._levels(spec, p).items()},
             }
         )
@@ -108,6 +109,7 @@ def strategy_card(
             "fill_on": next_trading_day(date.fromisoformat(o.date)).isoformat(),
             "est_shares": _f(est[o.order_id][0], 6) if o.order_id in est else None,
             "est_eur": _f(est[o.order_id][1], 2) if o.order_id in est else None,
+            "spread": _f(o.spread, 5),
         }
         for o in b.pending
     ]

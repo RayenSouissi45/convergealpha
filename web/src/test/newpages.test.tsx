@@ -8,13 +8,14 @@ import { COLUMNS } from '../lib/columns'
 import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
-import { byValue, planned, statusOf, twinOf } from '../lib/strategies'
+import { byValue, liveOf, planned, statusOf, twinOf, withLive } from '../lib/strategies'
 import { AppRoutes } from '../routes'
-import type { Health, OpportunitiesFile, Opportunity, StrategiesFile } from '../types'
+import type { Health, OpportunitiesFile, Opportunity, StrategiesFile, StrategiesLiveFile } from '../types'
 import health from './fixtures/health.json'
 import opportunities from './fixtures/opportunities.json'
 import plan from './fixtures/plan.json'
 import strategies from './fixtures/strategies.json'
+import strategiesLive from './fixtures/strategies_live.json'
 
 function stubFetch(files: Record<string, unknown>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -262,5 +263,42 @@ describe('Columns explained covers the new numbers', () => {
     for (const id of ['plan-shares', 'plan-leftover', 'plan-fees', 'plan-breakeven', 'plan-chance', 'plan-right', 'plan-results', 'plan-verdict', 'strat-value', 'strat-vs', 'strat-fees', 'strat-win', 'strat-drop', 'strat-cash', 'strat-levels', 'strat-universe', 'strat-status', 'strat-estimate']) {
       expect(ids).toContain(id)
     }
+  })
+})
+
+describe('live strategies during US trading hours', () => {
+  const f = strategies as unknown as StrategiesFile
+  const live = strategiesLive as unknown as StrategiesLiveFile
+
+  it('only uses a live estimate made on top of these official numbers, once trading started', () => {
+    expect(liveOf(f, live)).toBe(live)
+    expect(liveOf(f, { ...live, official_as_of: '2026-10-12' })).toBeNull()
+    expect(liveOf(f, { ...live, market: 'pre-open' })).toBeNull()
+    expect(liveOf(f, null)).toBeNull()
+  })
+
+  it('lays the estimate over the card: filled orders become holdings with exit levels', () => {
+    const card = withLive(f.strategies[0]!, live)
+    expect(card.live).toBe(true)
+    expect(card.pending).toEqual([])
+    expect(card.holdings.map((h) => h.ticker)).toEqual(['KSPI', 'MTG'])
+    const kspi = card.holdings[0]!
+    expect(kspi.entry_usd).toBe(85)
+    expect(kspi.levels.stop_usd).toBeCloseTo(85 * 0.94)
+    expect(kspi.levels.take_profit_usd).toBeCloseTo(85 * 1.08)
+    expect(card.value).toBeCloseTo(live.strategies['balanced-v1']!.value)
+    expect(statusOf(card).label).toBe('Invested')
+  })
+
+  it('the page says LIVE with the time, and tiles show live values', async () => {
+    stubFetch({ ...FILES(), 'strategies_live.json': live })
+    renderAt('/strategies')
+    const line = await screen.findByText(/Updated .* New York, every 30 minutes/)
+    expect(line).toBeInTheDocument()
+    const board = screen.getByRole('list', { name: 'Strategies by value' })
+    const hr = within(board).getByRole('link', { name: /High risk, high reward/ })
+    expect(within(hr).getByText('€202.72')).toBeInTheDocument()
+    expect(within(hr).getByText('LIVE')).toBeInTheDocument()
+    expect(within(hr).getByText('Invested')).toBeInTheDocument()
   })
 })

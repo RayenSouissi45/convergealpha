@@ -1,14 +1,14 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
-import { Dot, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
+import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatPct, formatPrice, signClass } from '../lib/format'
-import { cardsFor, COLORS, investedEur, planned, statusOf, twinOf, UNIVERSE_LABEL, useUniverse, type Universe } from '../lib/strategies'
-import type { StrategiesFile, StrategyCard, StrategyEvent } from '../types'
+import { cardsFor, COLORS, investedEur, linePoints, liveOf, planned, statusOf, twinOf, UNIVERSE_LABEL, useUniverse, withLive, type Universe } from '../lib/strategies'
+import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategyEvent } from '../types'
 import type { ChartSeries } from '../components/StrategyChart'
 
 const StrategyChart = lazy(() => import('../components/StrategyChart'))
@@ -270,6 +270,7 @@ function Rules({ s, f }: { s: StrategyCard; f: StrategiesFile }) {
 export default function StrategyDetail() {
   const { id = '' } = useParams()
   const res = useSiteJson<StrategiesFile>('strategies.json')
+  const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
   const [u, setU] = useUniverse()
   const back = (
     <Link to={`/strategies${u === 'all' ? '?stocks=all' : ''}`} className="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-teal-700 dark:text-teal-400">
@@ -285,7 +286,9 @@ export default function StrategyDetail() {
     )
   }
   const f = res.data
-  const s = cardsFor(f, u).find((x) => x.id === id)
+  const live = liveOf(f, liveRes.state === 'ready' ? liveRes.data : null)
+  const official = cardsFor(f, u).find((x) => x.id === id)
+  const s = official ? withLive(official, live) : undefined
   if (!s) {
     return (
       <>
@@ -296,18 +299,20 @@ export default function StrategyDetail() {
       </>
     )
   }
-  const twin = twinOf(f, s)
+  const t0 = twinOf(f, s)
+  const twin = t0 ? withLive(t0, live) : null
+  const bench = f.benchmark ? withLive(f.benchmark, live) : null
   const line = (c: StrategyCard, dotted = false) => ({
     key: `${c.id}-${c.universe ?? 'zero'}`,
     name: c.universe === 'all' ? 'All stocks' : 'Only finanzen.net zero',
     color: COLORS[c.id] ?? 'var(--viz-axis)',
     dotted,
-    points: [[f.start, f.capital] as [string, number], ...c.series.filter(([d]) => d !== f.start)],
+    points: linePoints(f, c, live),
   })
   const series: ChartSeries[] = [
     line(s),
     ...(twin ? [line(twin, true)] : []),
-    ...(f.benchmark ? [{ key: 'sp500', name: 'S&P 500', color: 'var(--viz-ref)', dashed: true, points: [[f.start, f.capital] as [string, number], ...f.benchmark.series.filter(([d]) => d !== f.start)] }] : []),
+    ...(bench ? [{ key: 'sp500', name: 'S&P 500', color: 'var(--viz-ref)', dashed: true, points: linePoints(f, bench, live) }] : []),
   ]
   return (
     <>
@@ -325,6 +330,7 @@ export default function StrategyDetail() {
         <strong>Paper money only. Past and live results do not guarantee future results.</strong> {f.research_mode ? 'RESEARCH MODE: not yet proven live.' : ''}
       </p>
       <UniverseSwitch u={u} set={setU} f={f} />
+      {live && <LiveLine live={live} />}
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="grid content-start gap-3">
           <Summary s={s} />

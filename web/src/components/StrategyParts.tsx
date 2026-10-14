@@ -1,8 +1,8 @@
 import { Link } from 'react-router'
 import { formatEur } from '../lib/costs'
 import { formatPct, signClass } from '../lib/format'
-import { COLORS, statusOf, type Universe } from '../lib/strategies'
-import type { StrategiesFile, StrategyCard } from '../types'
+import { COLORS, nyTime, statusOf, type Universe } from '../lib/strategies'
+import type { StrategiesFile, StrategiesLiveFile, StrategyCard } from '../types'
 import { Badge } from './ui'
 
 export function TickerLink({ t }: { t: string }) {
@@ -82,5 +82,22 @@ export function MoneyChips({ s, max = 4 }: { s: StrategyCard; max?: number }) {
       ))}
       {chips.length > max && <li className="px-1 text-sm text-slate-600 dark:text-zinc-400">+{chips.length - max} more</li>}
     </ul>
+  )
+}
+
+/** "LIVE · updated 11:05 AM New York": the values are today's estimate, not the sealed record. */
+export function LiveLine({ live }: { live: StrategiesLiveFile }) {
+  const at = live.prices_at ?? live.generated_at
+  const open = live.market === 'open'
+  return (
+    <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100" role="status">
+      <span className="inline-flex items-center gap-1.5 font-semibold">
+        <span className={`size-2 rounded-full bg-emerald-500 ${open ? 'motion-safe:animate-pulse' : ''}`} aria-hidden="true" />
+        {open ? 'LIVE' : 'Today, after the close'}
+      </span>
+      <span>
+        {open ? `Updated ${nyTime(at)} New York, every 30 minutes; prices about 15 minutes delayed.` : `Estimated at ${nyTime(at)} New York.`} The official numbers are written after the close.
+      </span>
+    </p>
   )
 }

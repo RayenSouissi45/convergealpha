@@ -11,7 +11,7 @@ interface IntradayFile {
   alerts: { ticker: string; type: string; severity: 'high' | 'medium' | 'info'; text: string; url?: string }[]
 }
 
-/** Alerts from the intraday check (every ~2 hours in market hours). Hidden when not from today. */
+/** Alerts from the intraday check (every 30 minutes in market hours). Hidden when not from today. */
 export function IntradayCard() {
   const res = useSiteJson<IntradayFile>('intraday.json')
   const [today] = useState(() => new Date().toDateString())

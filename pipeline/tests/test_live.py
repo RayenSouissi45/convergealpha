@@ -1,0 +1,138 @@
+"""Live estimate of the paper strategies during US trading hours: never written to the ledger, and
+equal to the official value the engine records that night when the last price is the close."""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, date, datetime
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from convergealpha.paper import engine as E
+from convergealpha.paper import export as X
+from convergealpha.paper import live as L
+from convergealpha.paper import strategies as S
+from tests.test_paper import DAYS, FX, VAL, panel, table, today
+
+
+def test_market_state_follows_new_york_hours() -> None:
+    assert L.market_state(datetime(2026, 10, 14, 13, 0, tzinfo=UTC)) == "pre-open"  # 9:00 New York
+    assert L.market_state(datetime(2026, 10, 14, 14, 0, tzinfo=UTC)) == "open"  # 10:00
+    assert L.market_state(datetime(2026, 10, 14, 20, 30, tzinfo=UTC)) == "closed"  # 16:30
+    assert L.market_state(datetime(2026, 10, 17, 15, 0, tzinfo=UTC)) == "closed"  # Saturday
+
+
+def _card(tmp: Path, until: int, closes: list[float], opens: list[float]) -> tuple[dict, dict]:  # type: ignore[type-arg]
+    pnl = panel(
+        {"AAA": closes, "SPY": [660.0] * len(closes)}, {"AAA": opens, "SPY": [660.0] * len(closes)}
+    )
+    t = table({"AAA": {"price": closes[until]}, "SPY": {"price": 660.0, "adv_dollar": 3e10}})
+    books, _ = E.run(tmp, pnl, FX, DAYS[until], today(t), "x", (S.SPECS[0], S.BENCHMARK))
+    out = X.export(books, t, DAYS[until].strftime("%Y-%m-%d"), datetime(2026, 10, 13, 21, tzinfo=UTC), (1.10, "2026-10-09"), (True, "ok", 0), VAL, 0.56)  # fmt: skip
+    return out, {"pnl": pnl, "t": t}
+
+
+def test_live_value_equals_the_official_value_when_the_last_price_is_the_close(
+    tmp_path: Path,
+) -> None:
+    closes = [50.0] * 9 + [51.5, 52.0, 52.0]
+    opens = [50.0] * 9 + [50.8, 51.6, 52.0]
+    f, ctx = _card(
+        tmp_path, 8, closes, opens
+    )  # official numbers after the Oct 13 close: a buy waits
+    card = f["strategies"][0]
+    assert card["pending"] and card["pending"][0]["spread"] > 0
+    day = DAYS[9].date()
+    q = {
+        "AAA": L.Quote(open=50.8, last=51.5, at="x"),
+        "SPY": L.Quote(open=660.0, last=660.0, at="x"),
+    }
+    est = L.estimate(card, q, 1.10, day, f["capital"])
+    assert [x["ticker"] for x in est["filled_today"]] == ["AAA"]
+    # The engine's own day, run the same way the daily build would tonight.
+    books, _ = E.run(
+        tmp_path, ctx["pnl"], FX, DAYS[9], today(ctx["t"]), "y", (S.SPECS[0], S.BENCHMARK)
+    )
+    official = books[S.SPECS[0].key].values[-1][1]
+    assert est["value"] == pytest.approx(official, abs=1e-6)
+    assert est["holdings"][0]["bought_today"] and est["holdings"][0]["move"] == pytest.approx(51.5 / 50.8 - 1)  # fmt: skip
+
+
+def test_before_the_open_nothing_fills_and_cash_is_the_value(tmp_path: Path) -> None:
+    f, _ = _card(tmp_path, 8, [50.0] * 12, [50.0] * 12)
+    card = f["strategies"][0]
+    est = L.estimate(
+        card, {"AAA": L.Quote(open=None, last=50.0, at="x")}, 1.10, DAYS[9].date(), 200.0
+    )
+    assert est["filled_today"] == [] and est["value"] == pytest.approx(200.0)
+    assert [w["ticker"] for w in est["waiting"]] == ["AAA"]
+
+
+def test_a_holding_is_marked_at_its_latest_price_and_a_waiting_sell_fills_at_the_open() -> None:
+    card = {
+        "key": "x-v1", "benchmark": False, "cash": 10.0, "value": 210.0,
+        "holdings": [{"ticker": "BBB", "shares": 4.0, "entry_usd": 50.0, "close_usd": 55.0, "cost_eur": 190.0, "spread": 0.001}],
+        "pending": [],
+    }  # fmt: skip
+    est = L.estimate(card, {"BBB": L.Quote(open=55.0, last=57.2, at="x")}, 1.10, date(2026, 10, 15))
+    assert est["value"] == pytest.approx(10.0 + 4 * 57.2 / 1.10)
+    assert est["holdings"][0]["day_move"] == pytest.approx(57.2 / 55.0 - 1)
+    assert est["day_change_eur"] == pytest.approx(est["value"] - 210.0)
+    card["pending"] = [{"side": "sell", "ticker": "BBB", "fill_on": "2026-10-15", "spread": 0.001}]
+    est = L.estimate(card, {"BBB": L.Quote(open=56.0, last=57.2, at="x")}, 1.10, date(2026, 10, 15))
+    assert est["holdings"] == [] and est["value"] == pytest.approx(
+        10.0 + 4 * 56.0 / 1.10 * (1 - 0.0005) - 1.0
+    )
+
+
+def _site(tmp: Path, f: dict) -> Path:  # type: ignore[type-arg]
+    (tmp / "strategies.json").write_text(json.dumps(f), encoding="utf-8")
+    return tmp
+
+
+def test_run_writes_the_live_file_and_never_the_ledger(tmp_path: Path) -> None:
+    f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
+    ledger_before = (tmp_path / "d" / E.LEDGER).read_text(encoding="utf-8")
+    site = _site(tmp_path, f)
+    fake = lambda tks, d: {
+        t: L.Quote(
+            open=50.0 if t == "AAA" else 660.0,
+            last=51.0 if t == "AAA" else 661.0,
+            at="2026-10-14T15:00:00+00:00",
+        )
+        for t in tks
+    }  # noqa: E731
+    out = L.run(site, datetime(2026, 10, 14, 15, 0, tzinfo=UTC), quote_source=fake)
+    assert out is not None and out["market"] == "open"
+    live = json.loads((site / "strategies_live.json").read_text(encoding="utf-8"))
+    assert set(live["strategies"]) == {S.SPECS[0].key} and live["benchmark"]["key"] == "sp500-v1"
+    assert live["strategies"][S.SPECS[0].key]["vs_benchmark"] is not None
+    assert (tmp_path / "d" / E.LEDGER).read_text(encoding="utf-8") == ledger_before
+
+
+def test_run_before_the_open_only_says_it_waits(tmp_path: Path) -> None:
+    f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
+    site = _site(tmp_path, f)
+    called: list[int] = []
+    out = L.run(
+        site,
+        datetime(2026, 10, 14, 12, 0, tzinfo=UTC),
+        quote_source=lambda t, d: called.append(1) or {},
+    )  # type: ignore[func-returns-value]
+    assert (
+        out is not None and out["market"] == "pre-open" and out["strategies"] == {} and not called
+    )
+
+
+def test_yahoo_quotes_keep_only_todays_bar(monkeypatch: pytest.MonkeyPatch) -> None:
+    bars = pd.DataFrame({
+        "ticker": ["AAA", "AAA", "BBB"], "date": pd.to_datetime(["2026-10-13", "2026-10-14", "2026-10-13"]),
+        "open": [50.0, 50.5, 20.0], "close": [50.2, 51.0, 20.1],
+    })  # fmt: skip
+    import convergealpha.sources.prices as P
+
+    monkeypatch.setattr(P, "download", lambda *a, **k: bars)
+    q = L.yahoo_quotes(["AAA", "BBB"], date(2026, 10, 14))
+    assert set(q) == {"AAA"} and q["AAA"].open == 50.5 and q["AAA"].last == 51.0

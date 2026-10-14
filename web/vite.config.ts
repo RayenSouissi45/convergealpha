@@ -14,5 +14,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
+    // Page tests render the whole app; a cold first run on a busy machine can pass 5 s.
+    testTimeout: 15000,
   },
 })
