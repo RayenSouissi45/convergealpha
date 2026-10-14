@@ -131,6 +131,63 @@ def next_results(data_dir: Path) -> dict[str, str | None]:
     return out
 
 
+DECAY_MIN_PERIODS = 6  # independent periods before a family can be called "not working live"
+
+
+def family_ic(data_dir: Path, tr: pd.DataFrame, as_of: pd.Timestamp) -> dict[str, Any]:
+    """Signal decay: does each evidence family still rank stocks in the right order live?
+    Per forecast day, the rank correlation between the family score and the stock's return over
+    1 week and 1 month (eligible stocks); averaged over matured days. A family is "not working
+    live" after 6+ independent periods with a negative average and t below -2 (a flag for the
+    next rules version, never an automatic change)."""
+    from convergealpha.features.families import FAMILIES, FAMILY_NAMES
+
+    idx = pd.DatetimeIndex(tr.index)
+    per: dict[tuple[str, str], list[float]] = {}
+    for day, f in snapshot_days(data_dir):
+        d = pd.Timestamp(day)
+        if d not in idx:
+            continue
+        i = idx.get_loc(d)
+        snap = pd.read_parquet(f)
+        if "eligible" in snap:
+            snap = snap[snap["eligible"].astype(bool)]
+        snap = snap.set_index("ticker")
+        for days, name in ((5, "1w"), (21, "1m")):
+            j = i + days
+            if j >= len(idx) or idx[j] > as_of:
+                continue
+            tks = [t for t in snap.index if t in tr.columns]
+            ret = (tr.loc[idx[j], tks] / tr.loc[idx[i], tks] - 1).astype(float)
+            for fam in FAMILIES:
+                if fam not in snap:
+                    continue
+                x = snap[fam].reindex(ret.index).astype(float)
+                ok = x.notna() & ret.notna()
+                if ok.sum() >= 30:
+                    per.setdefault((fam, name), []).append(float(x[ok].rank().corr(ret[ok].rank())))
+    out: dict[str, Any] = {}
+    for fam in FAMILIES:
+        row: dict[str, Any] = {"name": FAMILY_NAMES.get(fam, fam)}
+        for days, name in ((5, "1w"), (21, "1m")):
+            ics = per.get((fam, name), [])
+            periods = len(ics) / days
+            if not ics:
+                row[name] = {"days": 0}
+                continue
+            mean = float(np.mean(ics))
+            sd = float(np.std(ics, ddof=1)) if len(ics) > 1 else float("nan")
+            t = (
+                mean / (sd / np.sqrt(max(periods, 1e-9)))
+                if sd and np.isfinite(sd) and sd > 0
+                else None
+            )
+            status = "too early" if periods < DECAY_MIN_PERIODS else ("not working live" if mean < 0 and t is not None and t < -2 else "working" if mean > 0 else "unclear")  # fmt: skip
+            row[name] = {"days": len(ics), "periods": round(periods, 2), "ic": mean, "t": t, "status": status}  # fmt: skip
+        out[fam] = row
+    return out
+
+
 def export(data_dir: Path, tr: pd.DataFrame, as_of: pd.Timestamp, base_up: Mapping[str, float]) -> dict[str, Any]:  # fmt: skip
     days = snapshot_days(data_dir)
     df = outcomes(data_dir, tr, as_of)
@@ -141,6 +198,7 @@ def export(data_dir: Path, tr: pd.DataFrame, as_of: pd.Timestamp, base_up: Mappi
         "confident": CONFIDENT,
         "horizons": card(df, base_up),
         "first_result": next_results(data_dir),
+        "families": family_ic(data_dir, tr, as_of),
         "note": "Every eligible stock of every day counts, losers too. Forecasts on consecutive days overlap in time, so the 95% ranges are too narrow; read them with the number of forecast days.",
     }
 

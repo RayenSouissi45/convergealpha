@@ -9,7 +9,9 @@ import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
-import { holdingStatus, usePortfolioView } from '../lib/portfolio'
+import { breakers, holdingStatus, usePortfolioView } from '../lib/portfolio'
+import { useFx } from '../lib/fx'
+import { formatEur, formatEurSigned } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { toRows, useScreener } from '../lib/screener'
 import { useBrokerList, useOnlyZero, zeroAvailability, zeroKeep } from '../lib/zero'
@@ -130,8 +132,21 @@ export default function Today() {
   const reds = top(rows.filter((r) => r.opp === 'red'), 'ret_1w', 6)
   const candidates = (full ?? rows).filter((r) => r.eligible === true && isBuy(r))
   const warnings = portfolio.holdings
-    .map((h) => ({ h, s: holdingStatus(h, byTicker.get(h.ticker), candidates) }))
-    .filter((x) => x.s.label !== 'HOLD')
+    .map((h) => ({ h, s: holdingStatus(h, byTicker.get(h.ticker), candidates), b: breakers(byTicker.get(h.ticker)) }))
+    .filter((x) => x.s.label !== 'HOLD' || x.b.length > 0)
+  // Your day in one line: what your stocks did today, and whether anything needs you.
+  const fx = useFx()
+  let valueEur = 0
+  let dayEur = 0
+  for (const h of portfolio.holdings) {
+    const r = byTicker.get(h.ticker)
+    if (!r) continue
+    const price = num(r, 'price')
+    const chg = num(r, 'change_1d')
+    if (price === null || !fx) continue
+    valueEur += (h.shares * price) / fx.rate
+    if (chg !== null) dayEur += (h.shares * price * chg) / (1 + chg) / fx.rate
+  }
 
   return (
     <>
@@ -173,16 +188,29 @@ export default function Today() {
             {screener.state !== 'ready' ? (
               <p className="text-sm text-slate-500" aria-busy={screener.state === 'loading'}>{screener.state === 'loading' ? 'Checking your holdings…' : 'Stock data is not available yet.'}</p>
             ) : warnings.length === 0 ? (
-              <p className="text-sm">All {portfolio.holdings.length} holdings: HOLD (no exit rule triggered).</p>
+              <p className="text-sm">
+                {valueEur > 0 && (
+                  <>
+                    Your {portfolio.holdings.length} stocks: <strong className="tabular-nums">{formatEurSigned(dayEur, 0)}</strong> today ({formatEur(valueEur, 0)}).{' '}
+                  </>
+                )}
+                <strong>Nothing to do today:</strong> every holding is HOLD and no news or filing checks against your reasons.
+              </p>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-zinc-800">
-                {warnings.map(({ h, s }) => (
+                {valueEur > 0 && (
+                  <li className="pb-2 text-sm">
+                    Your {portfolio.holdings.length} stocks: <strong className="tabular-nums">{formatEurSigned(dayEur, 0)}</strong> today ({formatEur(valueEur, 0)}). {warnings.length} need{warnings.length === 1 ? 's' : ''} a look:
+                  </li>
+                )}
+                {warnings.map(({ h, s, b }) => (
                   <li key={h.ticker} className="py-2">
                     <div className="flex items-center justify-between">
                       <Link to={`/stock/${h.ticker}`} className="font-semibold underline">{h.ticker}</Link>
                       <LabelBadge label={s.label} />
                     </div>
                     <p className="text-sm text-slate-600 dark:text-zinc-400">{s.reasons.join(' ')}</p>
+                    {b.length > 0 && <p className="text-sm text-amber-800 dark:text-amber-300">Check your reason: {b.join('; ')}.</p>}
                   </li>
                 ))}
               </ul>

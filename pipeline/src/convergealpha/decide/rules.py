@@ -65,6 +65,10 @@ def blocking_events(t: pd.DataFrame) -> pd.Series:
             reasons.append("late filing notice (NT 10-K/10-Q)")
         if bool(fda_tag.get(tk, False)):
             reasons.append("FDA decision pending")
+        if bool(r.get("bankruptcy_filed")):
+            reasons.append("bankruptcy or receivership filed (8-K 1.03)")
+        if bool(r.get("delisting_notice")):
+            reasons.append("delisting notice (8-K 3.01)")
         pc = r.get("price_check")
         if isinstance(pc, str) and pc:
             reasons.append(f"price data failed a check ({pc})")

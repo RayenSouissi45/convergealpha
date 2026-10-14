@@ -185,6 +185,16 @@ describe('Strategies page', () => {
     expect(screen.getByRole('heading', { name: 'Trade history (3)' })).toBeInTheDocument()
     expect(screen.getByText('+€8.60 (+4.6%)')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Show the Only finanzen.net zero version' })).toBeInTheDocument()
+    // Copy it with your money: the holdings scaled to 5,000 €, with a warning for the all-stocks version.
+    const copy = screen.getByRole('heading', { name: 'Copy it with your money' }).closest('section')!
+    expect(within(copy).getByText(/This is the all-stocks version/)).toBeInTheDocument()
+    const orders = within(copy).getByRole('list', { name: 'Orders to copy it' })
+    expect(within(orders).getByText(/× COHU/)).toBeInTheDocument()
+    expect(within(orders).getByText('free')).toBeInTheDocument()
+    await userEvent.setup().click(within(copy).getByRole('button', { name: 'Practice first: add as paper trades' }))
+    expect(within(copy).getByRole('link', { name: 'See them in Portfolio (paper)' })).toHaveAttribute('href', '/portfolio?paper=1')
+    const stored = JSON.parse(localStorage.getItem('ca-journal') ?? '{}') as { trades?: { ticker: string; paper?: boolean }[] }
+    expect(stored.trades?.map((t) => [t.ticker, t.paper])).toEqual([['COHU', true]])
   })
 
   it('“Give me a strategy” uses your amount and marks the best overall', async () => {

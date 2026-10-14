@@ -371,7 +371,8 @@ def build_table(src: Sources) -> pd.DataFrame:
 
     # ---- filings flags (SEC)
     fl = src.filings
-    for c in ("offering_recent", "merger_pending", "auditor_change", "restatement", "late_filing"):
+    flags = ("offering_recent", "merger_pending", "auditor_change", "restatement", "late_filing", "officer_change", "impairment", "bankruptcy_filed", "delisting_notice")  # fmt: skip
+    for c in flags:
         t[c] = False
     if not fl.empty:
         fl = fl[fl["filing_date"] <= as_of]
@@ -387,6 +388,23 @@ def build_table(src: Sources) -> pd.DataFrame:
                 recent90.loc[recent90["items"].fillna("").str.contains("4.02"), "cik"]
             ),
             "late_filing": set(recent90.loc[recent90["form"].isin(LATE_FORMS), "cik"]),
+            # A reason to buy can break: a director or officer leaves, assets are written down.
+            "officer_change": set(
+                recent10.loc[recent10["items"].fillna("").str.contains("5.02", regex=False), "cik"]
+            ),
+            "impairment": set(
+                recent90.loc[
+                    (recent90["filing_date"] > as_of - pd.Timedelta(days=30))
+                    & recent90["items"].fillna("").str.contains("2.06", regex=False),
+                    "cik",
+                ]
+            ),
+            "bankruptcy_filed": set(
+                recent90.loc[recent90["items"].fillna("").str.contains("1.03", regex=False), "cik"]
+            ),
+            "delisting_notice": set(
+                recent90.loc[recent90["items"].fillna("").str.contains("3.01", regex=False), "cik"]
+            ),
         }
         for c, ciks in by.items():
             t[c] = cik.isin(ciks)

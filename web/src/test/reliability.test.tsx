@@ -123,3 +123,25 @@ describe('live report card on the Scorecard', () => {
     expect(screen.getByRole('link', { name: "This month's forecasts (JSON)" })).toHaveAttribute('href', 'data/forecasts/2026-10.json')
   })
 })
+
+describe('stock page answers', () => {
+  it('says why it moved today and answers the seven questions', async () => {
+    const { default: aapl } = await import('./fixtures/stocks/AAPL.json')
+    const stock = {
+      ...aapl,
+      why_move: { move: -0.042, market: -0.01, sector: -0.005, own: -0.027, news: [{ headline: 'Apple cuts its guidance', source: 'Reuters', url: 'https://example.com/a' }], filings: [], text: '-4.2% today: market -1.0%, sector -0.5%, its own part -2.7%. News: Apple cuts its guidance.' },
+      valuation: { value_pct: 22, value_view: 'expensive for its sector' },
+      distress: { level: 'low', why: null },
+    }
+    stubFetch({ 'health.json': health, 'stocks/AAPL.json': stock })
+    render_('/stock/AAPL')
+    expect(await screen.findByText(/Why did it move today\?/)).toBeInTheDocument()
+    expect(screen.getByText(/its own part -2\.7%/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Read (Reuters)' })).toHaveAttribute('href', 'https://example.com/a')
+    const q = screen.getByRole('heading', { name: 'Seven questions before you buy' }).closest('section')!
+    expect(within(q).getAllByRole('listitem')).toHaveLength(7)
+    expect(within(q).getByText('expensive for its sector')).toBeInTheDocument()
+    expect(within(q).getByText('no warning sign')).toBeInTheDocument()
+    expect(within(q).getByRole('link', { name: 'Check it against your rules' })).toHaveAttribute('href', '/portfolio?tab=log&t=AAPL')
+  })
+})

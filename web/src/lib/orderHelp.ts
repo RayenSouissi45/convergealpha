@@ -3,6 +3,7 @@
 // cost compared with the app's estimate.
 
 import type { Journal } from './journal'
+import type { StrategyCard } from '../types'
 
 /** gettex trades US shares 8:00–22:00 German time, but the US market is only open 15:30–22:00
  * (Berlin): outside it, market makers quote wider spreads. */
@@ -70,7 +71,7 @@ export function measuredCosts(j: Journal, spreadOf: (ticker: string) => number |
   const xs: { paid: number; est: number }[] = []
   for (const t of j.trades) {
     const s = t.snapshot
-    if (t.side !== 'buy' || !s?.price_usd || !s.fx || !(t.priceEur > 0)) continue
+    if (t.paper || t.side !== 'buy' || !s?.price_usd || !s.fx || !(t.priceEur > 0)) continue
     const mid = s.price_usd / s.fx
     const spread = spreadOf(t.ticker)
     xs.push({ paid: t.priceEur / mid - 1, est: (spread ?? 0.002) / 2 })
@@ -86,4 +87,37 @@ export function measuredCosts(j: Journal, spreadOf: (ticker: string) => number |
       ? `Your buys cost ${(paid * 100).toFixed(2)}% above the app's price on average, ${factor.toFixed(1)}× its estimate (${(estimate * 100).toFixed(2)}%): Plan now counts ${factor.toFixed(1)}× the spread.`
       : `Your buys cost ${(paid * 100).toFixed(2)}% above the app's price on average, within its estimate (${(estimate * 100).toFixed(2)}%).`
   return { n: xs.length, paid, estimate, factor, text }
+}
+
+const COPY_FREE_FROM = 500
+const COPY_SPREAD = 0.002 // a typical spread when the card carries none
+
+export interface CopyLine {
+  ticker: string
+  weight: number
+  shares: number
+  orderEur: number
+  fee: number
+  limit: number
+  priceEur: number
+}
+
+/** The strategy's holdings scaled to your amount: whole shares, the finanzen.net zero fee rule,
+ * a euro limit price per order. Waiting buys are listed separately (they fill at the next open). */
+export function copyPlan(s: StrategyCard, amount: number, fx: number): { lines: CopyLine[]; cashEur: number } {
+  const value = s.value ?? 0
+  const lines: CopyLine[] = []
+  let spent = 0
+  for (const h of s.holdings) {
+    if (!h.close_usd || !h.value_eur || value <= 0) continue
+    const weight = h.value_eur / value
+    const priceEur = (h.close_usd / fx) * (1 + COPY_SPREAD / 2)
+    const shares = Math.floor((amount * weight) / priceEur)
+    if (shares <= 0) continue
+    const orderEur = shares * priceEur
+    const fee = orderEur >= COPY_FREE_FROM ? 0 : 1
+    spent += orderEur + fee
+    lines.push({ ticker: h.ticker, weight, shares, orderEur, fee, limit: limitPriceEur(h.close_usd, fx, COPY_SPREAD), priceEur })
+  }
+  return { lines, cashEur: Math.max(0, amount - spent) }
 }

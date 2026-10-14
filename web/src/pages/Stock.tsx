@@ -35,6 +35,7 @@ import {
   type PlanSection,
 } from '../components/stock/decision'
 import { PatternsCard, type PatternsSection } from '../components/stock/patterns'
+import { SevenQuestions, WhyMoveLine, type WhyMove } from '../components/stock/Questions'
 import { OppBadge, OppWhy } from '../components/Opportunity'
 import { Badge, Card, PageHeader, Planned, Row } from '../components/ui'
 import { ZeroBadge } from '../components/Zero'
@@ -196,6 +197,7 @@ export default function Stock() {
         )}
         {opp && <OppBadge ticker={s.ticker} color={opp.color} opp={opp} />}
       </div>
+      <WhyMoveLine w={s.why_move as WhyMove | null | undefined} />
 
       <div className="grid gap-3 lg:grid-cols-3">
         {s.decision ? <DecisionCard d={s.decision as DecisionSection} /> : null}
@@ -204,6 +206,7 @@ export default function Stock() {
             <OppWhy opp={opp} />
           </Card>
         )}
+        <SevenQuestions s={s} />
         {s.forecast ? <ForecastCard f={s.forecast as ForecastSection} /> : null}
         {s.families ? <FamiliesCard f={s.families as FamiliesSection} /> : null}
         <Card title="Price" className="lg:col-span-2">

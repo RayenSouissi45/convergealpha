@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch, VersionSwitch } from '../components/StrategyParts'
+import { CopyStrategy } from '../components/CopyStrategy'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
@@ -355,6 +356,7 @@ export default function StrategyDetail() {
         <div className="grid content-start gap-3">
           <Summary s={s} />
           <RightNow s={s} />
+          {!s.benchmark && <CopyStrategy key={s.key} s={s} fallbackFx={f.fx?.rate} />}
         </div>
         <div className="grid content-start gap-3">
           <Compare s={s} twin={twin} u={u} query={query} />

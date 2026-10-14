@@ -3,11 +3,12 @@ import { Link } from 'react-router'
 import { formatEur, formatEurSigned, formatShares } from '../../lib/costs'
 import { formatDay, formatPct, formatPrice, signClass } from '../../lib/format'
 import { evidenceChanges, fifo, normalDay, thesis, type Journal, type Position } from '../../lib/journal'
-import { holdingStatus, journalHoldings, throttle } from '../../lib/portfolio'
+import { breakers, holdingStatus, journalHoldings, throttle } from '../../lib/portfolio'
 import { exposures, maxStocks, overlapWarnings, summary } from '../../lib/risk'
 import { taxFrom, useTradeSettings } from '../../lib/settings'
 import { taxOnGain } from '../../lib/taxes'
 import { useSiteJson } from '../../lib/data'
+import { vsMarket, type SpyFile } from '../../lib/vsMarket'
 import type { MarketFile, ScreenerRow } from '../../types'
 import { LabelBadge } from '../LabelBadge'
 import { Tip } from '../Tip'
@@ -26,6 +27,22 @@ function IdleCash({ cash }: { cash: number | null }) {
   return (
     <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
       Your {formatEur(cash, 0)} in cash earns nothing at the broker. At the ECB deposit rate ({rate.value.toFixed(2)}%, {formatDay(rate.date)}), a free call-money account would pay about <strong>{formatEur(year, 0)} a year</strong> (before tax) while you wait for a buy.
+    </p>
+  )
+}
+
+/** The same trades in the S&P 500: same euros, same days. */
+function VsMarketLine({ j, invested }: { j: Journal; invested: number }) {
+  const spy = useSiteJson<SpyFile>('spy.json')
+  const vs = vsMarket(j.trades, spy.state === 'ready' ? spy.data : null)
+  if (!vs || invested <= 0) return null
+  const diff = invested - vs.marketNow
+  return (
+    <p className="mt-2 text-sm">
+      <Tip content="Every euro you put into a stock buys the S&P 500 (SPY, dividends reinvested) on the same day instead, and every sale takes the same euros out, converted with the European Central Bank's rate. Your own dividends are not counted here, so you are a little better off than shown.">Same trades in the S&P 500</Tip>
+      : <strong className="tabular-nums">{formatEur(vs.marketNow, 0)}</strong> now. You are{' '}
+      <strong className={`tabular-nums ${signClass(diff)}`}>{formatEurSigned(diff, 0)}</strong> {diff >= 0 ? 'ahead of' : 'behind'} the index since {formatDay(vs.since ?? '')}.
+      {vs.skipped ? <span className="text-xs text-slate-600 dark:text-zinc-400"> ({vs.skipped} older trade{vs.skipped === 1 ? '' : 's'} not compared)</span> : null}
     </p>
   )
 }
@@ -79,6 +96,12 @@ function PositionCard({ p, rows, fx, j }: { p: Position; rows: Map<string, Scree
             <span className="text-slate-600 dark:text-zinc-400">a normal move for this stock (usual ±{(day.usual * 100).toFixed(1)}% a day)</span>
           )}
           {day.unusual ? <span className="text-slate-600 dark:text-zinc-400"> (usual ±{(day.usual * 100).toFixed(1)}%). Check the news and your reasons before acting.</span> : null}
+        </p>
+      )}
+      {typeof p.row?.why_move === 'string' && <p className="mt-1 text-xs text-slate-700 dark:text-zinc-300">{p.row.why_move}</p>}
+      {breakers(p.row).length > 0 && (
+        <p className="mt-1 text-sm">
+          <Badge tone="warn">Check your reason</Badge> <span className="text-slate-700 dark:text-zinc-300">{breakers(p.row).join('; ')}.</span>
         </p>
       )}
       {checks.length > 0 && (
@@ -164,6 +187,7 @@ export function HoldingsTab({ j, setJ, ps, rows, fx }: { j: Journal; setJ: (j: J
             <input className={input} type="number" inputMode="decimal" min={0} step={50} value={j.cashEur ?? ''} onChange={(e) => setJ({ ...j, cashEur: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} />
           </label>
           <IdleCash cash={j.cashEur} />
+          <VsMarketLine j={j} invested={invested} />
         </Card>
         <Card title="Risk in plain numbers">
           <ul className="space-y-1.5 text-sm">

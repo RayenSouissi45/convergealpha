@@ -66,7 +66,8 @@ export function journalHoldings(j: Journal, fx: number | null): Holding[] {
 export function usePortfolioView(): PortfolioState {
   const [j] = useJournal()
   const fx = useFx()
-  return { ...EMPTY, holdings: journalHoldings(j, fx?.rate ?? null) }
+  // Real money only: paper trades never count as holdings.
+  return { ...EMPTY, holdings: journalHoldings({ ...j, trades: j.trades.filter((t) => !t.paper) }, fx?.rate ?? null) }
 }
 
 /** Drawdown throttle: −10% from the peak -> half risk; −15% -> no new buys. */
@@ -86,6 +87,29 @@ export function driftBrake(drift: { alerts: string[] } | null | undefined): { fa
   const n = drift?.alerts.length ?? 0
   if (n >= DRIFT_ALERTS) return { factor: 0.5, text: `The market looks different from what the model learned on (${n} inputs drifted): new positions at half size until it is retrained.` }
   return { factor: 1, text: null }
+}
+
+const NEWS_BREAKERS: Record<string, string> = {
+  guidance_down: 'guidance cut in the news',
+  lawsuit: 'a lawsuit in the news',
+  ceo_exit: 'the CEO or CFO is leaving',
+  downgrade: 'an analyst downgrade',
+  investigation: 'an investigation in the news',
+  going_concern: 'a going-concern doubt',
+  offering: 'a share sale (offering)',
+  dividend_down: 'a dividend cut',
+}
+
+/** News and filings of the last days that can break the reason you bought. */
+export function breakers(row: ScreenerRow | undefined): string[] {
+  if (!row) return []
+  const out: string[] = []
+  const tags = typeof row.news_negative_tags === 'string' ? row.news_negative_tags.split(',') : []
+  for (const t of tags) if (NEWS_BREAKERS[t]) out.push(NEWS_BREAKERS[t]!)
+  if (row.officer_change === true) out.push('a director or officer change was filed (8-K 5.02)')
+  if (row.impairment === true) out.push('an impairment was filed (8-K 2.06)')
+  if (row.distress === 'high') out.push(`company finances look fragile${typeof row.distress_why === 'string' ? ` (${row.distress_why})` : ''}`)
+  return out
 }
 
 // ---------------------------------------------------------------- holding labels

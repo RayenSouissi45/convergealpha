@@ -59,6 +59,8 @@ export interface Trade {
   overrode?: string[]
   /** Converted from the old dollar portfolio with an assumed exchange rate: check the price. */
   fxGuessed?: boolean
+  /** Practice with paper money first: kept apart from your real holdings, results and tax. */
+  paper?: boolean
 }
 
 /** Your own rules, written before you invest (an investment policy statement). */
@@ -137,6 +139,18 @@ export function parseJournal(v: unknown): Journal {
     createdOn: ymd(r.createdOn) ? (r.createdOn as string) : null,
   }
   return { version: 1, trades: sortTrades(trades), rules, cashEur: isNum(o.cashEur) ? o.cashEur : null, peakEur: isNum(o.peakEur) ? o.peakEur : null }
+}
+
+/** Only your real trades, or only your paper trades. `merge` puts the hidden ones back when the
+ * view is saved and marks trades added in the paper view as paper. */
+export function journalView(j: Journal, paper: boolean): { view: Journal; merge: (next: Journal) => Journal } {
+  const inView = (t: Trade) => Boolean(t.paper) === paper
+  const hidden = j.trades.filter((t) => !inView(t))
+  const known = new Set(j.trades.map((t) => t.id))
+  return {
+    view: { ...j, trades: j.trades.filter(inView) },
+    merge: (next) => ({ ...next, trades: sortTrades([...next.trades.map((t) => (known.has(t.id) ? t : { ...t, paper: paper || undefined })), ...hidden]) }),
+  }
 }
 
 export const sortTrades = (ts: Trade[]) => [...ts].sort((a, b) => (a.date === b.date ? (a.side === b.side ? 0 : a.side === 'buy' ? -1 : 1) : a.date < b.date ? -1 : 1))

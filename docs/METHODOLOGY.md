@@ -520,7 +520,10 @@ crash), every stock −20% at once, the biggest holding gapping −20% overnight
 concentration, and a before/after view of a planned trade. Drawdown brake: 10% below the peak =
 half-size new positions, 15% = no new buys. Review: trades and fees this month vs your limit,
 chasing and panic counts, winners sold earlier than losers, whether ignoring warnings paid off,
-and each closed trade scored as good/weak decision × good/bad result.
+and each closed trade scored as good/weak decision × good/bad result. Paper trades (for example a copied
+strategy, "practice first") are kept in the same journal with a paper flag and never count as
+holdings, warnings, sizing, measured costs or tax. "Copy it with your money" scales a strategy's
+holdings to your amount (whole shares, the finanzen.net zero fee rule, a euro limit price per order).
 
 ## 20. Research run once (fixed protocols and the experiment log)
 
@@ -592,6 +595,35 @@ so a lucky result cannot hide behind unreported tries.
 - **Drift actions.** When 3 or more model inputs drift (PSI above 0.25 against the last two years of
   training data), the position plan sizes new positions at half, and the daily workflow starts the
   weekly retraining early (if the model is more than 3 days old).
+
+- **Signal decay.** For every forecast day, each evidence family's rank correlation with the
+  stocks' later 1-week and 1-month returns is measured (eligible stocks). After 6 independent
+  periods, a family with a negative average and t below −2 is shown as "not working live": a
+  reason for the next rules version, never a silent change.
+
+## 22b. Plain answers on the stock page and your holdings (display only)
+
+`features/explain.py`. None of these feeds a label or a rule until it passes a one-time test.
+
+- **Why did it move today:** today's move = the market (SPY) + the sector beyond the market (median
+  move of the sector's eligible stocks − SPY) + its own part (the rest), with that day's headlines
+  (Finnhub, for about 150 candidates) and SEC filings; "no public reason found in the news and
+  filings the app reads" when there is none. Shown on the stock page, and for moves of 3% or more
+  in the screener data and on your holdings.
+- **What is already in the price:** the average of two sector percentiles among eligible stocks:
+  free-cash-flow yield and earnings yield (last 12 months ÷ market value); 100 = cheapest; 67+
+  "cheap for its sector", 33 or less "expensive" (at least 5 stocks per sector).
+- **Distress check (simple rules, not a probability):** liabilities above 90% of assets or negative
+  equity; cash for less than a year of cash burn; debt above 6× EBITDA or debt with negative
+  EBITDA; a late report. 0 flags = low, 1-2 = elevated, 3+ = high; a bankruptcy filing (8-K 1.03),
+  a delisting notice (8-K 3.01) or a going-concern doubt is always high.
+- **New warnings:** 8-K 1.03 (bankruptcy) and 3.01 (delisting notice) in the last 90 days block new
+  buys; 8-K 5.02 (director or officer change, 14 days), 2.06 (impairment, 30 days) and the news tag
+  "CEO or CFO leaving" show on your holdings as "check your reason", next to guidance cuts,
+  lawsuits, downgrades, investigations, offerings and dividend cuts.
+- **Seven questions** on every stock page: why it could rise, how good the evidence is, what could go
+  wrong, what is already in the price, what the app does not know, what it would do to your
+  portfolio, and whether it beats the simple alternative (a broad ETF).
 
 ## 23. Known biases and limits
 

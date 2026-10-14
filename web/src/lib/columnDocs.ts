@@ -441,6 +441,26 @@ export const COLUMN_DOCS: Record<string, ColumnDoc> = {
     status: { kind: 'data' },
     mistakes: 'It is a typical day, not the biggest possible move.',
   },
+  distress: {
+    name: 'Company finances (distress check)',
+    what: 'Simple warning signs that a company could get into money trouble. It is a checklist, not a probability.',
+    how: 'One flag each for: liabilities above 90% of assets or negative equity; cash covering less than a year of cash burn; debt above 6× EBITDA (or debt with negative EBITDA); a late annual or quarterly report. 0 flags = low, 1–2 = elevated, 3+ = high. A bankruptcy filing (8-K 1.03), a delisting notice (8-K 3.01) or a going-concern doubt in the news is always high.',
+    example: '"elevated: cash covers less than a year of cash burn".',
+    read: 'Low is the normal case. High means the company may need new money soon, which often costs shareholders.',
+    source: 'SEC XBRL company accounts (point in time) and SEC filings; news headlines (Finnhub).',
+    status: { kind: 'research' },
+    mistakes: 'Banks and insurers carry high liabilities by design: the liabilities flag says less about them. Young growth companies burn cash on purpose. It is not used by any label or rule.',
+  },
+  value_pct: {
+    name: 'Cheaper than its sector',
+    what: 'How cheap the stock is compared with the other stocks of its sector, by the cash and profit the company makes for its price.',
+    how: 'The average of two sector percentiles among eligible stocks: free-cash-flow yield (cash flow from operations minus capital spending, last 12 months, ÷ market value) and earnings yield (net income, last 12 months, ÷ market value). 100 = the cheapest of its sector. Needs at least 5 stocks in the sector.',
+    example: '"78": cheaper than about 78% of its sector; "22": more expensive than most.',
+    read: 'Cheap (67+) can mean bad news is priced in; expensive (33 or less) often means high hopes are priced in. Either can be right.',
+    source: 'SEC XBRL company accounts (point in time) and the daily market value.',
+    status: { kind: 'research' },
+    mistakes: 'Cheap stocks can stay cheap for years, and losses make the earnings yield negative. It is shown for context only: no label or rule uses it until it passes a one-time test.',
+  },
   short_pct_float: {
     name: 'Short interest',
     what: 'The share of tradable shares that investors have sold short (bets that the price falls).',
@@ -616,7 +636,7 @@ export const COLUMN_DOCS: Record<string, ColumnDoc> = {
   },
 }
 
-const COSTS_SRC = 'Your settings on the Plan page (default 1 € per buy and per sell; check your broker’s price list), the spread estimated from daily trading volume, and EUR/USD from FRED (DEXUSEU, published about weekly).'
+const COSTS_SRC = 'Your settings on the Plan page (default: the finanzen.net zero rule, 0 € for orders of 500 € or more and 1 € below; check your broker’s price list), the spread estimated from daily trading volume, and the European Central Bank’s daily EUR/USD rate.'
 const PAPER_SRC = 'The paper-trading ledger (append-only, hash-chained) in the private data repo, extended after every daily close.'
 
 /** Numbers on the Plan and Strategies pages (not screener columns), explained the same way. */

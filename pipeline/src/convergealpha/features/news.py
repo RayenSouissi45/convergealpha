@@ -133,6 +133,14 @@ TAGS: list[tuple[str, re.Pattern[str], int]] = [
         -1,
     ),
     ("lawsuit", re.compile(r"\bclass action\b|\blawsuit\b|\bsued\b", re.I), -1),
+    (
+        "ceo_exit",
+        re.compile(
+            r"\b(CEO|CFO|chief executive|chief financial officer)\b.{0,40}\b(resign|resigns|resigned|steps down|stepping down|departs|departure|ousted|fired|leaves|to leave)\b",
+            re.I,
+        ),
+        -1,
+    ),
     ("upgrade", re.compile(r"\bupgrade[sd]?\b", re.I), 1),
     ("downgrade", re.compile(r"\bdowngrade[sd]?\b", re.I), -1),
 ]

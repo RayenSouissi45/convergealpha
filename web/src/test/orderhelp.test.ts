@@ -40,3 +40,53 @@ describe('order help for finanzen.net zero', () => {
     expect(measuredCosts({ ...j, trades: j.trades.map((_, i) => buy(i, 0.0005)) }, () => 0.002).factor).toBe(1)
   })
 })
+
+describe('copy a strategy and paper trades', () => {
+  it('scales the holdings to your amount with whole shares, fees and limits', async () => {
+    const { copyPlan } = await import('../lib/orderHelp')
+    const card = {
+      value: 5000,
+      holdings: [
+        { ticker: 'AAA', close_usd: 110, value_eur: 2500 },
+        { ticker: 'BBB', close_usd: 550, value_eur: 1000 },
+      ],
+    } as unknown as Parameters<typeof copyPlan>[0]
+    const { lines, cashEur } = copyPlan(card, 2000, 1.1)
+    // AAA: 50% of 2,000 € at ~100.10 € → 9 shares (≈ 901 €, free); BBB: 20% = 400 € at ~500.50 € → none.
+    expect(lines.map((l) => [l.ticker, l.shares, l.fee])).toEqual([['AAA', 9, 0]])
+    expect(cashEur).toBeCloseTo(2000 - 9 * 100 * 1.001, 1)
+    expect(lines[0]!.limit).toBe(limitPriceEur(110, 1.1, 0.002))
+  })
+
+  it('keeps paper trades apart and merges them back when saved', async () => {
+    const { journalView } = await import('../lib/journal')
+    const t = (id: string, paper?: boolean): Trade => ({ id, date: '2026-10-14', side: 'buy', ticker: 'AAA', shares: 1, priceEur: 100, feeEur: 0, paper })
+    const j: Journal = { ...EMPTY_JOURNAL, trades: [t('r1'), t('p1', true)] }
+    const real = journalView(j, false)
+    expect(real.view.trades.map((x) => x.id)).toEqual(['r1'])
+    const paper = journalView(j, true)
+    expect(paper.view.trades.map((x) => x.id)).toEqual(['p1'])
+    // Adding a trade in the paper view marks it paper and keeps the real one.
+    const saved = paper.merge({ ...paper.view, trades: [...paper.view.trades, t('p2')] })
+    expect(saved.trades.map((x) => [x.id, Boolean(x.paper)])).toEqual([['p1', true], ['p2', true], ['r1', false]])
+    // Deleting in the real view never touches paper trades.
+    expect(real.merge({ ...real.view, trades: [] }).trades.map((x) => x.id)).toEqual(['p1'])
+  })
+})
+
+describe('your trades vs the S&P 500', () => {
+  it('replays every buy and sale into the index on the same day', async () => {
+    const { vsMarket } = await import('../lib/vsMarket')
+    // The index doubles in euros between Oct 1 and Oct 20.
+    const spy = { dates: ['2026-10-01', '2026-10-10', '2026-10-20'], tr: [100, 150, 200], usd_per_eur: [1, 1, 1] }
+    const buy: Trade = { id: 'b', date: '2026-10-01', side: 'buy', ticker: 'AAA', shares: 10, priceEur: 100, feeEur: 0 }
+    const sell: Trade = { id: 's', date: '2026-10-10', side: 'sell', ticker: 'AAA', shares: 5, priceEur: 120, feeEur: 0 }
+    const paper: Trade = { ...buy, id: 'p', paper: true }
+    const v = vsMarket([buy, sell, paper], spy)!
+    // 1,000 € buys 10 units; the 600 € sale removes 4 units; 6 units × 200 € = 1,200 €.
+    expect(v.marketNow).toBeCloseTo(1200)
+    expect(v.takenOut).toBe(600)
+    expect(v.since).toBe('2026-10-01')
+    expect(vsMarket([{ ...buy, date: '2026-09-01' }], spy)).toBeNull() // before the file starts
+  })
+})

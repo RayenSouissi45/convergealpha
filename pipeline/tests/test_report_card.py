@@ -88,3 +88,20 @@ def test_live_correction_follows_its_fixed_rule() -> None:
     # A huge gap is capped.
     big = LC.fit(df.assign(p_up=0.98))
     assert big["1w"]["shift"] >= -LC.CAP
+
+
+def test_signal_decay_is_measured_per_family(tmp_path: Path) -> None:
+    # 40 stocks: f1 ranks them in the right order (higher f1 = higher return), f2 in the wrong one.
+    tks = [f"S{i}" for i in range(40)]
+    n = len(DAYS)
+    tr_ = pd.DataFrame({t: 100 * (1 + 0.001 * i) ** np.arange(n) for i, t in enumerate(tks)}, index=DAYS)  # fmt: skip
+    for k in range(8):
+        d = tmp_path / "snapshots" / f"{DAYS[k]:%Y}" / f"{DAYS[k]:%Y%m%d}"
+        d.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"ticker": tks, "f1": np.arange(40.0), "f2": -np.arange(40.0), "eligible": True}).to_parquet(d / "scores.parquet")  # fmt: skip
+    fam = RC.family_ic(tmp_path, tr_, DAYS[-1])
+    assert fam["f1"]["1w"]["ic"] == pytest.approx(1.0) and fam["f2"]["1w"]["ic"] == pytest.approx(
+        -1.0
+    )
+    assert fam["f1"]["1w"]["status"] == "too early"  # 8 days = 1.6 independent weeks
+    assert fam["f1"]["name"] == "Opinion" and fam["f3"]["1w"] == {"days": 0}

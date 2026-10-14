@@ -417,5 +417,7 @@ def f6_inputs(
     out["assets"] = df["assets"]
     out["equity"] = df["equity"]
     out["debt"] = debt
+    out["cash"] = df["cash"]
+    out["liabilities"] = df["liabilities"] if "liabilities" in df else np.nan
     out.index.name = "cik"
     return out

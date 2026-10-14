@@ -43,6 +43,8 @@ SCREENER_FIELDS: tuple[str, ...] = (
     "price", "change_1d", "ret_1w", "ret_1m", "ret_3m", "ret_ytd", "ret_1y",
     "vol_63", "atr_pct", "trend_up", "dist_52w_high", "market_cap", "adv_dollar",
     "next_earnings", "days_to_earnings", "cluster", "last_date", "opp", "opp_event",
+    "why_move", "value_pct", "value_view", "distress", "distress_why",
+    "news_negative_tags", "officer_change", "impairment",
 )  # fmt: skip
 
 STAT_KEYS: tuple[str, ...] = (
@@ -764,6 +766,22 @@ def build(ctx: RunContext) -> int:
             ),
         )
 
+    # ---- plain answers: why it moved, what is in the price, how fragile (display only)
+    moves: dict[str, dict[str, Any]] = {}
+    try:
+        from convergealpha.config import SPY
+        from convergealpha.features import explain as EX
+
+        spy = panel.close[SPY].dropna() if SPY in panel.close else pd.Series(dtype=float)
+        spy_move = float(spy.iloc[-1] / spy.iloc[-2] - 1) if len(spy) >= 2 else float("nan")
+        moves = EX.why_move(t, src.news, src.filings, as_of, spy_move)
+        t["why_move"] = pd.Series({k: v["text"] for k, v in moves.items() if abs(v["move"]) >= EX.EXPLAIN_MOVE}, dtype=object).reindex(t.index)  # fmt: skip
+        for frame in (EX.valuation(t), EX.distress(t, src.filings, as_of)):
+            for c in frame.columns:
+                t[c] = frame[c]
+    except Exception:
+        log.exception("explanations failed; the pages show them as missing")
+
     # ---- exports
     meta = {
         "reliability": _reliability_meta(extra),
@@ -847,6 +865,13 @@ def build(ctx: RunContext) -> int:
         }
         payload.update(extra.get("stock_sections", {}).get(tk, {}))
         payload["opportunity"] = opp_export.get(tk)
+        payload["why_move"] = moves.get(tk)
+        payload["valuation"] = {
+            k: site._round(k, row.get(k))
+            for k in ("value_pct", "value_fcf_pct", "value_earn_pct", "earnings_yield", "fcf_yield", "value_view")
+            if k in row
+        }  # fmt: skip
+        payload["distress"] = {"level": row.get("distress"), "why": row.get("distress_why")} if "distress" in row else None  # fmt: skip
         site.write_stock(paths.site, tk, payload)
 
     market = market_summary(panel, snap)
@@ -952,6 +977,30 @@ def build(ctx: RunContext) -> int:
         log.exception("incident log failed")
     from convergealpha.util.io import write_json
 
+    try:
+        # The S&P 500 with dividends and the EUR/USD rate, daily for 3 years: your own trades
+        # replayed into the index on Portfolio ("same money in the S&P 500").
+        from convergealpha.config import SPY as _SPY
+
+        if _SPY in panel.tr:
+            spy_tr = panel.tr[_SPY].dropna()
+            spy_tr = spy_tr[spy_tr.index >= as_of - pd.Timedelta(days=3 * 365)]
+            rate = user_fx.reindex(spy_tr.index, method="ffill") if user_fx is not None and not user_fx.empty else None  # fmt: skip
+            site.write_json_file(
+                paths.site,
+                "spy.json",
+                {
+                    "dates": [d.strftime("%Y-%m-%d") for d in spy_tr.index],
+                    "tr": [round(float(x), 4) for x in spy_tr],
+                    "usd_per_eur": [
+                        None if rate is None or pd.isna(x) else round(float(x), 5)
+                        for x in (rate if rate is not None else spy_tr * float("nan"))
+                    ],
+                    "fx_source": user_fx_src,
+                },
+            )
+    except Exception:
+        log.exception("spy.json failed")
     try:
         # The live report card (every forecast vs what happened) and the public forecast archive.
         from convergealpha.ledger import report_card as RC

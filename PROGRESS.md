@@ -362,6 +362,14 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 125. Idle cash shows what the ECB deposit rate (FRED ECBDFR) would pay in a call-money account; the paper strategies keep earning nothing on cash (their recorded rule).
 126. Strategy pages show fees per year and the value after German tax (26.375%, before the allowance); results stay before tax everywhere else because the allowance is personal.
 127. The goal planner adds a core ETF + picks split: the picks share is saved until one free 500 EUR order, so small monthly amounts never pay fees.
+128. "Why did it move" splits a move into market, sector and own part and names that day's headline or filing; when there is none it says so, instead of guessing a cause.
+129. Valuation and the distress check are display only (sector percentiles; a flag checklist, not a probability): no label or rule may use them before a one-time 2016-2023 test.
+130. Bankruptcy (8-K 1.03) and delisting notices (8-K 3.01) now block new buys like the other hard events; officer changes, impairments and CEO/CFO exits only warn holders ("check your reason"), because they are often harmless.
+131. Every stock page answers seven questions, including "what the app does not know" and "is it better than a broad ETF", so a buy is never argued from the app's strengths alone.
+132. Signal decay is measured live per evidence family; a family that stops working is flagged for the next rules version, never switched off silently.
+133. Each strategy page shows how to copy it with your own amount (its holdings scaled, whole shares, the zero fee rule, a euro limit per order) and warns that copying later buys at today's prices.
+134. "Practice first" adds the copied orders to your journal as paper trades; paper trades live in the same journal but never count as holdings, warnings, sizing, measured costs or tax (a Real money / Paper switch on Portfolio).
+135. Today opens with one line about your holdings ("+12 EUR today, nothing to do") and lists only what needs you; the intraday checks still only warn.
 
 ## Questions for the owner
 

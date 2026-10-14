@@ -34,6 +34,8 @@ export interface ReportCardFile {
   horizons: Record<string, HorizonCard>
   first_result: Record<string, string | null>
   note: string
+  /** Signal decay: each evidence family's live rank correlation with later returns. */
+  families?: Record<string, { name: string } & Record<'1w' | '1m', { days: number; periods?: number; ic?: number; t?: number | null; status?: string }>>
 }
 
 export interface CommitmentFile {
@@ -111,6 +113,33 @@ export function LiveReportCard() {
           </tbody>
         </table>
       </div>
+      {f.families && Object.keys(f.families).length > 0 && (
+        <>
+          <h3 className="mt-3 text-sm font-semibold">Which evidence still works live</h3>
+          <ul className="mt-1 space-y-0.5 text-sm" aria-label="Evidence families live">
+            {Object.entries(f.families).map(([k, fam]) => {
+              const m = fam['1m']?.days ? fam['1m'] : fam['1w']
+              const label = fam['1m']?.days ? '1 month' : '1 week'
+              return (
+                <li key={k} className="flex flex-wrap justify-between gap-x-3 tabular-nums">
+                  <span>{fam.name}</span>
+                  <span className="text-slate-600 dark:text-zinc-400">
+                    {m?.days ? (
+                      <>
+                        {label}: rank correlation {m.ic !== undefined ? m.ic.toFixed(3) : '—'} over {m.days} days ·{' '}
+                        <Badge tone={m.status === 'working' ? 'good' : m.status === 'not working live' ? 'bad' : 'neutral'}>{m.status}</Badge>
+                      </>
+                    ) : (
+                      'first results with the 1-week horizon'
+                    )}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400">A family is called "not working live" only after 6 independent periods with a negative average (t below −2). That is a reason for the next rules version, never a silent change.</p>
+        </>
+      )}
       <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
         "Better than the usual rate" compares the Brier score (the average squared miss of the chances) with simply using how often stocks rose in 2016–2023. {f.note}
       </p>

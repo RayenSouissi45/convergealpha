@@ -116,6 +116,8 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'short_pct_float', label: 'Short interest', group: 'Risk', kind: 'pctAbs', help: 'Shares sold short as a share of the tradable shares.', phase: 2, width: 96 },
   { key: 'days_to_cover', label: 'Days to cover', group: 'Risk', kind: 'num', help: 'Short interest divided by average daily volume.', phase: 2, width: 96 },
   { key: 'iv_30d', label: 'Implied volatility', group: 'Risk', kind: 'pctAbs', help: 'Volatility the options market expects (about 30 days).', phase: 2, width: 100 },
+  { key: 'distress', label: 'Company finances', group: 'Risk', kind: 'text', help: 'Simple warning signs in the accounts and filings: low, elevated or high.', phase: 9, width: 104 },
+  { key: 'value_pct', label: 'Cheaper than its sector', group: 'Evidence families', kind: 'score', help: 'How cheap by cash flow and earnings within its sector (100 = cheapest). Display only.', phase: 9, width: 104 },
   { key: 'cluster', label: 'Correlation group', group: 'Risk', kind: 'int', help: 'Stocks that move closely together share a group number.', phase: 3, width: 104 },
 
   { key: 'change_1d', label: 'Return 1 day', group: 'Past performance', kind: 'pct', help: 'Total return on the last trading day.', phase: 1, width: 84 },
