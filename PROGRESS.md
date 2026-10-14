@@ -376,6 +376,8 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 139. Dependabot groups minor and patch updates; major versions arrive one by one, because the first grouped PR carried react-table 9, which breaks the screener (CI caught it, the PR was closed).
 140. Review replays each closed trade with the tested sell rule (price change only, from the stock page's daily prices), so you learn whether your own exits beat it, trade by trade.
 141. Quality filters on the model's top 2% were tested once (filters-2016-2023-v1): only "heavy debt" helped in both halves (it removes 2% of picks that averaged -1.4% vs +0.8%); it is shown as a tested warning on stock pages, not a hidden rule. Cash burn, expensive-for-sector and weak earnings quality were rejected: the removed picks did better than average.
+142. Holdings shows your money month by month next to the same trades in the S&P 500 (and the euros paid in), from the second month end on; sales are added back to both lines so they stay comparable.
+143. No automatic challenger configuration yet: switching the model's configuration would make the validation lab evaluate the 2024-2026 holdout again, which is forbidden. The weekly gate and rollback stay; a challenger can be judged on the second exam's period instead.
 
 ## Questions for the owner
 

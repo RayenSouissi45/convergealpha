@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { formatEur, formatEurSigned, formatShares } from '../../lib/costs'
 import { formatDay, formatPct, formatPrice, signClass } from '../../lib/format'
@@ -7,8 +7,11 @@ import { breakers, holdingStatus, journalHoldings, throttle } from '../../lib/po
 import { exposures, maxStocks, overlapWarnings, summary } from '../../lib/risk'
 import { taxFrom, useTradeSettings } from '../../lib/settings'
 import { taxOnGain } from '../../lib/taxes'
-import { useSiteJson } from '../../lib/data'
-import { vsMarket, type SpyFile } from '../../lib/vsMarket'
+import { fetchSiteJson, stockFile, useSiteJson } from '../../lib/data'
+import { monthly, vsMarket, type SpyFile } from '../../lib/vsMarket'
+import type { StockFile } from '../../types'
+
+const MoneyChart = lazy(() => import('./MoneyChart'))
 import type { MarketFile, ScreenerRow } from '../../types'
 import { LabelBadge } from '../LabelBadge'
 import { Tip } from '../Tip'
@@ -28,6 +31,36 @@ function IdleCash({ cash }: { cash: number | null }) {
     <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">
       Your {formatEur(cash, 0)} in cash earns nothing at the broker. At the ECB deposit rate ({rate.value.toFixed(2)}%, {formatDay(rate.date)}), a free call-money account would pay about <strong>{formatEur(year, 0)} a year</strong> (before tax) while you wait for a buy.
     </p>
+  )
+}
+
+/** Month by month: your money next to the same trades in the S&P 500 (from 2 month ends on). */
+function MonthlyCard({ j }: { j: Journal }) {
+  const spy = useSiteJson<SpyFile>('spy.json')
+  const tickers = [...new Set(j.trades.filter((t) => !t.paper && t.side !== 'dividend').map((t) => t.ticker))].sort()
+  const key = tickers.join(',')
+  const [closes, setCloses] = useState<{ key: string; map: Map<string, { t: string[]; c: (number | null)[] }> } | null>(null)
+  useEffect(() => {
+    if (!key) return
+    const controller = new AbortController()
+    void Promise.all(key.split(',').map(async (tk) => [tk, await fetchSiteJson<StockFile>(stockFile(tk), controller.signal)] as const)).then((rs) => {
+      if (controller.signal.aborted) return
+      const map = new Map<string, { t: string[]; c: (number | null)[] }>()
+      for (const [tk, r] of rs) if (r.state === 'ready' && r.data.chart?.daily) map.set(tk, { t: r.data.chart.daily.t, c: r.data.chart.daily.c })
+      setCloses({ key, map })
+    })
+    return () => controller.abort()
+  }, [key])
+  if (spy.state !== 'ready' || !closes || closes.key !== key) return null
+  const data = monthly(j.trades, spy.data, closes.map)
+  if (data.length < 2) return null
+  return (
+    <Card title="Your money month by month" className="lg:col-span-2">
+      <Suspense fallback={<div className="h-56" aria-busy="true" />}>
+        <MoneyChart data={data} />
+      </Suspense>
+      <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400">At each month's last close, with euros taken out by sales added back to both lines so they stay comparable. Prices from the last year; your dividends are not counted.</p>
+    </Card>
   )
 }
 
@@ -243,6 +276,7 @@ export function HoldingsTab({ j, setJ, ps, rows, fx }: { j: Journal; setJ: (j: J
           </p>
         </Card>
       </div>
+      <MonthlyCard j={j} />
       <ul className="grid gap-2.5 md:grid-cols-2" aria-label="Positions">
         {ps.map((p) => (
           <PositionCard key={p.ticker} p={p} rows={rows} fx={fx} j={j} />

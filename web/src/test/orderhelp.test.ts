@@ -106,3 +106,16 @@ describe('your exits vs the tested sell rule', () => {
     expect(ruleExit({ ...flat, t: days.slice(0, 10), o: flat.o.slice(0, 10), c: flat.c.slice(0, 10) }, days[0]!)!.why).toBe('still holding')
   })
 })
+
+describe('your money month by month', () => {
+  it('values your holdings and the same trades in the index at each month end', async () => {
+    const { monthly } = await import('../lib/vsMarket')
+    const spy = { dates: ['2026-10-01', '2026-10-30', '2026-11-30'], tr: [100, 110, 120], usd_per_eur: [1, 1, 1] }
+    const buy: Trade = { id: 'b', date: '2026-10-01', side: 'buy', ticker: 'AAA', shares: 10, priceEur: 100, feeEur: 0 }
+    const closes = new Map([['AAA', { t: ['2026-10-01', '2026-10-30', '2026-11-30'], c: [100, 105, 130] }]])
+    const pts = monthly([buy], spy, closes)
+    expect(pts.map((p) => p.month)).toEqual(['2026-10', '2026-11'])
+    expect(pts[1]).toMatchObject({ paidIn: 1000, you: 1300 })
+    expect(pts[1]!.market).toBeCloseTo(1200)
+  })
+})
