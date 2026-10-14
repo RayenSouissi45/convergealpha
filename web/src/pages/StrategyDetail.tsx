@@ -1,13 +1,13 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
-import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
+import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch, VersionSwitch } from '../components/StrategyParts'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatPct, formatPrice, signClass } from '../lib/format'
-import { cardsFor, COLORS, investedEur, linePoints, liveOf, planned, statusOf, twinOf, UNIVERSE_LABEL, useUniverse, withLive, type Universe } from '../lib/strategies'
+import { cardsFor, COLORS, investedEur, linePoints, liveFor, liveOf, planned, statusOf, strategyQuery, twinOf, UNIVERSE_LABEL, useUniverse, useVersion, viewOf, withLive, type Universe } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategyEvent } from '../types'
 import type { ChartSeries } from '../components/StrategyChart'
 
@@ -39,7 +39,7 @@ function Summary({ s }: { s: StrategyCard }) {
         <div>
           <p className="text-3xl font-semibold tabular-nums">{eurOrDash(s.value)}</p>
           <p className={`text-base tabular-nums ${signClass(s.pct)}`}>
-            {pctOrDash(s.pct)} <span className="text-sm text-slate-600 dark:text-zinc-400">since 200 €</span>
+            {pctOrDash(s.pct)} <span className="text-sm text-slate-600 dark:text-zinc-400">since {formatEur(s.capital ?? 200, 0)}</span>
           </p>
         </div>
         <div className="text-right text-sm tabular-nums">
@@ -54,7 +54,7 @@ function Summary({ s }: { s: StrategyCard }) {
       <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 sm:grid-cols-6 dark:border-zinc-800">
         <Stat label="Cash" help="Money not in stocks, in euros.">{eurOrDash(s.cash)}</Stat>
         <Stat label="In stocks" help="Value of the stocks it holds at the last close, in euros.">{formatEur(investedEur(s))}</Stat>
-        <Stat label="Fees paid" help="All buy and sell fees so far (1 € each by default). The spread is inside the prices.">{eurOrDash(s.fees)}</Stat>
+        <Stat label="Fees paid" help={`All buy and sell fees so far (${s.fee_rule === 'zero' ? 'finanzen.net zero: 0 € for orders of 500 € or more, 1 € below' : '1 € each way'}). The spread is inside the prices.`}>{eurOrDash(s.fees)}</Stat>
         <Stat label="Trades" help="Buys and sells that filled.">{s.trades}</Stat>
         <Stat label="Win rate" help="Share of sold positions that made money after fees and spread.">{s.win_rate === null ? '—' : `${Math.round(s.win_rate * 100)}%`}</Stat>
         <Stat label="Worst drop" help="The largest fall from a previous high of the total value, in %.">{pctOrDash(s.max_drawdown)}</Stat>
@@ -148,7 +148,7 @@ function RightNow({ s }: { s: StrategyCard }) {
   )
 }
 
-function Side({ s, label, current, to }: { s: StrategyCard | null; label: string; current: boolean; to: Universe }) {
+function Side({ s, label, current, to, query }: { s: StrategyCard | null; label: string; current: boolean; to: Universe; query: (u: Universe) => string }) {
   const body = s ? (
     <>
       <p className="text-xs font-medium text-slate-600 dark:text-zinc-400">{label}</p>
@@ -165,22 +165,22 @@ function Side({ s, label, current, to }: { s: StrategyCard | null; label: string
   const cls = `block h-full min-w-0 rounded-lg border p-2.5 ${current ? 'border-teal-600 ring-1 ring-teal-600 dark:border-teal-500 dark:ring-teal-500' : 'border-slate-200 hover:border-teal-600 dark:border-zinc-700'}`
   if (current || !s) return <div className={cls} aria-current={current ? 'true' : undefined}>{body}</div>
   return (
-    <Link to={`?${to === 'all' ? 'stocks=all' : ''}`} replace className={cls} aria-label={`Show the ${label} version`}>
+    <Link to={query(to) || '?'} replace className={cls} aria-label={`Show the ${label} version`}>
       {body}
     </Link>
   )
 }
 
-function Compare({ s, twin, u }: { s: StrategyCard; twin: StrategyCard | null; u: Universe }) {
+function Compare({ s, twin, u, query }: { s: StrategyCard; twin: StrategyCard | null; u: Universe; query: (u: Universe) => string }) {
   const zero = u === 'zero' ? s : twin
   const all = u === 'all' ? s : twin
   return (
     <Card title="finanzen.net zero vs all stocks">
       <div className="grid grid-cols-2 gap-2">
-        <Side s={zero} label="Only finanzen.net zero" current={u === 'zero'} to="zero" />
-        <Side s={all} label="All stocks" current={u === 'all'} to="all" />
+        <Side s={zero} label="Only finanzen.net zero" current={u === 'zero'} to="zero" query={query} />
+        <Side s={all} label="All stocks" current={u === 'all'} to="all" query={query} />
       </div>
-      <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">Same rules, same start, 200 € each. The only difference: which stocks it may buy. Tap one to see it.</p>
+      <p className="mt-2 text-xs text-slate-600 dark:text-zinc-400">Same rules, same start, {formatEur(s.capital ?? 200, 0)} each. The only difference: which stocks it may buy. Tap one to see it.</p>
     </Card>
   )
 }
@@ -272,8 +272,9 @@ export default function StrategyDetail() {
   const res = useSiteJson<StrategiesFile>('strategies.json')
   const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
   const [u, setU] = useUniverse()
+  const [v, setV] = useVersion(res.state === 'ready' ? res.data : null)
   const back = (
-    <Link to={`/strategies${u === 'all' ? '?stocks=all' : ''}`} className="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-teal-700 dark:text-teal-400">
+    <Link to={`/strategies${res.state === 'ready' ? strategyQuery(res.data, u, v) : u === 'all' ? '?stocks=all' : ''}`} className="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-teal-700 dark:text-teal-400">
       ← All strategies
     </Link>
   )
@@ -285,8 +286,10 @@ export default function StrategyDetail() {
       </>
     )
   }
-  const f = res.data
-  const live = liveOf(f, liveRes.state === 'ready' ? liveRes.data : null)
+  const file = res.data
+  const f = viewOf(file, v)
+  const live = liveFor(liveOf(file, liveRes.state === 'ready' ? liveRes.data : null), v)
+  const query = (to: Universe) => strategyQuery(file, to, v)
   const official = cardsFor(f, u).find((x) => x.id === id)
   const s = official ? withLive(official, live) : undefined
   if (!s) {
@@ -329,6 +332,7 @@ export default function StrategyDetail() {
       <p role="note" className="mb-3 text-xs text-slate-600 dark:text-zinc-400">
         <strong>Paper money only. Past and live results do not guarantee future results.</strong> {f.research_mode ? 'RESEARCH MODE: not yet proven live.' : ''}
       </p>
+      <VersionSwitch v={v} set={setV} f={file} />
       <UniverseSwitch u={u} set={setU} f={f} />
       {live && <LiveLine live={live} />}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -337,7 +341,7 @@ export default function StrategyDetail() {
           <RightNow s={s} />
         </div>
         <div className="grid content-start gap-3">
-          <Compare s={s} twin={twin} u={u} />
+          <Compare s={s} twin={twin} u={u} query={query} />
           <Card title={`Value since ${day(f.start)} (€)`}>
             <WhenVisible height="h-72">
               <Suspense fallback={<div className="h-72" aria-busy="true" />}>

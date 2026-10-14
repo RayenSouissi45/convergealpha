@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { formatEur } from '../lib/costs'
-import { formatPct, signClass } from '../lib/format'
-import { COLORS, nyTime, statusOf, type Universe } from '../lib/strategies'
+import { formatDay, formatPct, signClass } from '../lib/format'
+import { COLORS, nyTime, statusOf, type Universe, type Version } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard } from '../types'
 import { Badge } from './ui'
 
@@ -15,6 +15,42 @@ export function TickerLink({ t }: { t: string }) {
 
 export function Dot({ id, size = 'size-3' }: { id: string; size?: string }) {
   return <span className={`inline-block shrink-0 rounded-full ${size}`} style={{ background: COLORS[id] ?? 'var(--viz-axis)' }} aria-hidden="true" />
+}
+
+/** Version 2 (newest rules) or version 1 (the first rules, still running for comparison). */
+export function VersionSwitch({ v, set, f }: { v: Version; set: (v: Version) => void; f: StrategiesFile }) {
+  const x = f.v2
+  if (!x) return null
+  const short = (d: string) => formatDay(d).replace(/, \d{4}$/, '')
+  const opts: [Version, string, string, boolean][] = [
+    [2, 'Version 2', `${formatEur(x.capital, 0)} · from ${short(x.start)}`, !x.started],
+    [1, 'Version 1', `${formatEur(f.capital, 0)} · from ${short(f.start)}`, false],
+  ]
+  return (
+    <fieldset className="mb-3 min-w-0">
+      <legend className="mb-1 text-sm font-medium">Rules version</legend>
+      <div className="inline-flex max-w-full rounded-xl bg-slate-100 p-1 dark:bg-zinc-800">
+        {opts.map(([k, label, sub, off]) => (
+          <label
+            key={k}
+            className={`inline-flex min-h-11 flex-col justify-center rounded-lg px-3 py-1 text-sm font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-teal-600 ${
+              v === k ? 'bg-white text-slate-900 shadow-xs dark:bg-zinc-950 dark:text-zinc-100' : 'text-slate-600 dark:text-zinc-400'
+            } ${off ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+          >
+            <input type="radio" name="version" value={k} checked={v === k} disabled={off} onChange={() => set(k)} className="sr-only" />
+            {label}
+            <span className="text-xs font-normal">{sub}</span>
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400">
+        {v === 2
+          ? 'The newest rules: free orders from 500 € on finanzen.net zero, the sell rule that tested best on 2016–2023 (−5% stop, +6% take profit; see Validation), up to 8 stocks, the ECB exchange rate.'
+          : 'The first rules, still running unchanged so both versions can be compared live. Neither is ever edited.'}
+        {!x.started && ` Version 2 starts at the close of ${formatDay(x.start)}.`}
+      </p>
+    </fieldset>
+  )
 }
 
 /** Two-way switch: the versions you can copy (finanzen.net zero) or the same rules on all stocks. */

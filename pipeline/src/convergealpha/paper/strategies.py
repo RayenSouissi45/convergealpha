@@ -26,6 +26,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from convergealpha.decide import costs as C
+
 START = date(2026, 10, 13)  # first decision at this close; first fills at the next open
 CAPITAL = 200.0  # euros per strategy
 MIN_HOLD = 3  # trading days, unless a stop triggers
@@ -51,6 +53,11 @@ class Spec:
     universe: str = (
         "zero"  # "zero": finanzen.net zero stocks only; "all": every stock the app covers
     )
+    # Added for version 2 (the defaults are version 1's recorded rules):
+    capital: float = CAPITAL
+    start: date = START
+    fee_rule: str = "flat"  # "flat": 1 € each way; "zero": finanzen.net zero (free from 500 €)
+    fx_source: str = "FRED"  # "FRED" (published about weekly) or "ECB" (daily reference rate)
 
     @property
     def key(self) -> str:
@@ -70,15 +77,25 @@ class Spec:
             "switch_margin": self.switch_margin,
             "min_hold": MIN_HOLD,
             "rebuy_cooldown": REBUY_COOLDOWN,
-            "capital": CAPITAL,
-            "start": START.isoformat(),
+            "capital": self.capital,
+            "start": self.start.isoformat(),
             "extra": dict(sorted(self.extra.items())),
             "benchmark": self.benchmark,
         }
         # Added after the zero versions started: they keep the rules digest recorded on Oct 13.
         if self.universe != "zero":
             p["universe"] = self.universe
+        if self.fee_rule != "flat":
+            p["fee_rule"] = self.fee_rule
+        if self.fx_source != "FRED":
+            p["fx_source"] = self.fx_source
         return p
+
+    def fees(self) -> C.Fees:
+        return C.Fees(
+            fractional=self.benchmark,
+            free_from=C.ZERO_FEE_FREE_FROM if self.fee_rule == "zero" else None,
+        )
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.params(), sort_keys=True).encode()).hexdigest()[:12]
@@ -210,7 +227,88 @@ UNIVERSES = {
     "all": "All stocks the app covers (US-listed shares and ADRs), whether or not finanzen.net zero offers them.",
 }
 
-ALL_SPECS: tuple[Spec, ...] = (*SPECS, *SPECS_ALL, BENCHMARK)
+# --------------------------------------------------------------------------- version 2
+
+# Version 2, from the close of Wed 14 Oct 2026: the same five ideas with the evidence gathered
+# since version 1 started. Each choice and its reason is in PROGRESS.md (decisions 101-108).
+START_V2 = date(2026, 10, 14)
+CAPITAL_V2 = 5000.0  # 8 stocks x 625 € or 4 x 1,250 €: most orders reach the free 500 €
+# The sell rule chosen by research protocol rules-2016-2023-v1 (run once, 2016-2023 only).
+TESTED_STOP, TESTED_TAKE_PROFIT = 0.05, 0.06
+TESTED_WINDOW = 63  # the protocol's horizon in trading days
+TESTED_SELL_TEXT = (
+    "Sells at −5% (stop) or +6% (take profit): the sell rule that tested best on 2016–2023 "
+    "(Validation page), or after 63 trading days."
+)
+SHARED_RULES_V2 = (
+    "Decides after each US close with that day's data only; orders fill at the next trading day's official opening price (buying at the next open tested as well as any other way of buying, 2016–2023).",
+    "Euros: finanzen.net zero fees (0 € for orders of 500 € or more, 1 € below), half the estimated spread each way, US prices converted with the European Central Bank's daily EUR/USD rate.",
+    "5,000 € to start, shared equally between the buys of a day; whole shares; money left over stays as cash. An order under 500 € pays the 1 € fee (a good stock is never skipped to save 1 €).",
+    "Only stocks eligible for signals, not blocked by an event, never SELL / RISK WARNING. A holding that turns SELL / RISK WARNING is sold like a stop.",
+    "Keeps a stock at least 3 trading days unless a stop triggers, and does not buy back a stock it sold in the last 5 trading days.",
+    "Switches only if the new stock's score is ahead by the strategy's margin AND its expected 1-month gain beats the holding's by more than the cost of switching.",
+)
+
+
+def _v2(s: Spec, positions: int, specific: tuple[str, ...]) -> Spec:
+    return replace(
+        s,
+        version=2,
+        max_positions=positions,
+        stop=TESTED_STOP,
+        take_profit=TESTED_TAKE_PROFIT,
+        trailing=None,
+        max_hold=TESTED_WINDOW,
+        capital=CAPITAL_V2,
+        start=START_V2,
+        fee_rule="zero",
+        fx_source="ECB",
+        rules=(*specific, TESTED_SELL_TEXT),
+    )
+
+
+_BY_ID = {s.id: s for s in SPECS}
+SPECS_V2: tuple[Spec, ...] = (
+    _v2(_BY_ID["balanced"], 8, (
+        "Up to 8 stocks, ranked by the Picks Balanced score (only stocks that pass the Picks minimum of 40 on Safety, Upside and Confidence).",
+        "Buys only with a validated chance up (1 month) of at least 52% and an expected 1-month gain larger than the round-trip cost; also sells when the Balanced score falls below 60 or the label turns SELL.",
+    )),
+    _v2(_BY_ID["high_risk"], 4, (
+        "Up to 4 stocks. Score = 60% rank of the good case (90th percentile 1-month forecast) + 40% rank of momentum (F5 trend family). Volatile stocks allowed.",
+        "Version 2 uses the tested sell rule, which also caps gains at +6%: less of a lottery ticket than version 1.",
+    )),
+    _v2(_BY_ID["safe_upside"], 8, (
+        "Up to 8 stocks with a Picks Safety score of 75 or more, ranked by the Upside score.",
+    )),
+    _v2(_BY_ID["confidence"], 8, (
+        "Up to 8 stocks, ranked by validated chance up (1 month) × the lower end of how often that chance was right before; buys only at or above the usual 1-month rate and also sells when it drops below it.",
+    )),
+    _v2(_BY_ID["opportunity"], 4, (
+        "Up to 4 stocks, only with a GREEN opportunity badge, the freshest event first; also sells when the badge turns red. Stays in cash when there is no green opportunity.",
+    )),
+)  # fmt: skip
+SPECS_V2_ALL: tuple[Spec, ...] = tuple(replace(s, universe="all") for s in SPECS_V2)
+BENCHMARK_V2 = replace(
+    BENCHMARK,
+    version=2,
+    mindset="The yardstick: 5,000 € into the S&P 500 at the first open, then held.",
+    rules=(
+        "Buys SPY (an S&P 500 fund) with all 5,000 € at the first open (a fraction of a share; SPY itself is not sold to EU investors, it is only the yardstick), then holds.",
+    ),
+    capital=CAPITAL_V2,
+    start=START_V2,
+    fee_rule="zero",
+    fx_source="ECB",
+)
+
+ALL_SPECS: tuple[Spec, ...] = (
+    *SPECS,
+    *SPECS_ALL,
+    BENCHMARK,
+    *SPECS_V2,
+    *SPECS_V2_ALL,
+    BENCHMARK_V2,
+)
 BY_KEY = {s.key: s for s in ALL_SPECS}
 
 

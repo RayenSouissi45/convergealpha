@@ -42,7 +42,7 @@ def _estimates(b: E.Book, t: pd.DataFrame | None, fx: float | None) -> dict[str,
     out: dict[str, tuple[float, float]] = {}
     if t is None or not fx or "price" not in t:
         return out
-    fees = C.Fees(fractional=b.spec.benchmark)
+    fees = b.spec.fees()
     cash = b.cash
 
     def close(tk: str) -> float:
@@ -52,7 +52,7 @@ def _estimates(b: E.Book, t: pd.DataFrame | None, fx: float | None) -> dict[str,
     for o in b.pending:
         p = b.positions.get(o.ticker)
         if o.side == "sell" and p is not None and math.isfinite(c := close(o.ticker)):
-            v = C.sell_value(p.shares, c, fx, o.spread, fees.sell)
+            v = C.sell_value_fees(p.shares, c, fx, o.spread, fees)
             out[o.order_id] = (p.shares, v)
             cash += v
     buys = [o for o in b.pending if o.side == "buy"]
@@ -72,8 +72,8 @@ def strategy_card(
     spec = b.spec
     est = _estimates(b, t, fx)
     values = [v for _, v in b.values]
-    value = values[-1] if values else S.CAPITAL
-    pct = value / S.CAPITAL - 1
+    value = values[-1] if values else spec.capital
+    pct = value / spec.capital - 1
     sells = [f for f in b.fills if f["side"] == "sell"]
     wins = sum(1 for f in sells if float(f.get("pnl_eur") or 0) > 0)
     holdings = []
@@ -151,6 +151,10 @@ def strategy_card(
         "max_positions": spec.max_positions,
         "params": spec.params(),
         "benchmark": spec.benchmark,
+        "capital": spec.capital,
+        "start": spec.start.isoformat(),
+        "fee_rule": spec.fee_rule,
+        "fx_rate": _f(fx, 6),
         "locked": b.locked,
         "last_day": b.last_day,
         "value": _f(value, 2),
@@ -162,7 +166,7 @@ def strategy_card(
         "closed": len(sells),
         "wins": wins,
         "win_rate": _f(wins / len(sells)) if sells else None,
-        "max_drawdown": _f(E.max_drawdown([S.CAPITAL, *values])),
+        "max_drawdown": _f(E.max_drawdown([spec.capital, *values])),
         "cash": _f(b.cash, 2),
         "holdings": holdings,
         "pending": pending,
@@ -220,15 +224,17 @@ def export(
     base_up_1m: float | None,
     status: str | None = None,
     reliability: dict[str, Any] | None = None,
+    fx_ecb: tuple[float, str] | None = None,
 ) -> dict[str, Any]:
     bench = books.get(S.BENCHMARK.key)
     bench_pct = (bench.values[-1][1] / S.CAPITAL - 1) if bench and bench.values else None
     rate = fx[0] if fx else None
     cards = [strategy_card(books[s.key], t, bench_pct, rate) for s in S.SPECS if s.key in books]
     cards_all = [strategy_card(books[s.key], t, bench_pct, rate) for s in S.SPECS_ALL if s.key in books]  # fmt: skip
+    v2 = version_2(books, t, fx_ecb)
     proven = [
-        c["name"] + (" (all stocks)" if c["universe"] == "all" else "")
-        for c in (*cards, *cards_all)
+        c["name"] + (" (all stocks)" if c["universe"] == "all" else "") + f" v{c['version']}"
+        for c in (*cards, *cards_all, *v2["strategies"], *v2["strategies_all"])
         if len(c["series"]) >= PROVEN_DAYS and (c["vs_benchmark"] or 0) > 0 and not c["locked"]
     ]
     started = any(b.values for b in books.values())
@@ -271,4 +277,40 @@ def export(
         "suggestions_all": suggestions(t, list(validated), base_up_1m, S.SPECS_ALL)
         if t is not None
         else {},
+        "v2": v2,
+    }
+
+
+def version_2(
+    books: Mapping[str, E.Book], t: pd.DataFrame | None, fx: tuple[float, str] | None
+) -> dict[str, Any]:
+    """Version 2 (from the close of 14 Oct 2026): its own start, capital, fees and EUR/USD rate.
+    The page shows it with the same cards as version 1."""
+    bench = books.get(S.BENCHMARK_V2.key)
+    bench_pct = (bench.values[-1][1] / S.CAPITAL_V2 - 1) if bench and bench.values else None
+    rate = fx[0] if fx else None
+
+    def cards(specs: Sequence[S.Spec]) -> list[dict[str, Any]]:
+        return [strategy_card(books[s.key], t, bench_pct, rate) for s in specs if s.key in books]
+
+    return {
+        "version": 2,
+        "start": S.START_V2.isoformat(),
+        "capital": S.CAPITAL_V2,
+        "started": bool(bench and bench.started),
+        "fx": {"rate": fx[0], "date": fx[1], "series": C.USER_FX_SERIES, "source": "ECB"}
+        if fx
+        else None,
+        "costs": {
+            "fee_buy": C.FEE_BUY_EUR,
+            "fee_sell": C.FEE_SELL_EUR,
+            "free_from": C.ZERO_FEE_FREE_FROM,
+            "dividend_withholding": C.DIVIDEND_WITHHOLDING,
+            "min_hold": S.MIN_HOLD,
+            "rebuy_cooldown": S.REBUY_COOLDOWN,
+        },
+        "shared_rules": list(S.SHARED_RULES_V2),
+        "benchmark": strategy_card(bench, t, None, rate) if bench else None,
+        "strategies": cards(S.SPECS_V2),
+        "strategies_all": cards(S.SPECS_V2_ALL),
     }

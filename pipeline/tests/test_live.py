@@ -136,3 +136,29 @@ def test_yahoo_quotes_keep_only_todays_bar(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(P, "download", lambda *a, **k: bars)
     q = L.yahoo_quotes(["AAA", "BBB"], date(2026, 10, 14))
     assert set(q) == {"AAA"} and q["AAA"].open == 50.5 and q["AAA"].last == 51.0
+
+
+def test_version_2_live_value_uses_its_own_capital_rate_and_free_orders(tmp_path: Path) -> None:
+    from tests.test_paper import FX2
+
+    closes = [50.0] * 10 + [51.5, 52.0]
+    opens = [50.0] * 10 + [50.8, 52.0]
+    pnl = panel({"AAA": closes, "SPY": [660.0] * 12}, {"AAA": opens, "SPY": [660.0] * 12})
+    t = table({"AAA": {"price": 50.0}, "SPY": {"price": 660.0, "adv_dollar": 3e10, "eligible": False}})  # fmt: skip
+    specs = (S.SPECS_V2[0], S.BENCHMARK_V2)
+    books, _ = E.run(tmp_path / "d", pnl, FX2, DAYS[9], today(t), "x", specs)  # Oct 14
+    f = X.export(books, t, "2026-10-14", datetime(2026, 10, 14, 21, tzinfo=UTC), (1.10, "2026-10-14"), (True, "ok", 0), VAL, 0.56, fx_ecb=(1.20, "2026-10-14"))  # fmt: skip
+    card = f["v2"]["strategies"][0]
+    q = {"AAA": L.Quote(open=50.8, last=51.5, at="x"), "SPY": L.Quote(open=660.0, last=660.0, at="x")}  # fmt: skip
+    # The page-level defaults (200 €, FRED) are ignored: the card carries 5,000 € and the ECB rate.
+    est = L.estimate(card, q, 1.10, DAYS[10].date(), 200.0)
+    assert est["filled_today"][0]["amount_eur"] > 4900  # one order for ~5,000 €: no fee
+    books, _ = E.run(tmp_path / "d", pnl, FX2, DAYS[10], today(t), "y", specs)  # Oct 15
+    assert est["value"] == pytest.approx(books[S.SPECS_V2[0].key].values[-1][1], abs=1e-6)
+    assert est["pct"] == pytest.approx(est["value"] / 5000 - 1)
+    # The live file carries both versions, each against its own S&P 500 yardstick.
+    site = _site(tmp_path, f)
+    out = L.run(site, datetime(2026, 10, 15, 15, 0, tzinfo=UTC), quote_source=lambda tks, d: {k: q[k] for k in tks if k in q})  # fmt: skip
+    assert out is not None and out["benchmark_v2"]["key"] == "sp500-v2"
+    assert S.SPECS_V2[0].key in out["strategies"]
+    assert out["strategies"][S.SPECS_V2[0].key]["vs_benchmark"] is not None

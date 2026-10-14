@@ -9,7 +9,7 @@ import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
 import { resetGoal } from '../lib/goalSettings'
-import { byValue, liveOf, planned, statusOf, twinOf, withLive } from '../lib/strategies'
+import { byValue, defaultVersion, liveFor, liveOf, planned, statusOf, strategyQuery, twinOf, viewOf, withLive } from '../lib/strategies'
 import { AppRoutes } from '../routes'
 import type { Health, OpportunitiesFile, Opportunity, StrategiesFile, StrategiesLiveFile } from '../types'
 import health from './fixtures/health.json'
@@ -250,7 +250,7 @@ describe('opportunity badge', () => {
     renderAt('/')
     expect(await screen.findByText('Opportunities this week')).toBeInTheDocument()
     expect(screen.getByText('Be careful: hype')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Strategies: 5 × 200 € paper money/ })).toHaveAttribute('href', '/strategies')
+    expect(screen.getByRole('link', { name: /Strategies: paper money, live/ })).toHaveAttribute('href', '/strategies')
     const why = await screen.findByRole('button', { name: new RegExp(`Why is ${ticker} marked`) })
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith('opportunities.json'))).toBe(false)
     await user.click(why)
@@ -271,6 +271,81 @@ describe('Columns explained covers the new numbers', () => {
     for (const id of ['plan-shares', 'plan-leftover', 'plan-fees', 'plan-breakeven', 'plan-chance', 'plan-right', 'plan-results', 'plan-verdict', 'strat-value', 'strat-vs', 'strat-fees', 'strat-win', 'strat-drop', 'strat-cash', 'strat-levels', 'strat-universe', 'strat-status', 'strat-estimate']) {
       expect(ids).toContain(id)
     }
+  })
+})
+
+describe('strategy versions', () => {
+  const f = strategies as unknown as StrategiesFile
+  const live = strategiesLive as unknown as StrategiesLiveFile
+  // Version 2 as the pipeline writes it: 5,000 €, the finanzen.net zero fee rule, the ECB rate.
+  const v2card = (c: StrategiesFile['strategies'][number], i: number) => ({
+    ...c,
+    key: c.key.replace('-v1', '-v2'),
+    version: 2,
+    capital: 5000,
+    start: '2026-10-14',
+    fee_rule: 'zero' as const,
+    value: 5000 + 10 * i,
+    pct: (10 * i) / 5000,
+    holdings: [],
+    pending: [],
+    notes: [],
+    series: [['2026-10-14', 5000 + 10 * i]] as [string, number][],
+  })
+  const withV2: StrategiesFile = {
+    ...f,
+    v2: {
+      version: 2,
+      start: '2026-10-14',
+      capital: 5000,
+      started: true,
+      fx: { rate: 1.165, date: '2026-10-14', series: 'ECB_USD', source: 'ECB' },
+      costs: { ...f.costs, free_from: 500 },
+      shared_rules: ['Version 2 shared rule.'],
+      benchmark: { ...v2card(f.benchmark!, 0), value: 5005, pct: 0.001 },
+      strategies: f.strategies.map(v2card),
+      strategies_all: (f.strategies_all ?? []).map(v2card),
+    },
+  }
+
+  it('version 1 stays the default until version 2 has started; links only carry what differs', () => {
+    expect(defaultVersion(f)).toBe(1)
+    expect(defaultVersion(withV2)).toBe(2)
+    expect(defaultVersion({ ...withV2, v2: { ...withV2.v2!, started: false } })).toBe(1)
+    expect(strategyQuery(withV2, 'zero', 2)).toBe('')
+    expect(strategyQuery(withV2, 'all', 1)).toBe('?stocks=all&v=1')
+    const view = viewOf(withV2, 2)
+    expect([view.capital, view.start, view.fx?.source, view.strategies[0]!.key]).toEqual([5000, '2026-10-14', 'ECB', 'balanced-v2'])
+    expect(viewOf(withV2, 1)).toBe(withV2)
+    // Each version is compared with its own S&P 500 yardstick.
+    const lv = { ...live, benchmark_v2: { ...live.benchmark!, key: 'sp500-v2', value: 5010 } }
+    expect(liveFor(lv, 2)!.benchmark!.key).toBe('sp500-v2')
+    expect(liveFor(lv, 1)!.benchmark).toBe(live.benchmark)
+  })
+
+  it('shows version 2 with 5,000 € and switches to version 1 in one tap', async () => {
+    stubFetch({ ...FILES(), 'strategies.json': withV2 })
+    const user = userEvent.setup()
+    renderAt('/strategies')
+    expect(await screen.findByRole('radio', { name: /Version 2/ })).toBeChecked()
+    let board = screen.getByRole('list', { name: 'Strategies by value' })
+    const top = within(board).getAllByRole('link')[0]!
+    expect(within(top).getByText('€5,040.00')).toBeInTheDocument()
+    expect(top).toHaveAttribute('href', '/strategies/opportunity')
+    expect(screen.getByText(/^The newest rules: free orders from 500 €/)).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: /Version 1/ }))
+    board = screen.getByRole('list', { name: 'Strategies by value' })
+    const balanced = within(board).getByRole('link', { name: /Best overall \(Balanced\)/ })
+    expect(balanced).toHaveAttribute('href', '/strategies/balanced?v=1')
+    expect(within(balanced).getByText('KSPI')).toBeInTheDocument()
+  })
+
+  it('a version 2 strategy page shows its start money and fee rule', async () => {
+    stubFetch({ ...FILES(), 'strategies.json': withV2 })
+    renderAt('/strategies/balanced')
+    expect(await screen.findByText(/since €5,000/)).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Version 2/ })).toBeChecked()
+    expect(screen.getByRole('link', { name: '← All strategies' })).toHaveAttribute('href', '/strategies')
   })
 })
 

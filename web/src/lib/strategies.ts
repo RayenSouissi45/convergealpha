@@ -18,6 +18,52 @@ export const COLORS: Record<string, string> = {
   opportunity: 'var(--viz-series-5)',
 }
 
+/** Version 2 (from 14 Oct 2026: 5,000 €, free orders from 500 €, the tested sell rule) or version 1
+ * (the first rules, kept running unchanged so both can be compared live). */
+export type Version = 1 | 2
+
+/** The newest version once it has started, else version 1. */
+export const defaultVersion = (f: StrategiesFile | null): Version => (f?.v2?.started ? 2 : 1)
+
+/** The `v` URL parameter; the newest started version by default. */
+export function useVersion(f: StrategiesFile | null): [Version, (v: Version) => void] {
+  const [params, setParams] = useSearchParams()
+  const def = defaultVersion(f)
+  const raw = params.get('v')
+  const v: Version = raw === '1' ? 1 : raw === '2' && f?.v2 ? 2 : def
+  const set = (next: Version) =>
+    setParams(
+      (p) => {
+        const q = new URLSearchParams(p)
+        if (next === def) q.delete('v')
+        else q.set('v', String(next))
+        return q
+      },
+      { replace: true },
+    )
+  return [v, set]
+}
+
+/** The file seen through one version: its start, money, rate, rules and cards. */
+export function viewOf(f: StrategiesFile, v: Version): StrategiesFile {
+  const x = f.v2
+  if (v === 1 || !x) return f
+  return { ...f, start: x.start, capital: x.capital, fx: x.fx, costs: x.costs, shared_rules: x.shared_rules, benchmark: x.benchmark, strategies: x.strategies, strategies_all: x.strategies_all }
+}
+
+/** The live file with this version's S&P 500 yardstick. */
+export const liveFor = (live: StrategiesLiveFile | null, v: Version): StrategiesLiveFile | null =>
+  live && v === 2 ? { ...live, benchmark: live.benchmark_v2 ?? null } : live
+
+/** "?stocks=all&v=1": only what differs from the defaults, so links stay short. */
+export function strategyQuery(f: StrategiesFile, u: Universe, v: Version): string {
+  const q = new URLSearchParams()
+  if (u === 'all') q.set('stocks', 'all')
+  if (v !== defaultVersion(f)) q.set('v', String(v))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
+
 /** The `stocks` URL parameter (shareable, survives a reload); finanzen.net zero by default. */
 export function useUniverse(): [Universe, (u: Universe) => void] {
   const [params, setParams] = useSearchParams()
@@ -46,7 +92,7 @@ export function twinOf(f: StrategiesFile, s: StrategyCard): StrategyCard | null 
   return cardsFor(f, other).find((x) => x.id === s.id) ?? null
 }
 
-/** Ranked by value, best first; ties keep the fixed order (all start at 200 €). */
+/** Ranked by value, best first; ties keep the fixed order (all start with the same money). */
 export function byValue(cards: StrategyCard[]): StrategyCard[] {
   return cards
     .map((s, i) => ({ s, i }))
@@ -162,7 +208,8 @@ export function withLive(s: StrategyCard, live: StrategiesLiveFile | null): Live
 
 /** A strategy's line: its official daily values, plus today's live value while trading. */
 export function linePoints(f: StrategiesFile, s: LiveCard, live: StrategiesLiveFile | null): [string, number][] {
-  const pts: [string, number][] = [[f.start, f.capital], ...s.series.filter(([d]) => d !== f.start)]
+  const start = s.start ?? f.start
+  const pts: [string, number][] = [[start, s.capital ?? f.capital], ...s.series.filter(([d]) => d !== start)]
   const at = live?.prices_at ?? live?.generated_at
   if (s.live && at && s.value !== null) {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(at))

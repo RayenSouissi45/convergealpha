@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router'
 import { OppBadge } from '../components/Opportunity'
-import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch } from '../components/StrategyParts'
+import { Dot, LiveLine, MoneyChips, StatusBadge, TickerLink, UniverseSwitch, VersionSwitch } from '../components/StrategyParts'
 import { Tip } from '../components/Tip'
 import { Badge, Card, PageHeader } from '../components/ui'
 import { WhenVisible } from '../components/WhenVisible'
@@ -11,7 +11,7 @@ import { formatDay, formatPct, signClass } from '../lib/format'
 import { isOpp } from '../lib/opportunity'
 import { evaluate, evaluateSplit, mapPeriod, type Context, type PlanRow, type Verdict } from '../lib/plan'
 import { feesFrom, feeText, useTradeSettings } from '../lib/settings'
-import { byValue, cardsFor, COLORS, linePoints, liveOf, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, withLive, type LiveCard, type Universe } from '../lib/strategies'
+import { byValue, cardsFor, COLORS, linePoints, liveFor, liveOf, strategyQuery, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, useVersion, viewOf, withLive, type LiveCard, type Universe } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
 import { OutcomeLines, ValidTag, VerdictBox } from './Plan'
 import type { ChartSeries } from '../components/StrategyChart'
@@ -20,16 +20,14 @@ const StrategyChart = lazy(() => import('../components/StrategyChart'))
 
 const day = (d: string) => formatDay(d)
 const pts = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} pts`)
-const detailLink = (id: string, u: Universe) => `/strategies/${id}${u === 'all' ? '?stocks=all' : ''}`
-
 /** One strategy at a glance: value, return, what the money is in. The whole tile opens its page. */
-function Tile({ s, rank, f, u, live }: { s: LiveCard; rank: number; f: StrategiesFile; u: Universe; live: StrategiesLiveFile | null }) {
+function Tile({ s, rank, f, u, live, query }: { s: LiveCard; rank: number; f: StrategiesFile; u: Universe; live: StrategiesLiveFile | null; query: string }) {
   const t0 = twinOf(f, s)
   const twin = t0 ? withLive(t0, live) : null
   return (
     <li className="min-w-0">
       <Link
-        to={detailLink(s.id, u)}
+        to={`/strategies/${s.id}${query}`}
         className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs hover:border-teal-600 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-500"
       >
         <div className="flex items-start justify-between gap-3">
@@ -66,12 +64,13 @@ function Tile({ s, rank, f, u, live }: { s: LiveCard; rank: number; f: Strategie
 }
 
 function Benchmark({ b }: { b: LiveCard }) {
+  const fee = b.fee_rule === 'zero' ? 'no fee (orders from 500 € are free)' : 'one buy fee'
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 px-3.5 py-2.5 text-sm dark:border-zinc-700">
       <span className="flex min-w-0 items-center gap-2">
         <span className="inline-block h-0.5 w-3 shrink-0" style={{ background: 'var(--viz-ref)' }} aria-hidden="true" />
         <span className="min-w-0">
-          <Tip content="The yardstick: 200 € into the S&P 500 (SPY) at the first open, one buy fee, then held. SPY is not sold to EU investors; it is only the comparison.">
+          <Tip content={`The yardstick: ${formatEur(b.capital ?? 200, 0)} into the S&P 500 (SPY) at the first open, ${fee}, then held. SPY is not sold to EU investors; it is only the comparison.`}>
             S&P 500 yardstick
           </Tip>
           <span className="block text-xs text-slate-600 dark:text-zinc-400">
@@ -232,10 +231,11 @@ export default function Strategies() {
   const res = useSiteJson<StrategiesFile>('strategies.json')
   const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
   const [u, setU] = useUniverse()
+  const [v, setV] = useVersion(res.state === 'ready' ? res.data : null)
   const [show, setShow] = useState(false)
   const header = (
     <>
-      <PageHeader title="Strategies" subtitle="Five strategies, 200 € of paper money each, run every trading day by fixed rules. Tap one to see what it holds and why." />
+      <PageHeader title="Strategies" subtitle="Five strategies with paper money, run every trading day by fixed rules. Tap one to see what it holds and why." />
       <p role="note" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-100">
         <strong>Paper money only. Past and live results do not guarantee future results.</strong>
       </p>
@@ -253,8 +253,10 @@ export default function Strategies() {
       </>
     )
   }
-  const f = res.data
-  const live = liveOf(f, liveRes.state === 'ready' ? liveRes.data : null)
+  const file = res.data
+  const f = viewOf(file, v)
+  const live = liveFor(liveOf(file, liveRes.state === 'ready' ? liveRes.data : null), v)
+  const query = strategyQuery(file, u, v)
   const cards = cardsFor(f, u).map((s) => withLive(s, live))
   const bench = f.benchmark ? withLive(f.benchmark, live) : null
   const ranked = byValue(cards)
@@ -275,7 +277,7 @@ export default function Strategies() {
         )}
         <span>
           Live since {day(f.start)} · prices of {day(f.as_of)} ·{' '}
-          <Tip content={`No broker is connected and no real order is placed. Every order, fill and daily value is in an append-only, hash-chained ledger (${f.ledger.entries} entries), checked at every build.${f.fx ? ` Euro values use ${f.fx.rate.toFixed(4)} $/€ (FRED, ${day(f.fx.date)}).` : ''}`}>
+          <Tip content={`No broker is connected and no real order is placed. Every order, fill and daily value is in an append-only, hash-chained ledger (${f.ledger.entries} entries), checked at every build.${f.fx ? ` Euro values use ${f.fx.rate.toFixed(4)} $/€ (${f.fx.source === 'ECB' ? 'European Central Bank' : 'FRED'}, ${day(f.fx.date)}).` : ''}`}>
             {f.ledger.verified ? 'ledger ✓' : `ledger ✗ ${f.ledger.detail}`}
           </Tip>
         </span>
@@ -287,10 +289,11 @@ export default function Strategies() {
         </p>
       )}
       {f.status !== 'live' && f.status !== 'waiting' && <p className="mb-3 text-sm text-red-700 dark:text-red-400">Today: {f.status}.</p>}
+      <VersionSwitch v={v} set={setV} f={file} />
       <UniverseSwitch u={u} set={setU} f={f} />
       <ol className="grid grid-cols-1 gap-2.5 md:grid-cols-2" aria-label="Strategies by value">
         {ranked.map((s, i) => (
-          <Tile key={s.key} s={s} rank={i + 1} f={f} u={u} live={live} />
+          <Tile key={s.key} s={s} rank={i + 1} f={f} u={u} live={live} query={query} />
         ))}
       </ol>
       {bench && (
@@ -321,13 +324,18 @@ export default function Strategies() {
           <summary className="min-h-12 cursor-pointer content-center font-semibold">How it works</summary>
           <ul className="mb-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-700 dark:text-zinc-300">
             <li>
-              Two versions of each strategy, 200 € each, same rules and same start: <strong>only finanzen.net zero</strong> ({f.universes?.zero ?? 'stocks on the broker’s list'}) and <strong>all stocks</strong> ({f.universes?.all ?? 'every stock the app covers'}).
+              Each strategy runs twice, {formatEur(f.capital, 0)} each, same rules and same start: <strong>only finanzen.net zero</strong> ({f.universes?.zero ?? 'stocks on the broker’s list'}) and <strong>all stocks</strong> ({f.universes?.all ?? 'every stock the app covers'}).
             </li>
+            {file.v2 && (
+              <li>
+                Version 2 (from {day(file.v2.start)}, {formatEur(file.v2.capital, 0)}) uses what was learned since version 1: free orders from 500 € on finanzen.net zero, the European Central Bank’s daily rate, and the sell rule that tested best on 2016–2023 (Validation page). Version 1 (from {day(file.start)}, {formatEur(file.capital, 0)}) keeps its first rules, so the two can be compared live.
+              </li>
+            )}
             {f.shared_rules.map((r) => (
               <li key={r}>{r}</li>
             ))}
             <li>Dividends are added to cash after 15% US withholding tax; German taxes are not included. Exit levels use the stock’s dollar price; the euro value also moves with EUR/USD.</li>
-            <li>Rules were fixed before the first decision and are never tuned on past data. A changed rule would be a new version starting again from 200 €; past trades are never edited.</li>
+            <li>Rules were fixed before the first decision and are never tuned on 2024–2026 data. A changed rule is a new version with its own start; past trades are never edited.</li>
             <li>No broker is connected and no real order is ever placed.</li>
           </ul>
           <p className="mb-3 text-sm">

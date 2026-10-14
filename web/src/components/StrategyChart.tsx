@@ -13,7 +13,7 @@ export interface ChartSeries {
   points: [string, number][]
 }
 
-/** Value of each strategy in euros, all starting at 200 €. Colour follows the strategy (fixed
+/** Value of each strategy in euros, all starting with the same money. Colour follows the strategy (fixed
  * order), the S&P 500 is a dashed neutral line; the legend and the leaderboard table name them. */
 export default function StrategyChart({ series, start }: { series: ChartSeries[]; start: number }) {
   const dates = [...new Set(series.flatMap((s) => s.points.map(([d]) => d)))].sort()

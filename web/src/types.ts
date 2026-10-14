@@ -337,6 +337,13 @@ export interface StrategyCard {
   max_positions: number
   params: Record<string, unknown>
   benchmark: boolean
+  /** Euros it started with (200 € in version 1, 5,000 € in version 2). */
+  capital?: number
+  start?: string
+  /** "flat": 1 € each way; "zero": finanzen.net zero (0 € from 500 €, 1 € below). */
+  fee_rule?: 'flat' | 'zero'
+  /** The EUR/USD rate its euro values use ($ per €). */
+  fx_rate?: number | null
   locked: string | null
   last_day: string | null
   value: number | null
@@ -397,6 +404,8 @@ export interface StrategiesLiveFile {
   note?: string
   strategies: Record<string, LiveEstimate>
   benchmark: LiveEstimate | null
+  /** Version 2's S&P 500 yardstick (5,000 €). */
+  benchmark_v2?: LiveEstimate | null
 }
 
 export interface StrategySuggestion {
@@ -443,4 +452,19 @@ export interface StrategiesFile {
   universes?: Record<'zero' | 'all', string>
   suggestions: Record<string, StrategySuggestion[]>
   suggestions_all?: Record<string, StrategySuggestion[]>
+  /** Version 2 (from the close of 14 Oct 2026), absent in older files. */
+  v2?: StrategiesV2
+}
+
+export interface StrategiesV2 {
+  version: 2
+  start: string
+  capital: number
+  started: boolean
+  fx: StrategiesFile['fx']
+  costs: StrategiesFile['costs'] & { free_from?: number }
+  shared_rules: string[]
+  benchmark: StrategyCard | null
+  strategies: StrategyCard[]
+  strategies_all: StrategyCard[]
 }

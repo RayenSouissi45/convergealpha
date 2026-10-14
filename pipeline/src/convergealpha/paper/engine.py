@@ -20,7 +20,7 @@ re-run finds the day already recorded and adds nothing. Past entries are never e
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -263,7 +263,7 @@ def process_day(
     base = {"strategy": spec.key, "date": ds, "recorded_at": recorded_at}
     out: list[dict[str, Any]] = []
     notes: list[str] = []
-    fees = C.Fees(fractional=spec.benchmark)
+    fees = spec.fees()
 
     # 1. corporate actions (before the open)
     for tk, p in book.positions.items():
@@ -296,7 +296,8 @@ def process_day(
             )
             continue
         p = held
-        proceeds = C.sell_value(p.shares, op, rate, o.spread, fees.sell)
+        proceeds = C.sell_value_fees(p.shares, op, rate, o.spread, fees)
+        fee = C.fee_for(fees.sell, p.shares * op * (1 - o.spread / 2) / rate, fees)
         pnl = proceeds - p.cost_eur
         book.cash += proceeds
         book.pending.remove(o)
@@ -305,7 +306,7 @@ def process_day(
         out.append({
             **base, "kind": "fill", "order_id": o.order_id, "side": "sell", "ticker": o.ticker,
             "shares": p.shares, "open_usd": op, "spread": o.spread, "price_usd": op * (1 - o.spread / 2),
-            "fx": rate, "fx_date": rate_date, "price_eur": op * (1 - o.spread / 2) / rate, "fee": fees.sell,
+            "fx": rate, "fx_date": rate_date, "price_eur": op * (1 - o.spread / 2) / rate, "fee": fee,
             "amount_eur": proceeds, "pnl_eur": pnl, "pnl_pct": pnl / p.cost_eur if p.cost_eur else None,
             "stock_move": op / p.entry_usd - 1, "entry_date": p.entry_date, "days_held": p.days_held,
             "cash_after": book.cash,
@@ -386,7 +387,7 @@ def decide(
     base_up = today.base_up_1m if today is not None else None
     orders: list[dict[str, Any]] = []
     notes: list[str] = []
-    fees = C.Fees(fractional=spec.benchmark)
+    fees = spec.fees()
 
     def order(side: str, tk: str, reason: str, spread: float, **extra: Any) -> None:
         oid = f"{spec.key}:{ds}:{side}:{tk}"
@@ -399,7 +400,10 @@ def decide(
         if not book.bought_once and not book.pending:
             row = _row(t, SPY)
             s = C.spread(_num(row, "adv_dollar")) if row is not None else 0.0003
-            order("buy", SPY, "Bought the S&P 500 (SPY) once with all 200 € as the yardstick; a fraction of a share, one buy fee, then held.", s)  # fmt: skip
+            fee_txt = (
+                "one buy fee" if spec.fee_rule == "flat" else "no fee (orders from 500 € are free)"
+            )
+            order("buy", SPY, f"Bought the S&P 500 (SPY) once with all {spec.capital:,.0f} € as the yardstick; a fraction of a share, {fee_txt}, then held.", s)  # fmt: skip
         elif book.positions:
             notes.append("Held SPY (the S&P 500 yardstick never trades again).")
         return orders, notes
@@ -409,7 +413,7 @@ def decide(
     waiting = {o.ticker for o in book.pending if o.side == "sell"}
     for tk, p in book.positions.items():
         if tk in waiting:
-            sold[tk] = C.sell_value(p.shares, closes[tk], rate, p.spread, fees.sell)
+            sold[tk] = C.sell_value_fees(p.shares, closes[tk], rate, p.spread, fees)
             notes.append(f"{tk}: the sell order is still waiting for an opening price.")
             continue
         row = _row(t, tk)
@@ -418,7 +422,7 @@ def decide(
         why, _stop, wait = S.exit_check(spec, gain, c, p.peak_usd, p.days_held, row, base_up)
         if why:
             order("sell", tk, f"Sold {tk}: {why}.", p.spread, close_usd=c, stock_move=gain)
-            sold[tk] = C.sell_value(p.shares, c, rate, p.spread, fees.sell)
+            sold[tk] = C.sell_value_fees(p.shares, c, rate, p.spread, fees)
         else:
             kept.append(tk)
             if wait:
@@ -491,7 +495,7 @@ def decide(
                 switch_out[tk] = c.ticker
                 switch_in.append((c.ticker, why, s_new))
                 order("sell", tk, f"Sold {tk} to switch into {c.ticker}: {why}.", p.spread, close_usd=closes[tk], stock_move=gain)  # fmt: skip
-                est_cash += C.sell_value(p.shares, closes[tk], rate, p.spread, fees.sell)
+                est_cash += C.sell_value_fees(p.shares, closes[tk], rate, p.spread, fees)
                 done = True
                 break
         if not done:
@@ -578,35 +582,47 @@ def trading_days(panel: Panel, start: date, end: pd.Timestamp) -> list[pd.Timest
     return [pd.Timestamp(x) for x in idx[(idx >= pd.Timestamp(start)) & (idx <= end)]]
 
 
+def fx_for(fx: pd.Series | Mapping[str, pd.Series], spec: S.Spec) -> pd.Series:
+    """The EUR/USD series a strategy's rules name (FRED for version 1, the ECB for version 2)."""
+    if isinstance(fx, pd.Series):
+        return fx
+    return fx.get(spec.fx_source, pd.Series(dtype=float))
+
+
 def run(
     data_dir: Path,
     panel: Panel,
-    fx: pd.Series,
+    fx: pd.Series | Mapping[str, pd.Series],
     as_of: pd.Timestamp,
     today: Today | None,
     recorded_at: str,
     specs: Sequence[S.Spec] = S.ALL_SPECS,
-    start: date = S.START,
+    start: date | None = None,
 ) -> tuple[dict[str, Book], list[dict[str, Any]]]:
-    """Extend the trade ledger up to `as_of`. Returns the books and the entries written."""
+    """Extend the trade ledger up to `as_of`. Returns the books and the entries written.
+    Each strategy starts on its own start date (`start` overrides it, for tests); a strategy
+    whose start date is after `as_of` is not started yet."""
     path = data_dir / LEDGER
     entries = LG.read(path)
     books = replay(entries, specs)
-    if as_of < pd.Timestamp(start):
-        return books, []
     px = Prices(panel)
-    days = trading_days(panel, start, as_of)
     new: list[dict[str, Any]] = []
     for spec in specs:
+        begin = start if start is not None else spec.start
+        if as_of < pd.Timestamp(begin):
+            continue
+        days = trading_days(panel, begin, as_of)
+        series = fx_for(fx, spec)
         b = books[spec.key]
         if not b.started:
             new.append({
-                "kind": "start", "strategy": spec.key, "date": start.isoformat(), "recorded_at": recorded_at,
-                "name": spec.name, "params": spec.params(), "params_digest": spec.digest(), "capital": S.CAPITAL,
+                "kind": "start", "strategy": spec.key, "date": begin.isoformat(), "recorded_at": recorded_at,
+                "name": spec.name, "params": spec.params(), "params_digest": spec.digest(), "capital": spec.capital,
                 "currency": "EUR", "fee_buy": C.FEE_BUY_EUR, "fee_sell": C.FEE_SELL_EUR,
+                **({"fee_free_from": C.ZERO_FEE_FREE_FROM} if spec.fee_rule == "zero" else {}),
                 "paper_money_only": True,
             })  # fmt: skip
-            b.started, b.digest, b.cash = True, spec.digest(), S.CAPITAL
+            b.started, b.digest, b.cash = True, spec.digest(), spec.capital
         elif b.digest != spec.digest():
             b.locked = (
                 "The rules in the code differ from the rules recorded when this version started; "
@@ -618,9 +634,9 @@ def run(
             ds = d.strftime("%Y-%m-%d")
             if b.last_day is not None and ds <= b.last_day:
                 continue
-            rate = C.fx_on(fx, d)
+            rate = C.fx_on(series, d)
             if rate is None:
-                log.warning("no EUR/USD rate on or before %s: strategies wait", ds)
+                log.warning("no EUR/USD rate (%s) on or before %s: %s waits", spec.fx_source, ds, spec.key)  # fmt: skip
                 break
             new += process_day(b, d, px, rate, today if d == as_of else None, recorded_at)
     if new:
@@ -641,4 +657,4 @@ def max_drawdown(values: Sequence[float]) -> float:
     return worst
 
 
-__all__ = ["LEDGER", "Book", "Prices", "Today", "date", "max_drawdown", "process_day", "replay", "run", "verify"]  # fmt: skip
+__all__ = ["LEDGER", "Book", "Prices", "Today", "date", "fx_for", "max_drawdown", "process_day", "replay", "run", "verify"]  # fmt: skip

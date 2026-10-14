@@ -69,9 +69,18 @@ def _spread(item: Mapping[str, Any]) -> float:
     return s if s is not None and s >= 0 else DEFAULT_SPREAD
 
 
+def card_fees(card: Mapping[str, Any]) -> C.Fees:
+    """The card's fee rule (version 2 orders of 500 € or more are free on finanzen.net zero)."""
+    zero = card.get("fee_rule") == "zero"
+    return C.Fees(fractional=bool(card.get("benchmark")), free_from=C.ZERO_FEE_FREE_FROM if zero else None)  # fmt: skip
+
+
 def estimate(card: Mapping[str, Any], quotes: Mapping[str, Quote], fx: float, today: date, capital: float = 200.0) -> dict[str, Any]:  # fmt: skip
-    """One strategy's value right now, from its last official card and today's prices."""
-    fees = C.Fees(fractional=bool(card.get("benchmark")))
+    """One strategy's value right now, from its last official card and today's prices. The card's
+    own capital and EUR/USD rate win over the defaults (version 2 uses 5,000 € and the ECB)."""
+    fees = card_fees(card)
+    capital = _f(card.get("capital")) or capital
+    fx = _f(card.get("fx_rate")) or fx
     cash = float(card.get("cash") or 0.0)
     held: dict[str, dict[str, Any]] = {
         h["ticker"]: {
@@ -99,7 +108,7 @@ def estimate(card: Mapping[str, Any], quotes: Mapping[str, Quote], fx: float, to
         if h is None or op is None:
             waiting.append(o)
             continue
-        got = C.sell_value(h["shares"], op, fx, _spread(o), fees.sell)
+        got = C.sell_value_fees(h["shares"], op, fx, _spread(o), fees)
         cash += got
         filled.append({"side": "sell", "ticker": o["ticker"], "shares": h["shares"], "open_usd": op, "amount_eur": got})  # fmt: skip
         del held[o["ticker"]]
@@ -217,8 +226,13 @@ def run(
     fx = _f((f.get("fx") or {}).get("rate"))
     if f.get("status") != "live" or not fx:
         return None
-    cards = [*(f.get("strategies") or []), *(f.get("strategies_all") or [])]
-    bench = f.get("benchmark")
+    v2 = f.get("v2") or {}
+    groups = [
+        ([*(f.get("strategies") or []), *(f.get("strategies_all") or [])], f.get("benchmark"), "benchmark"),
+        ([*(v2.get("strategies") or []), *(v2.get("strategies_all") or [])], v2.get("benchmark"), "benchmark_v2"),
+    ]  # fmt: skip
+    cards = [c for g in groups for c in g[0]]
+    benches = [g[1] for g in groups if g[1]]
     state = market_state(now)
     today = now.astimezone(NEW_YORK).date()
     out: dict[str, Any] = {
@@ -229,6 +243,7 @@ def run(
         "source": "Yahoo daily bar, about 15 minutes delayed",
         "strategies": {},
         "benchmark": None,
+        "benchmark_v2": None,
     }
     if (
         state == "pre-open"
@@ -244,7 +259,7 @@ def run(
         write_json(out, site_dir / "strategies_live.json")
         return out
     tickers = sorted({
-        t for c in [*cards, *([bench] if bench else [])]
+        t for c in [*cards, *benches]
         for t in [*(h["ticker"] for h in c.get("holdings") or []), *(o["ticker"] for o in c.get("pending") or [])]
     })  # fmt: skip
     quotes = quote_source(tickers, today)
@@ -256,16 +271,25 @@ def run(
     out["prices_at"] = times[-1] if times else None
     out["priced"] = f"{len(quotes)} of {len(tickers)} stocks"
     capital = _f(f.get("capital")) or 200.0
-    bench_est = estimate(bench, quotes, fx, today, capital) if bench else None
-    bench_pct = bench_est["pct"] if bench_est else None
-    for c in cards:
-        e = estimate(c, quotes, fx, today, capital)
-        e["vs_benchmark"] = e["pct"] - bench_pct if bench_pct is not None else None
-        out["strategies"][c["key"]] = e
-    out["benchmark"] = bench_est
+    for group, bench, slot in groups:
+        bench_est = estimate(bench, quotes, fx, today, capital) if bench else None
+        bench_pct = bench_est["pct"] if bench_est else None
+        for c in group:
+            e = estimate(c, quotes, fx, today, capital)
+            e["vs_benchmark"] = e["pct"] - bench_pct if bench_pct is not None else None
+            out["strategies"][c["key"]] = e
+        out[slot] = bench_est
     write_json(out, site_dir / "strategies_live.json")
     log.info("live strategies: %s, %s priced", state, out["priced"])
     return out
 
 
-__all__ = ["Quote", "estimate", "finnhub_quotes", "market_state", "run", "yahoo_quotes"]
+__all__ = [
+    "Quote",
+    "card_fees",
+    "estimate",
+    "finnhub_quotes",
+    "market_state",
+    "run",
+    "yahoo_quotes",
+]

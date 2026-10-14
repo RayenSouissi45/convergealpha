@@ -116,6 +116,12 @@ def sell_value(shares: float, price_usd: float, fx_usd_per_eur: float, spread_fr
     return shares * to_eur(price_usd, fx_usd_per_eur) * (1 - spread_frac / 2) - fee
 
 
+def sell_value_fees(shares: float, price_usd: float, fx_usd_per_eur: float, spread_frac: float, fees: Fees) -> float:  # fmt: skip
+    """Euros received for a sale, with this broker's fee rule applied to the sale's value."""
+    gross = shares * to_eur(price_usd, fx_usd_per_eur) * (1 - spread_frac / 2)
+    return gross - fee_for(fees.sell, gross, fees)
+
+
 def break_even(b: Buy, spread_frac: float, fee_sell: float) -> float:
     """How much the stock must rise (vs the mid price at purchase) just to get the money spent
     back after selling: the spread both ways and both fees. NaN if nothing was bought."""

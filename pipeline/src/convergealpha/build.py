@@ -280,11 +280,13 @@ def paper_step(
     fx_now: tuple[float, str] | None,
     snapshot_paths: dict[str, Path],
     price_coverage: float,
+    ecb_series: pd.Series | None = None,
 ) -> dict[str, Any]:
     """Paper trading (paper money only): extend the trade ledger with today's fills, values and
     decisions, verify the whole chain, and publish strategies.json."""
     from datetime import UTC
 
+    from convergealpha.decide import costs as CO
     from convergealpha.ledger import ledger as LG
     from convergealpha.paper import engine as PE
     from convergealpha.paper import export as PX
@@ -320,7 +322,8 @@ def paper_step(
     else:
         try:
             recorded = ctx.now.astimezone(UTC).isoformat(timespec="seconds")
-            books, new = PE.run(d, panel, fx_series, as_of, today, recorded)
+            fx_by_source = {"FRED": fx_series, "ECB": ecb_series if ecb_series is not None else pd.Series(dtype=float)}  # fmt: skip
+            books, new = PE.run(d, panel, fx_by_source, as_of, today, recorded)
         except Exception:
             log.exception("paper trading failed; nothing was recorded today")
             books = PE.replay(LG.read(d / PE.LEDGER), specs)
@@ -341,6 +344,7 @@ def paper_step(
             base_up.get("1m"),
             status,
             extra.get("reliability"),
+            CO.fx_on(ecb_series, as_of) if ecb_series is not None else None,
         ),
     )
     log.info("paper trading: %d new ledger entries (%d in total), chain %s", len(new), n, "ok" if ok else "BROKEN")  # fmt: skip
@@ -794,6 +798,7 @@ def build(ctx: RunContext) -> int:
             fx_now,
             snapshot_paths,
             coverage,
+            user_fx if user_fx_src == "ECB" else None,
         )
     except Exception:
         # Paper trading must never stop the site from being published.

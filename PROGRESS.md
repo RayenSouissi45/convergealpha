@@ -335,6 +335,14 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 98. One page per strategy (`/#/strategies/<id>`) instead of five long cards on one page; the switch lives in the link (`?stocks=all`) so a shared link shows the same version.
 99. Waiting orders show "about N shares ≈ €X" estimated from the last close (same sharing rule as the engine); the trade history shows the real fill.
 100. Playwright uses 127.0.0.1 instead of localhost: on Windows localhost resolved to IPv6 for the server and IPv4 for the browser, so local runs failed at random.
+101. Strategy version 2 starts at the close of 14 Oct 2026 next to version 1 (which keeps running unchanged): a rule change may never edit a running version, and running both is a live test of the new rules.
+102. Version 2 uses 5,000 € per strategy: with 8 stocks that is about 625 € per order, above finanzen.net zero's free level of 500 €, so the strategies can be copied with realistic money and almost no fees.
+103. Version 2 applies the finanzen.net zero fee rule to every order's value (0 € from 500 €, 1 € below), the same function the Plan page uses.
+104. No hard 500 € minimum order: with whole shares it would skip many good stocks (a 400 € share in a 625 € slot) to save 1 €.
+105. Version 2 converts with the ECB's daily rate (FRED's arrives about weekly); version 1 keeps FRED because that is its recorded rule.
+106. All five version 2 strategies use the sell rule chosen by protocol rules-2016-2023-v1 (−5% / +6% / 63 days): it was fixed before the run and tested once on 2016–2023; its cost (a lower average trade) is shown on Validation and in METHODOLOGY.
+107. Up to 8 stocks for Balanced, Safe upside and Confidence, 4 for the two high-risk ideas: more stocks spread the risk of one bad pick; the high-risk ideas keep fewer, larger positions by design.
+108. The page shows version 2 by default once it has started, with version 1 one tap away; links carry `?v=1` only when it differs from the default, so old links still work.
 
 ## Questions for the owner
 

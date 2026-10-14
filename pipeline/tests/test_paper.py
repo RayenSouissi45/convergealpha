@@ -164,7 +164,7 @@ def test_fx_uses_the_latest_rate_published_on_or_before_the_day() -> None:
 
 def test_parameters_are_fixed() -> None:
     # Changing any number is a NEW version that starts again from 200 € (update METHODOLOGY too).
-    got = {s.key: s.params() for s in S.ALL_SPECS}
+    got = {s.key: s.params() for s in S.ALL_SPECS if s.version == 1}
     zero = {
         "balanced-v1": (2, 0.06, 0.08, None, 63, 10.0, {"min_balanced": 60.0, "min_p_up_1m": 0.52}),
         "high_risk-v1": (1, 0.12, 0.20, 0.10, 21, 10.0, {"w_momentum": 0.4, "w_p90_1m": 0.6}),
@@ -193,6 +193,117 @@ def test_zero_strategies_keep_the_rules_recorded_at_their_start() -> None:
     }  # fmt: skip
     assert {s.key: s.digest() for s in (*S.SPECS, S.BENCHMARK)} == recorded
     assert all(s.digest() != recorded[s.key.replace("-all", "")] for s in S.SPECS_ALL)
+
+
+# --------------------------------------------------------------------------- version 2
+
+FX2 = {"FRED": FX, "ECB": pd.Series(1.20, index=FX.index)}  # two different rates on purpose
+
+
+def v2(sid: str) -> S.Spec:
+    return next(s for s in S.SPECS_V2 if s.id == sid)
+
+
+def test_version_2_rules_are_fixed() -> None:
+    # Recorded in the trade ledger at its start (14 Oct 2026): any change needs version 3.
+    recorded = {
+        "balanced-v2": "7a7added97f1", "high_risk-v2": "0e3584b10b83", "safe_upside-v2": "0edd36ec0de5",
+        "confidence-v2": "c399001873d5", "opportunity-v2": "c61531a4c897",
+        "balanced-all-v2": "6dc24195057a", "high_risk-all-v2": "deee6afa030c",
+        "safe_upside-all-v2": "1a85087a58a8", "confidence-all-v2": "b7c4bf4b8e2e",
+        "opportunity-all-v2": "5920d4d9014d", "sp500-v2": "4565b9ef7dbf",
+    }  # fmt: skip
+    assert {s.key: s.digest() for s in (*S.SPECS_V2, *S.SPECS_V2_ALL, S.BENCHMARK_V2)} == recorded
+    slots = {"balanced": 8, "high_risk": 4, "safe_upside": 8, "confidence": 8, "opportunity": 4}
+    for s in (*S.SPECS_V2, *S.SPECS_V2_ALL):
+        p = s.params()
+        # The sell rule chosen by the research protocol (2016-2023 only), the same for all five.
+        assert (p["stop"], p["take_profit"], p["trailing"], p["max_hold"]) == (0.05, 0.06, None, 63)  # fmt: skip
+        assert (p["capital"], p["start"], p["fee_rule"], p["fx_source"]) == (5000.0, "2026-10-14", "zero", "ECB")  # fmt: skip
+        assert p["max_positions"] == slots[s.id] and p["version"] == 2
+        # The ideas themselves (scores, entry filters, special exits) are version 1's.
+        assert p["extra"] == spec(s.id).params()["extra"] and p["switch_margin"] == spec(s.id).switch_margin  # fmt: skip
+    assert S.START_V2 > S.START and len({s.key for s in S.ALL_SPECS}) == len(S.ALL_SPECS)
+
+
+def test_version_2_starts_on_its_own_day_with_5000_euros(tmp_path: Path) -> None:
+    pnl = panel({"AAA": [50.0] * 12})
+    t = table({"AAA": {}})
+    both = (spec("balanced"), v2("balanced"))
+    E.run(tmp_path, pnl, FX2, DAYS[8], today(t), "x", both)  # Oct 13: only version 1 starts
+    assert [e["strategy"] for e in kinds(tmp_path, "start")] == ["balanced-v1"]
+    E.run(tmp_path, pnl, FX2, DAYS[9], today(t), "x", both)  # Oct 14: version 2 starts too
+    st = kinds(tmp_path, "start", "balanced-v2")
+    assert len(st) == 1 and st[0]["date"] == "2026-10-14" and st[0]["capital"] == 5000.0
+    assert st[0]["fee_free_from"] == 500.0 and st[0]["params_digest"] == v2("balanced").digest()
+    assert {d["date"] for d in kinds(tmp_path, "day", "balanced-v2")} == {"2026-10-14"}
+    # Replaying the ledger gives version 2 its own 5,000 € and leaves version 1's 200 € alone.
+    books = E.replay(entries(tmp_path), both)
+    assert books["balanced-v2"].cash == pytest.approx(5000.0)
+    assert books["balanced-v1"].cash < 200.0  # version 1 bought at the Oct 14 open
+
+
+def test_version_2_uses_the_ecb_rate_free_orders_from_500_and_8_slots(tmp_path: Path) -> None:
+    tks = [f"S{i}" for i in range(10)]
+    pnl = panel({tk: [50.0] * 12 for tk in tks})
+    t = table({tk: {"pick_balanced": 90.0 - i} for i, tk in enumerate(tks)})
+    for i in (9, 10):
+        E.run(tmp_path, pnl, FX2, DAYS[i], today(t), "x", (v2("balanced"),))
+    fills = kinds(tmp_path, "fill", "balanced-v2")
+    assert len(fills) == 8  # up to 8 stocks, 625 € each
+    s = C.spread(5e8)
+    for f in fills:
+        assert f["fx"] == 1.20 and f["fee"] == 0.0  # the ECB rate; orders of 500 € or more: free
+        assert float(f["amount_eur"]) >= 500
+    # The first buy gets 5,000 / 8 = 625 €: 14 shares of ~41.7 €; leftovers carry to later buys.
+    assert float(fills[0]["shares"]) == math.floor(625 / (50.0 / 1.20 * (1 + s / 2))) == 14
+    assert sum(float(f["amount_eur"]) for f in fills) <= 5000
+    # Version 1's rule on the same day uses FRED and pays 1 € (not run here: the rate is per spec).
+    assert E.fx_for(FX2, spec("balanced")) is FX and E.fx_for(FX, v2("balanced")) is FX
+
+
+def test_version_2_small_orders_pay_1_euro_and_are_not_skipped(tmp_path: Path) -> None:
+    # A $500 stock: 625 € buys one share (~417 €), under 500 €: bought anyway, with the 1 € fee.
+    pnl = panel({"BIG": [500.0] * 12})
+    t = table({"BIG": {"price": 500.0}})
+    for i in (9, 10):
+        E.run(tmp_path, pnl, FX2, DAYS[i], today(t), "x", (v2("balanced"),))
+    f = kinds(tmp_path, "fill", "balanced-v2")
+    assert (
+        len(f) == 1 and float(f[0]["shares"]) > 1 and f[0]["fee"] == 0.0
+    )  # all 5,000 €: 11 shares
+    # The sell fee follows the sale's value too.
+    fees = v2("balanced").fees()
+    assert C.sell_value_fees(1, 500.0, 1.2, 0.0, fees) == pytest.approx(500 / 1.2 - 1)
+    assert C.sell_value_fees(2, 500.0, 1.2, 0.0, fees) == pytest.approx(1000 / 1.2)
+
+
+def test_version_2_waits_without_its_rate(tmp_path: Path) -> None:
+    pnl = panel({"AAA": [50.0] * 12})
+    t = table({"AAA": {}})
+    _, new = E.run(tmp_path, pnl, {"FRED": FX}, DAYS[9], today(t), "x", (v2("balanced"),))
+    assert [e["kind"] for e in new] == ["start"]  # started, but no day without the ECB rate
+
+
+def test_export_has_version_2_with_its_own_capital_and_rate(tmp_path: Path) -> None:
+    pnl = panel({"AAA": [50.0] * 12, "SPY": [660.0] * 12})
+    t = table({"AAA": {}, "SPY": {"price": 660.0, "adv_dollar": 3e10, "eligible": False}})
+    books, _ = E.run(tmp_path, pnl, FX2, DAYS[9], today(t), "x")
+    from datetime import UTC, datetime
+
+    out = X.export(books, t, "2026-10-14", datetime(2026, 10, 14, 21, tzinfo=UTC), (1.10, "2026-10-14"), (True, "ok", 0), VAL, 0.56, fx_ecb=(1.20, "2026-10-14"))  # fmt: skip
+    v = out["v2"]
+    assert v["started"] and v["capital"] == 5000.0 and v["start"] == "2026-10-14"
+    assert v["fx"]["source"] == "ECB" and v["costs"]["free_from"] == 500.0
+    assert [c["key"] for c in v["strategies"]] == [s.key for s in S.SPECS_V2]
+    assert [c["key"] for c in v["strategies_all"]] == [s.key for s in S.SPECS_V2_ALL]
+    c = v["strategies"][0]
+    assert (c["capital"], c["fx_rate"], c["fee_rule"], c["value"], c["pct"]) == (5000.0, 1.2, "zero", 5000.0, 0.0)  # fmt: skip
+    o = c["pending"][0]
+    assert o["ticker"] == "AAA" and o["est_eur"] > 4900  # one stock to buy: all 5,000 €, no fee
+    spy = v["benchmark"]["pending"][0]
+    assert spy["est_eur"] == pytest.approx(5000.0) and "5,000 €" in spy["reason"]
+    assert out["strategies"][0]["capital"] == 200.0 and out["strategies"][0]["fx_rate"] == 1.1
 
 
 def test_all_stocks_version_may_buy_what_finanzen_net_zero_does_not_offer(tmp_path: Path) -> None:

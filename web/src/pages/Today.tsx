@@ -156,8 +156,8 @@ export default function Today() {
         </Link>
         <Link to="/strategies" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">
           <span className="min-w-0">
-            <span className="block font-semibold">Strategies: 5 × 200 € paper money</span>
-            <span className="block text-sm text-slate-600 dark:text-zinc-400">Live since Oct 13, 2026, against the S&P 500.</span>
+            <span className="block font-semibold">Strategies: paper money, live</span>
+            <span className="block text-sm text-slate-600 dark:text-zinc-400">5 strategies × 5,000 € (version 2) and × 200 € (version 1), against the S&P 500.</span>
           </span>
           <Icon name="chevron" className="size-5 shrink-0 text-slate-400" />
         </Link>

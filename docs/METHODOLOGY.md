@@ -273,7 +273,8 @@ source acknowledged (transformation: filtered to gettex shares, mapped to ticker
 with the same reference values.
 
 - **Fee per order**: 1.00 € per buy and 1.00 € per sell by default (finanzen.net zero; the Plan page
-  lets you change it — check the broker's current price list). The paper strategies always use 1 €.
+  lets you change it — check the broker's current price list). Version 1 of the paper strategies
+  uses 1 € each way; version 2 uses the finanzen.net zero rule (0 € from 500 €, 1 € below).
 - **Spread**: the existing liquidity estimate (`decide/rules.spread_estimate`: 0.03% at ≥ $200M a
   day, 0.06% at ≥ $50M, 0.12% at ≥ $10M, 0.3% below, 0.5% unknown). Half is paid on the way in,
   half on the way out. Market impact is left out (a 200 € order is a tiny share of a liquid stock's
@@ -431,8 +432,32 @@ one would be guessing. "Usual rate" = the pooled 2016–2023 up rate for 1 month
 
 **Versions**: each strategy's parameters are hashed into its `start` entry. If the code's rules
 ever differ from that hash under the same version, the engine refuses to trade it and the page
-says so: a rule change must be a new version (e.g. `balanced-v2`) that starts again from 200 €;
-old history stays.
+says so: a rule change must be a new version (e.g. `balanced-v2`) with its own start, money and
+ledger entries; older versions keep running unchanged and old history stays.
+
+**Version 2** (from the close of **Wednesday 14 Oct 2026**; keys `balanced-v2` …,
+`balanced-all-v2` …, `sp500-v2`; hashes pinned by a test). The same five ideas (scores, entry
+filters and special exits as in the table above), with what was learned since version 1:
+
+- **5,000 €** each (benchmark: 5,000 € into SPY at the first open). Up to **8 stocks** for
+  Balanced, Safe upside and Confidence, **4** for High risk and Opportunity hunter: about 625 € or
+  1,250 € per order, so most orders reach finanzen.net zero's free level.
+- **Fees: the finanzen.net zero rule** (0 € for an order worth 500 € or more, 1 € below), applied
+  to each order's value, buys and sells. No hard minimum order: a good stock is not skipped to save
+  1 €.
+- **EUR/USD: the European Central Bank's daily reference rate** (version 1 keeps FRED's, its
+  recorded rule). A day without an ECB rate on or before it waits, like version 1 without FRED.
+- **One tested sell rule for all five**: −5% stop, +6% take-profit, at most 63 trading days, no
+  trailing stop. It is the rule chosen by research protocol `rules-2016-2023-v1` (section on sell
+  rules, Validation page), fixed before that run and run once on 2016–2023 only. The trade-off is
+  shown, not hidden: it cut the average of the worst 5% of trades from about −38% to about −13%
+  but also the average trade from about +3.2% to about +0.4%, and about 30% of stopped stocks
+  were back above the buy price 21 days later. Version 1 keeps its own exits, so the two are
+  compared live: if version 2 does not beat version 1 after costs over months, the rule did not
+  help live.
+- Entry stays at the next official open (no other way of buying beat it in both halves of
+  2016–2023).
+- Nothing in version 2 was chosen with 2024–2026 data.
 
 **Trade ledger** `ledger/trades.jsonl` in the private data repo: append-only and hash-chained like
 the signal ledger (`start`, `order`, `fill`, `cancel`, `dividend`, `split`, `day` entries; each
