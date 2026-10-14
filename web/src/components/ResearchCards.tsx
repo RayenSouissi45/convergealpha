@@ -101,6 +101,85 @@ export function ResearchCard() {
   )
 }
 
+interface Score {
+  n: number
+  mean: number | null
+  worst5: number | null
+  score: number | null
+}
+
+interface FiltersFile {
+  protocol: string
+  protocol_digest: string
+  period: string
+  picks: number
+  no_filter: Record<string, Score>
+  filters: Record<string, Record<string, Score> & { removed: Score; keep_share: number; adopted: boolean }>
+}
+
+interface CorrectionsFile {
+  protocol: string
+  protocol_digest: string
+  period: string
+  horizons: Record<string, { brier: number; gain_sector: number | null; gain_stock: number | null; adopt_sector: boolean; adopt_stock: boolean }>
+}
+
+const FILTER_TEXT: Record<string, string> = {
+  cash_burn: 'Leave out cash-burning companies',
+  heavy_debt: 'Leave out heavy debt (above 6× EBITDA)',
+  expensive: 'Leave out the most expensive 20% of the sector',
+  accruals: 'Leave out weak earnings quality (top 10% accruals)',
+}
+
+/** The other questions answered once on 2016–2023: quality filters and sector corrections. */
+export function MoreResearchCard() {
+  const fl = useSiteJson<FiltersFile>('research_filters.json')
+  const co = useSiteJson<CorrectionsFile>('research_corrections.json')
+  if (fl.state !== 'ready' && co.state !== 'ready') return null
+  return (
+    <Card title="Other questions tested once (2016–2023)">
+      {fl.state === 'ready' && (
+        <>
+          <p className="text-sm">
+            <strong>Quality filters on the model's top 2%</strong> ({fl.data.picks.toLocaleString('en-US')} picks, excess return over the S&P 500 in the next 3 months; adopted only if better in both halves and keeping 70%+ of picks). Without a filter: average {pct(fl.data.no_filter.all?.mean)}, worst 5% {pct(fl.data.no_filter.all?.worst5)}.
+          </p>
+          <ul className="mt-1 space-y-0.5 text-sm" aria-label="Quality filters">
+            {Object.entries(fl.data.filters).map(([k, v]) => (
+              <li key={k} className="flex flex-wrap justify-between gap-x-3 tabular-nums">
+                <span>
+                  {FILTER_TEXT[k] ?? k} {v.adopted ? <Badge tone="good">adopted as a warning</Badge> : <Badge tone="neutral">rejected</Badge>}
+                </span>
+                <span className="text-xs text-slate-600 dark:text-zinc-400">
+                  removes {formatPctAbs(1 - v.keep_share, 0)}; those did {pct(v.removed.mean)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400">Rejected filters would have removed stocks that did better than average: the model already prices in those risks. Protocol {fl.data.protocol} ({fl.data.protocol_digest}).</p>
+        </>
+      )}
+      {co.state === 'ready' && (
+        <>
+          <p className="mt-3 text-sm">
+            <strong>Sector and stock corrections of the chances of rising</strong> (fit 2016–2020, judged 2021–2023): {Object.values(co.data.horizons).some((h) => h.adopt_sector) ? 'some adopted.' : 'none adopted: they made every horizon less accurate.'}
+          </p>
+          <ul className="mt-1 space-y-0.5 text-sm" aria-label="Corrections">
+            {Object.entries(co.data.horizons).map(([h, v]) => (
+              <li key={h} className="flex justify-between gap-3 tabular-nums">
+                <span>{h}</span>
+                <span className="text-xs text-slate-600 dark:text-zinc-400">
+                  sector {v.gain_sector === null ? '—' : `${v.gain_sector >= 0 ? '+' : ''}${(v.gain_sector * 100).toFixed(2)}%`} · stock {v.gain_stock === null ? '—' : `${v.gain_stock >= 0 ? '+' : ''}${(v.gain_stock * 100).toFixed(2)}%`} accuracy (Brier)
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400">Past sector biases (e.g. Energy in 2016–2020) reversed in 2021–2023. Protocol {co.data.protocol} ({co.data.protocol_digest}).</p>
+        </>
+      )}
+    </Card>
+  )
+}
+
 /** Every experiment ever run, failures included, in a sealed log. */
 export function ExperimentsCard() {
   const res = useSiteJson<ExperimentsFile>('experiments.json')

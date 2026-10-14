@@ -542,6 +542,14 @@ so a lucky result cannot hide behind unreported tries.
   the test years worse (1 week −0.19%, 1 month −0.16%, 3 months −0.34%, 6 months −0.74%); the
   sector biases of 2016-2020 (e.g. Energy) reversed in 2021-2023. The weekly job refits only
   adopted corrections, so none is applied.
+- `filters-2016-2023-v1` (quality filters on the model's top 2%, `research/filters.py`): outcome = excess
+  return over the S&P 500 in the next 63 trading days; score = mean − 0.5 × |worst 5%|; a filter is
+  adopted only if better in both halves and keeping 70%+ of picks. Run 14 Oct 2026 on 2,958 picks:
+  **heavy debt** (above 6× EBITDA, or debt with negative EBITDA) adopted: it removes 2% of picks that
+  averaged −1.4% vs +0.8%. Rejected: cash burn (worse in 2020-2023), expensive for the sector and
+  weak earnings quality (the removed picks did +4.5% and +4.2%: the model already prices those
+  risks in). The adopted filter is a warning on stock pages; it can enter a rule only as a new
+  version.
 - `exam2-2026h2-v1` (the second clean exam, `research/exam2.py`): **registered on 14 Oct 2026, before
   any of its outcomes existed**. Forecasts published 12 Oct - 31 Dec 2026, judged once on or after
   1 Jul 2027: a horizon passes only if its Brier score beats the usual 2016-2023 up rate and stocks

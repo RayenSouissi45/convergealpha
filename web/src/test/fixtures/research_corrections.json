@@ -1,0 +1,158 @@
+{
+ "protocol": "corrections-2016-2023-v1",
+ "protocol_digest": "742fa06157b0",
+ "period": "fit 2016-2020, test 2021-2023",
+ "horizons": {
+  "1w": {
+   "fit_rows": 84017,
+   "test_rows": 66679,
+   "brier": 0.250093,
+   "brier_sector": 0.250563,
+   "brier_sector_stock": 0.251196,
+   "gain_sector": -0.00188,
+   "gain_stock": -0.002527,
+   "years": {
+    "2021": {
+     "p": 0.243428,
+     "p_sec": 0.244061,
+     "p_stk": 0.245026
+    },
+    "2022": {
+     "p": 0.252794,
+     "p_sec": 0.25326,
+     "p_stk": 0.253547
+    },
+    "2023": {
+     "p": 0.254568,
+     "p_sec": 0.254866,
+     "p_stk": 0.255493
+    }
+   },
+   "sectors": {
+    "Energy": -0.127173,
+    "Utilities": -0.062086,
+    "Information Technology": 0.058975
+   },
+   "adopt_sector": false,
+   "adopt_stock": false
+  },
+  "1m": {
+   "fit_rows": 84017,
+   "test_rows": 66679,
+   "brier": 0.25659,
+   "brier_sector": 0.257012,
+   "brier_sector_stock": 0.257818,
+   "gain_sector": -0.001644,
+   "gain_stock": -0.003136,
+   "years": {
+    "2021": {
+     "p": 0.252909,
+     "p_sec": 0.253331,
+     "p_stk": 0.253413
+    },
+    "2022": {
+     "p": 0.257398,
+     "p_sec": 0.258267,
+     "p_stk": 0.259869
+    },
+    "2023": {
+     "p": 0.259759,
+     "p_sec": 0.259727,
+     "p_stk": 0.260507
+    }
+   },
+   "sectors": {
+    "Energy": -0.218688,
+    "Communication Services": -0.078811,
+    "Consumer Staples": -0.07491
+   },
+   "adopt_sector": false,
+   "adopt_stock": false
+  },
+  "3m": {
+   "fit_rows": 84017,
+   "test_rows": 66679,
+   "brier": 0.258969,
+   "brier_sector": 0.259853,
+   "brier_sector_stock": 0.260743,
+   "gain_sector": -0.003414,
+   "gain_stock": -0.003423,
+   "years": {
+    "2021": {
+     "p": 0.253538,
+     "p_sec": 0.25508,
+     "p_stk": 0.255322
+    },
+    "2022": {
+     "p": 0.279564,
+     "p_sec": 0.280813,
+     "p_stk": 0.282448
+    },
+    "2023": {
+     "p": 0.24391,
+     "p_sec": 0.243709,
+     "p_stk": 0.244542
+    }
+   },
+   "sectors": {
+    "Energy": -0.3,
+    "Consumer Staples": -0.122305,
+    "Communication Services": -0.104721
+   },
+   "adopt_sector": false,
+   "adopt_stock": false
+  },
+  "6m": {
+   "fit_rows": 84017,
+   "test_rows": 66679,
+   "brier": 0.263502,
+   "brier_sector": 0.265454,
+   "brier_sector_stock": 0.266012,
+   "gain_sector": -0.007408,
+   "gain_stock": -0.002103,
+   "years": {
+    "2021": {
+     "p": 0.270868,
+     "p_sec": 0.274441,
+     "p_stk": 0.27464
+    },
+    "2022": {
+     "p": 0.279471,
+     "p_sec": 0.281544,
+     "p_stk": 0.282789
+    },
+    "2023": {
+     "p": 0.239274,
+     "p_sec": 0.239346,
+     "p_stk": 0.239595
+    }
+   },
+   "sectors": {
+    "Energy": -0.3,
+    "Information Technology": 0.174818,
+    "Consumer Staples": -0.14844
+   },
+   "adopt_sector": false,
+   "adopt_stock": false
+  }
+ },
+ "decision": {
+  "1w": {
+   "sector": false,
+   "stock": false
+  },
+  "1m": {
+   "sector": false,
+   "stock": false
+  },
+  "3m": {
+   "sector": false,
+   "stock": false
+  },
+  "6m": {
+   "sector": false,
+   "stock": false
+  }
+ },
+ "model_version": "m-20261012-ae47e893d0"
+}

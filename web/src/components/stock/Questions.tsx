@@ -110,6 +110,11 @@ export function SevenQuestions({ s }: { s: StockFile }) {
           {weak.length ? `Weak evidence: ${weak.map((f) => f.name).join(', ')}. ` : ''}
           {d?.blocking?.length ? `Blocked now: ${d.blocking.join('; ')}. ` : ''}
           {d?.risk_reasons?.length ? `Risks: ${d.risk_reasons.join('; ')}. ` : ''}
+          {dis?.why && /debt (above 6x EBITDA|with negative EBITDA)/.test(dis.why) && (
+            <>
+              <Badge tone="warn">Tested warning</Badge> Heavy debt: among the model's top picks in 2016–2023, such stocks did worse (−1.4% vs +0.8% over the next 3 months; the one filter of four that helped in both halves).{' '}
+            </>
+          )}
           {dis?.level && (
             <>
               Company finances: <Badge tone={DISTRESS_TONE[dis.level]}>{dis.level === 'low' ? 'no warning sign' : dis.level === 'elevated' ? 'some warning signs' : 'fragile'}</Badge> {dis.why ? `(${dis.why})` : ''}

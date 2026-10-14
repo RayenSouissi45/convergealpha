@@ -51,3 +51,28 @@ def test_weekly_refit_only_for_adopted_horizons() -> None:
     out = RC.refit(df, cal, {"1m": {"sector": True, "stock": False}, "1w": {"sector": False, "stock": False}})  # fmt: skip
     assert set(out) == {"1m"} and set(out["1m"]) == {"sector"} and out["1m"]["sector"]["Hype"] < 0
     assert RC.protocol_digest() == RC.protocol_digest() and len(RC.protocol_digest()) == 12
+
+
+def test_quality_filters_follow_the_fixed_protocol() -> None:
+    from convergealpha.research import filters as RF
+
+    rng = np.random.default_rng(3)
+    dates = pd.date_range("2016-01-31", "2023-12-31", freq="ME")
+    rows, feats = [], []
+    for d in dates:
+        for i in range(100):
+            burn = i % 10 == 0  # 10% of stocks burn cash, and among the top picks they lose
+            l1 = rng.uniform() + (1.0 if i < 5 else 0.0)  # T0..T4 are the model's top picks
+            exc = (-0.2 if burn else 0.02) + rng.normal(0, 0.01)
+            rows.append((d, f"T{i}", l1, exc))
+            feats.append((d, f"T{i}", "S", True, -0.05 if burn else 0.05, 1.0, 0.0))
+    oos = pd.DataFrame(rows, columns=["date", "ticker", "l1", "exc_3m"])
+    ds = pd.DataFrame(feats, columns=["date", "ticker", "sector", "eligible", "fcf_yield", "debt_ebitda", "accruals"])  # fmt: skip
+    res = RF.evaluate(oos, ds)
+    assert res["picks"] == 2 * len(dates)  # top 2% of 100 = 2 a month
+    cb = res["filters"]["cash_burn"]
+    assert cb["adopted"] and cb["all"]["score"] > res["no_filter"]["all"]["score"] and cb["keep_share"] >= 0.7  # fmt: skip
+    assert not res["filters"]["heavy_debt"][
+        "adopted"
+    ]  # removes nothing, so it cannot beat no filter
+    assert RF.protocol_digest() == RF.protocol_digest()

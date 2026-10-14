@@ -230,6 +230,47 @@ def _cmd_research_corrections(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_research_filters(args: argparse.Namespace) -> int:
+    import json
+
+    import pandas as pd
+
+    from convergealpha.ledger import experiments as X
+    from convergealpha.research import filters as RF
+    from convergealpha.util.io import write_json
+
+    data = Path(args.data)
+    digest = RF.protocol_digest()
+    if X.already_run(data, RF.PROTOCOL_ID, digest) and not args.repeat_for_audit:
+        log.error("protocol %s (%s) already ran: a protocol is tested once", RF.PROTOCOL_ID, digest)
+        return 1
+    models = Path(args.models)
+    oos = pd.read_parquet(models / "oos_devval.parquet")
+    cols = ["date", "ticker", "sector", "eligible", "fcf_yield", "debt_ebitda", "accruals"]
+    ds = pd.read_parquet(models / "dataset.parquet", columns=cols)
+    meta = models / "meta.json"
+    model_version = json.loads(meta.read_text(encoding="utf-8")).get("version") if meta.is_file() else None  # fmt: skip
+    res = {**RF.evaluate(oos, ds), "model_version": model_version}
+    write_json(res, data / "validation" / "filters_research.json", pretty=True)
+    if not args.repeat_for_audit:
+        X.record(
+            data,
+            {
+                "experiment": "quality filters on the model's top picks",
+                "question": "Do cash-burn, debt, price or earnings-quality filters improve the model's top 2%?",
+                "protocol_id": RF.PROTOCOL_ID,
+                "protocol_digest": digest,
+                "period": res["period"],
+                "model_version": model_version,
+                "status": "done",
+                "summary": {c: v["all"]["score"] for c, v in res["filters"].items()},
+                "decision": res["decision"],
+            },
+        )
+    log.info("research filters: %s", res["decision"])
+    return 0
+
+
 def _cmd_register_exam2(args: argparse.Namespace) -> int:
     from convergealpha.research import exam2 as E2
 
@@ -362,6 +403,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--models", default="models-out", help="model bundle with oos_devval.parquet")
     p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
     p.set_defaults(func=_cmd_research_corrections)
+
+    p = sub.add_parser("research-filters", help="test quality filters on the top picks (once)")
+    common(p)
+    p.add_argument("--models", default="models-out", help="bundle with oos_devval and dataset")
+    p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
+    p.set_defaults(func=_cmd_research_filters)
 
     p = sub.add_parser("register-exam2", help="seal the second clean exam's plan in advance")
     common(p)

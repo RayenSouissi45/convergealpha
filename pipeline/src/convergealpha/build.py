@@ -718,6 +718,12 @@ def build(ctx: RunContext) -> int:
         site.write_json_file(
             paths.site, "research.json", _json.loads(research.read_text(encoding="utf-8"))
         )
+    for src_name, site_name in (("corrections_research.json", "research_corrections.json"), ("filters_research.json", "research_filters.json")):  # fmt: skip
+        f = paths.data / "validation" / src_name
+        if f.is_file():
+            import json as _json
+
+            site.write_json_file(paths.site, site_name, _json.loads(f.read_text(encoding="utf-8")))
     site.write_json_file(paths.site, "experiments.json", XP.export(paths.data))
     fred = M.load_fred(paths.data)
     fx_series = CO.fx_series(fred)  # the first paper strategies' recorded rule (FRED)

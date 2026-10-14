@@ -145,3 +145,18 @@ describe('stock page answers', () => {
     expect(within(q).getByRole('link', { name: 'Check it against your rules' })).toHaveAttribute('href', '/portfolio?tab=log&t=AAPL')
   })
 })
+
+describe('other questions tested once', () => {
+  it('shows adopted and rejected filters and the rejected corrections', async () => {
+    const { default: filters } = await import('./fixtures/research_filters.json')
+    const { default: corrections } = await import('./fixtures/research_corrections.json')
+    stubFetch({ 'health.json': health, 'research_filters.json': filters, 'research_corrections.json': corrections })
+    render_('/validation')
+    const card = (await screen.findByRole('heading', { name: 'Other questions tested once (2016–2023)' })).closest('section')!
+    const list = within(card).getByRole('list', { name: 'Quality filters' })
+    expect(within(list).getByText(/heavy debt/)).toBeInTheDocument()
+    expect(within(list).getAllByText('adopted as a warning')).toHaveLength(1)
+    expect(within(list).getAllByText('rejected')).toHaveLength(3)
+    expect(within(card).getByText(/none adopted: they made every horizon less accurate/)).toBeInTheDocument()
+  })
+})
