@@ -139,6 +139,8 @@ def _cmd_backfill(args: argparse.Namespace) -> int:
 
 def _cmd_research_rules(args: argparse.Namespace) -> int:
     """Sell rules and entry timing on 2016-2023, once per protocol (research/rules.py)."""
+    import json
+
     import pandas as pd
 
     from convergealpha.ledger import experiments as X
@@ -152,10 +154,18 @@ def _cmd_research_rules(args: argparse.Namespace) -> int:
         log.error("protocol %s (%s) already ran: a protocol is tested once", R.PROTOCOL_ID, digest)
         return 1
     oos = pd.read_parquet(Path(args.models) / "oos_devval.parquet")
+    meta = Path(args.models) / "meta.json"
+    model_version = (
+        json.loads(meta.read_text(encoding="utf-8")).get("version") if meta.is_file() else None
+    )
+    res_extra = {
+        "model_version": model_version,
+        "signals_from": "walk-forward out-of-sample predictions 2016-2023",
+    }
     sig = R.signals(oos)
     panel = P.build_panel(P.load_rows(data, sorted(set(sig["ticker"]))))
     ps = R.paths(sig, panel.open, panel.high, panel.low, panel.close)
-    res = R.evaluate(ps)
+    res = {**R.evaluate(ps), **res_extra}
     write_json(res, data / "validation" / "rules_research.json", pretty=True)
     if not args.repeat_for_audit:
         X.record(
@@ -169,6 +179,7 @@ def _cmd_research_rules(args: argparse.Namespace) -> int:
                 "protocol_id": R.PROTOCOL_ID,
                 "protocol_digest": digest,
                 "period": res["period"],
+                "model_version": model_version,
                 "status": "done",
                 "summary": {k: res["exits"]["model"][k]["score"] for k in res["exits"]["model"]},
                 "decision": res["decision"],
