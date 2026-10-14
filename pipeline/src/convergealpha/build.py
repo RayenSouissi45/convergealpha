@@ -52,6 +52,7 @@ STAT_KEYS: tuple[str, ...] = (
     "vol_21", "vol_63", "vol_252", "atr14", "atr_pct", "sma50", "sma200", "trend_up",
     "high_52w", "low_52w", "dist_52w_high", "adv_dollar", "adv_shares", "gap_stress_pct",
     "max_dd_1y", "history_days", "last_date", "eligible", "market_cap", "shares_out",
+    "short_vol_ratio", "short_vol_usual",
 )  # fmt: skip
 
 
@@ -636,6 +637,12 @@ def build(ctx: RunContext) -> int:
             (s.reindex(t.index) >= 100).astype(int) for s in manual.values()
         )
     t["eligible"] = t["eligible"].fillna(False).astype(bool)
+    try:  # FINRA daily short sale volume (display only)
+        sv = M.short_volume_features(paths.data, as_of)
+        for c in ("short_vol_ratio", "short_vol_usual"):
+            t[c] = sv[c].reindex(t.index) if c in sv else float("nan")
+    except Exception:
+        log.exception("short volume features failed")
     record_coverage(ctx, t, src)
     try:
         data_quality: dict[str, Any] | None = quality_step(ctx, panel, as_of, t)

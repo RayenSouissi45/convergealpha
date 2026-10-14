@@ -69,6 +69,8 @@ const GROUPS: [string, StatDef[]][] = [
       ['atr_pct', 'ATR % of price', 'Typical daily move as a share of price.'],
       ['gap_stress_pct', 'Gap stress', 'Average of the worst 2% overnight gaps over the last 500 days. A stop can be jumped by a gap this size.'],
       ['max_dd_1y', 'Max drawdown (1 year)', 'Largest fall from a peak over the last year.'],
+      ['short_vol_ratio', 'Short selling today', 'Share of today’s reported volume that was short sales (FINRA daily file). 40–50% is normal: market makers sell short and buy back within the day. Only a change against the usual share below means something. It is not short interest (open positions).'],
+      ['short_vol_usual', 'Usual short selling', 'Median share of volume sold short over the last 20 trading days (FINRA).'],
     ],
   ],
   [
@@ -93,7 +95,7 @@ const GROUPS: [string, StatDef[]][] = [
   ],
 ]
 
-const KIND_OVERRIDE: Record<string, string> = { market_cap: 'money', sma50: 'price', sma200: 'price', high_52w: 'price', low_52w: 'price', atr14: 'price', adv_shares: 'num', history_days: 'num', ret_6m: 'pct', vol_252: 'pctAbs', gap_stress_pct: 'pctAbs', max_dd_1y: 'pct' }
+const KIND_OVERRIDE: Record<string, string> = { market_cap: 'money', sma50: 'price', sma200: 'price', high_52w: 'price', low_52w: 'price', atr14: 'price', adv_shares: 'num', history_days: 'num', ret_6m: 'pct', vol_252: 'pctAbs', gap_stress_pct: 'pctAbs', max_dd_1y: 'pct', short_vol_ratio: 'pctAbs', short_vol_usual: 'pctAbs' }
 
 function StatValue({ k, v }: { k: string; v: Cell }) {
   if (v === null || v === undefined) return <Missing reason="Not enough price history for this value yet." />

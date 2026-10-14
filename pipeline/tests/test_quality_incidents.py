@@ -139,3 +139,22 @@ def test_sample_puts_jumps_first_and_stays_within_the_free_limit(n: int) -> None
     issues = [Q.Issue(f"J{i}", "jump", "", True) for i in range(n)]
     s = Q.sample(issues, ["SPY", "AAA"], [f"P{i}" for i in range(100)])
     assert s[:n] == [f"J{i}" for i in range(n)] and len(s) == Q.SAMPLE and s[n] == "SPY"
+
+
+def test_daily_short_volume_features(tmp_path: Path) -> None:
+    from convergealpha.sources import macro as M
+
+    d = M.sv_dir(tmp_path)
+    d.mkdir(parents=True)
+    for i, day in enumerate(pd.bdate_range("2026-10-01", periods=5)):
+        rows = [
+            ("AAA", day, 40 + i, 100),
+            ("BBB", day, 30, 100),
+            ("BBB", day, 30, 100),
+        ]  # BBB twice
+        pd.DataFrame(rows, columns=["ticker", "date", "short_volume", "total_volume"]).to_parquet(d / f"{day:%Y%m%d}.parquet")  # fmt: skip
+    f = M.short_volume_features(tmp_path, pd.Timestamp("2026-10-07"))
+    assert f.at["AAA", "short_vol_ratio"] == pytest.approx(0.44)  # the latest day
+    assert f.at["AAA", "short_vol_usual"] == pytest.approx(0.42)  # the 20-day median
+    assert f.at["BBB", "short_vol_ratio"] == pytest.approx(0.30)  # duplicate rows summed
+    assert M.short_volume_features(tmp_path, pd.Timestamp("2026-09-30")).empty

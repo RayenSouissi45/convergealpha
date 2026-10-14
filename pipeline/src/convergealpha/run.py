@@ -301,6 +301,21 @@ def job_prepare(ctx: RunContext) -> int:
     except Exception as e:
         log.error("finra failed: %s", e)
         ctx.record("short_interest", False, detail=f"Update failed: {type(e).__name__}")
+    try:
+        sv = M.update_short_volume(ctx.paths.data, today)
+        stored = sorted(M.sv_dir(ctx.paths.data).glob("*.parquet"))
+        ctx.record(
+            "short_volume",
+            bool(stored),
+            as_of=f"{stored[-1].stem[:4]}-{stored[-1].stem[4:6]}-{stored[-1].stem[6:]}"
+            if stored
+            else None,
+            records=len(stored),
+            detail=f"FINRA daily short sale volume; {len(sv)} new day(s)",
+        )
+    except Exception as e:
+        log.error("finra short volume failed: %s", e)
+        ctx.record("short_volume", False, detail=f"Update failed: {type(e).__name__}")
     ctx.save()
     return 0
 

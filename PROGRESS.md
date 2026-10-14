@@ -372,6 +372,8 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 135. Today opens with one line about your holdings ("+12 EUR today, nothing to do") and lists only what needs you; the intraday checks still only warn.
 136. A holding above your per-stock limit gets "put new money elsewhere first" with the euros needed and the tax a sale would cost: in Germany selling a winner is taxed at once, adding money is not.
 137. The second clean exam (exam2-2026h2-v1) is registered today with its rules and date (forecasts 12 Oct - 31 Dec 2026, run on or after 1 Jul 2027) and sealed in the experiment log before any of its outcomes exist.
+138. FINRA's free daily short sale volume is shown next to each stock's own usual share, display only: market makers' intraday shorting makes ~45% normal, so the raw number alone would mislead.
+139. Dependabot groups minor and patch updates; major versions arrive one by one, because the first grouped PR carried react-table 9, which breaks the screener (CI caught it, the PR was closed).
 
 ## Questions for the owner
 

@@ -44,6 +44,9 @@ SOURCES: tuple[SourceSpec, ...] = (
     SourceSpec("insiders", "Insider trades (SEC Form 4)", 2, "SEC_USER_AGENT"),
     SourceSpec("fundamentals", "Fundamentals (SEC XBRL, point-in-time)", 2, "SEC_USER_AGENT", 10),
     SourceSpec("short_interest", "Short interest (FINRA)", 2, stale_after_days=20),
+    SourceSpec(
+        "short_volume", "Daily short sale volume (FINRA)", 2, stale_after_days=5, optional=True
+    ),
     SourceSpec("options", "Options implied volatility", 2),
     SourceSpec("macro", "Macro and regime (FRED)", 2, "FRED_API_KEY"),
     SourceSpec("news", "News and filings", 2, "FINNHUB_API_KEY"),

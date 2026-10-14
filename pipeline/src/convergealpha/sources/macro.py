@@ -200,6 +200,73 @@ def update_short_interest(data_dir: Path, today: date, since: date) -> list[date
     return written
 
 
+# --------------------------------------------------------------------------- FINRA daily short volume
+
+# Reg SHO daily short sale volume for the consolidated NMS tape: an official, free file posted each
+# trading day around 6 pm New York time. Short volume includes market makers' short sales that are
+# covered within the day, so 40-50% of volume is normal; only a change against the stock's own
+# usual share means something. It is NOT short interest (open short positions).
+SHORT_VOLUME_URL = "https://cdn.finra.org/equity/regsho/daily/CNMSshvol{ymd}.txt"
+
+
+def sv_dir(data_dir: Path) -> Path:
+    return data_dir / "short_volume"
+
+
+def update_short_volume(data_dir: Path, today: date, days: int = 30) -> list[date]:
+    """Store the daily files of the last `days` trading days that are not stored yet."""
+    s = http.make_session()
+    have = {p.stem for p in sv_dir(data_dir).glob("*.parquet")}
+    written: list[date] = []
+    d = today
+    for _ in range(days):
+        if is_trading_day(d) and d.strftime("%Y%m%d") not in have:
+            try:
+                r = http.get(s, SHORT_VOLUME_URL.format(ymd=d.strftime("%Y%m%d")), ok_404=True, timeout=60)  # fmt: skip
+            except http.HttpError as e:
+                if "HTTP 403" not in str(e):  # the CDN answers 403 for files not posted yet
+                    raise
+                r = None
+            if r is not None and r.text.startswith("Date|"):
+                df = pd.read_csv(io.StringIO(r.text), sep="|", dtype=str, on_bad_lines="skip")
+                df = df[df["Date"].str.fullmatch(r"\d{8}", na=False)]
+                out = pd.DataFrame(
+                    {
+                        "ticker": df["Symbol"]
+                        .str.upper()
+                        .str.replace(".", "-", regex=False)
+                        .str.replace("/", "-", regex=False),
+                        "date": pd.to_datetime(df["Date"], format="%Y%m%d"),
+                        "short_volume": pd.to_numeric(df["ShortVolume"], errors="coerce"),
+                        "total_volume": pd.to_numeric(df["TotalVolume"], errors="coerce"),
+                    }
+                ).dropna()
+                if not out.empty:
+                    write_parquet(out, sv_dir(data_dir) / f"{d:%Y%m%d}.parquet")
+                    written.append(d)
+        d = previous_trading_day(d)
+    return written
+
+
+def short_volume_features(data_dir: Path, as_of: pd.Timestamp, days: int = 20) -> pd.DataFrame:
+    """Per ticker: short share of volume on the latest day and its usual (20-day median) share."""
+    files = sorted(sv_dir(data_dir).glob("*.parquet"))
+    files = [f for f in files if f.stem <= as_of.strftime("%Y%m%d")][-days:]
+    if not files:
+        return pd.DataFrame(columns=["short_vol_ratio", "short_vol_usual", "short_vol_date"])
+    df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    # A symbol can appear on several rows (share classes written two ways): one row per day.
+    df = df.groupby(["ticker", "date"], as_index=False)[["short_volume", "total_volume"]].sum()
+    df = df[df["total_volume"] > 0]
+    df["ratio"] = df["short_volume"] / df["total_volume"]
+    last = df["date"].max()
+    today = df[df["date"] == last].set_index("ticker")["ratio"]
+    usual = df.groupby("ticker")["ratio"].median()
+    out = pd.DataFrame({"short_vol_ratio": today, "short_vol_usual": usual})
+    out["short_vol_date"] = last
+    return out
+
+
 def load_short_interest(data_dir: Path, as_of: pd.Timestamp | None = None) -> pd.DataFrame:
     files = sorted(si_dir(data_dir).glob("*.parquet"))
     if not files:
