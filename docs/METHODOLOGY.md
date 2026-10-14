@@ -542,6 +542,11 @@ so a lucky result cannot hide behind unreported tries.
   the test years worse (1 week −0.19%, 1 month −0.16%, 3 months −0.34%, 6 months −0.74%); the
   sector biases of 2016-2020 (e.g. Energy) reversed in 2021-2023. The weekly job refits only
   adopted corrections, so none is applied.
+- `exam2-2026h2-v1` (the second clean exam, `research/exam2.py`): **registered on 14 Oct 2026, before
+  any of its outcomes existed**. Forecasts published 12 Oct - 31 Dec 2026, judged once on or after
+  1 Jul 2027: a horizon passes only if its Brier score beats the usual 2016-2023 up rate and stocks
+  given 60%+ rose at least 55% of the time with the low end of a 95% Wilson range above 50%
+  (non-overlapping forecast days). Pass or fail, the result is logged next to the registration.
 
 ## 21. Reliability: checks, records and rollbacks
 

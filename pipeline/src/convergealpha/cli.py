@@ -230,6 +230,14 @@ def _cmd_research_corrections(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_register_exam2(args: argparse.Namespace) -> int:
+    from convergealpha.research import exam2 as E2
+
+    e = E2.register(Path(args.data))
+    log.info("exam 2: %s", "registered" if e else "already registered")
+    return 0
+
+
 def _cmd_model_gate(args: argparse.Namespace) -> int:
     import json
 
@@ -354,6 +362,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--models", default="models-out", help="model bundle with oos_devval.parquet")
     p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
     p.set_defaults(func=_cmd_research_corrections)
+
+    p = sub.add_parser("register-exam2", help="seal the second clean exam's plan in advance")
+    common(p)
+    p.set_defaults(func=_cmd_register_exam2)
 
     p = sub.add_parser(
         "model-gate", help="compare a new weekly model bundle with the one in use (rollback)"

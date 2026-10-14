@@ -112,7 +112,7 @@ export function ExperimentsCard() {
       <ul className="divide-y divide-slate-100 text-sm dark:divide-zinc-800">
         {f.experiments.map((e) => (
           <li key={`${e.recorded_at}-${e.protocol_digest}`} className="py-2">
-            <span className="font-medium">{e.experiment}</span> <Badge tone={e.status === 'done' ? 'good' : 'warn'}>{e.status}</Badge>
+            <span className="font-medium">{e.experiment}</span> <Badge tone={e.status === 'done' ? 'good' : e.status === 'registered' ? 'neutral' : 'warn'}>{e.status === 'registered' ? 'registered in advance' : e.status}</Badge>
             <span className="block text-xs text-slate-500 dark:text-zinc-400">
               {formatDateTime(e.recorded_at)} · {e.period} · protocol {e.protocol_id} ({e.protocol_digest}){e.code_commit ? ` · code ${e.code_commit.slice(0, 7)}` : ''}
             </span>

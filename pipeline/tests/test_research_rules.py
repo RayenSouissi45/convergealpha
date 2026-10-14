@@ -147,3 +147,15 @@ def test_experiment_log_counts_every_try_and_a_protocol_runs_once(tmp_path: Path
     assert X.already_run(tmp_path, "p1", "d1")
     out = X.export(tmp_path)
     assert out["verified"] and out["count"] == 2 and out["experiments"][0]["status"] == "done"
+
+
+def test_second_exam_is_registered_once_and_not_counted_as_run(tmp_path: Path) -> None:
+    from convergealpha.research import exam2 as E2
+
+    assert E2.register(tmp_path) is not None
+    assert E2.register(tmp_path) is None  # sealed once
+    e = X.entries(tmp_path)[0]
+    assert e["status"] == "registered" and e["protocol_digest"] == E2.protocol_digest()
+    assert not X.already_run(
+        tmp_path, E2.PROTOCOL_ID, E2.protocol_digest()
+    )  # the run is still to come

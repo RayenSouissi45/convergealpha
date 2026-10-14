@@ -370,6 +370,8 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 133. Each strategy page shows how to copy it with your own amount (its holdings scaled, whole shares, the zero fee rule, a euro limit per order) and warns that copying later buys at today's prices.
 134. "Practice first" adds the copied orders to your journal as paper trades; paper trades live in the same journal but never count as holdings, warnings, sizing, measured costs or tax (a Real money / Paper switch on Portfolio).
 135. Today opens with one line about your holdings ("+12 EUR today, nothing to do") and lists only what needs you; the intraday checks still only warn.
+136. A holding above your per-stock limit gets "put new money elsewhere first" with the euros needed and the tax a sale would cost: in Germany selling a winner is taxed at once, adding money is not.
+137. The second clean exam (exam2-2026h2-v1) is registered today with its rules and date (forecasts 12 Oct - 31 Dec 2026, run on or after 1 Jul 2027) and sealed in the experiment log before any of its outcomes exist.
 
 ## Questions for the owner
 

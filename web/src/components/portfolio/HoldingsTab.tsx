@@ -47,6 +47,30 @@ function VsMarketLine({ j, invested }: { j: Journal; invested: number }) {
   )
 }
 
+/** Too much in one stock: rebalance with new money first, because selling a winner costs tax. */
+function Rebalance({ ps, total, maxPerStock }: { ps: Position[]; total: number; maxPerStock: number }) {
+  const [settings] = useTradeSettings()
+  if (total <= 0) return null
+  const over = ps.filter((p) => (p.valueEur ?? 0) / total > maxPerStock + 1e-9)
+  if (!over.length) return null
+  return (
+    <ul className="mt-2 space-y-1 text-sm" aria-label="Rebalance">
+      {over.map((p) => {
+        const share = (p.valueEur ?? 0) / total
+        const excess = (p.valueEur ?? 0) - maxPerStock * total
+        const gainShare = p.gainEur !== null && p.valueEur ? Math.max(0, p.gainEur) / p.valueEur : 0
+        const tax = taxOnGain(excess * gainShare, taxFrom(settings)).tax
+        const newMoney = excess / maxPerStock
+        return (
+          <li key={p.ticker}>
+            <Badge tone="warn">Too big</Badge> {p.ticker} is {Math.round(share * 100)}% of your money (your limit {Math.round(maxPerStock * 100)}%). Put new money into your other holdings or a broad ETF first: about {formatEur(newMoney, 0)} more elsewhere brings it back under the limit without selling. Selling the extra {formatEur(excess, 0)} now would cost about {formatEur(tax, 0)} in tax.
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 function PositionCard({ p, rows, fx, j }: { p: Position; rows: Map<string, ScreenerRow>; fx: number | null; j: Journal }) {
   const [settings] = useTradeSettings()
   const holding = journalHoldings(j, fx).find((h) => h.ticker === p.ticker)
@@ -204,6 +228,7 @@ export function HoldingsTab({ j, setJ, ps, rows, fx }: { j: Journal; setJ: (j: J
               Free orders: your money supports about <strong>{Number.isFinite(maxStocks(total, j.rules.minOrderEur)) ? maxStocks(total, j.rules.minOrderEur) : '∞'}</strong> positions of {formatEur(j.rules.minOrderEur, 0)} or more.
             </li>
           </ul>
+          <Rebalance ps={ps} total={total} maxPerStock={j.rules.maxPerStock} />
           {overlap.length > 0 && (
             <ul className="mt-2 space-y-1 text-sm" aria-label="Hidden overlap">
               {overlap.map((w) => (
