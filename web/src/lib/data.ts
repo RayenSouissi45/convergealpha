@@ -25,10 +25,12 @@ export async function fetchSiteJson<T>(file: string, signal?: AbortSignal): Prom
   }
 }
 
-export function useSiteJson<T>(file: string): Loadable<T> {
+/** `file` null: nothing to load yet (no request is made). */
+export function useSiteJson<T>(file: string | null): Loadable<T> {
   const [result, setResult] = useState<{ file: string; value: Loadable<T> } | null>(null)
 
   useEffect(() => {
+    if (file === null) return
     const controller = new AbortController()
     void fetchSiteJson<T>(file, controller.signal).then((value) => {
       if (!controller.signal.aborted) setResult({ file, value })
@@ -36,6 +38,7 @@ export function useSiteJson<T>(file: string): Loadable<T> {
     return () => controller.abort()
   }, [file])
 
+  if (file === null) return { state: 'missing' }
   return result?.file === file ? result.value : { state: 'loading' }
 }
 

@@ -9,7 +9,7 @@ import { isOpp } from '../lib/opportunity'
 import { Tip } from '../components/Tip'
 import { Card, PageHeader } from '../components/ui'
 import { formatDay, formatMoney, formatNum, formatPct } from '../lib/format'
-import { holdingStatus, usePortfolio } from '../lib/portfolio'
+import { holdingStatus, usePortfolioView } from '../lib/portfolio'
 import { useSiteJson } from '../lib/data'
 import { toRows, useScreener } from '../lib/screener'
 import { useBrokerList, useOnlyZero, zeroAvailability, zeroKeep } from '../lib/zero'
@@ -96,7 +96,7 @@ function OppList({ title, help, rows, empty, more }: { title: string; help: stri
 }
 
 export default function Today() {
-  const [portfolio] = usePortfolio()
+  const portfolio = usePortfolioView()
   // today.json holds only the rows these lists can show (a few KB). The full screener (~1 MB) is
   // loaded only to check holdings, or when an older export has no today.json.
   const todayFile = useSiteJson<ScreenerFile>('today.json')

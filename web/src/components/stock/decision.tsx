@@ -1,7 +1,9 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router'
 import { formatDay, formatMoney, formatPct, formatPctAbs, formatPrice } from '../../lib/format'
-import { holdingStatus, limitChecks, throttle, usePortfolio } from '../../lib/portfolio'
+import { formatEur } from '../../lib/costs'
+import { useFx } from '../../lib/fx'
+import { holdingStatus, limitChecks, throttle, usePortfolioView } from '../../lib/portfolio'
 import { useScreener } from '../../lib/screener'
 import type { Reliability, ScreenerRow } from '../../types'
 import { positionShares } from '../../lib/sizing'
@@ -338,11 +340,14 @@ const FAMILY_HELP: Record<string, string> = {
 // ---------------------------------------------------------------- position plan
 
 export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker: string; label: string; sector: string | null }) {
-  const [portfolio, setPortfolio] = usePortfolio()
+  const portfolio = usePortfolioView()
+  const fx = useFx()
   // The full stock list is only needed for limit checks against existing holdings.
   const screener = useScreener(portfolio.holdings.length > 0)
-  const [equityInput, setEquityInput] = useState(portfolio.equity !== null ? String(portfolio.equity) : '')
-  const equity = Number(equityInput) > 0 ? Number(equityInput) : null
+  const [equityInput, setEquityInput] = useState('')
+  // Your account value in euros; sizing works in the stock's dollars at today's EUR/USD rate.
+  const equityEur = Number(equityInput) > 0 ? Number(equityInput) : null
+  const equity = equityEur !== null && fx ? equityEur * fx.rate : null
   const t = throttle({ ...portfolio, equity: equity ?? portfolio.equity })
   const sizing =
     equity && p.p_lower !== null && p.payoff_b !== null
@@ -353,35 +358,22 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
   const row = rows.get(ticker) ?? ({ ticker, sector } as ScreenerRow)
   const checks = equity && sizing ? limitChecks({ ...portfolio, equity }, rows, row, sizing.shares * p.entry, sizing.shares * sizing.riskPerShare) : []
   const held = portfolio.holdings.some((h) => h.ticker === ticker)
-  const add = () => {
-    if (!sizing) return
-    setPortfolio({
-      ...portfolio,
-      equity,
-      holdings: [
-        ...portfolio.holdings,
-        { ticker, shares: sizing.shares, entryPrice: p.entry, entryDate: today, exitLevel: p.planned_exit, atrAtEntry: p.atr, p25MonthAtEntry: null },
-      ],
-    })
-  }
   const [timeStop] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() + Math.round((p.time_stop_days * 7) / 5))
     return d
   })
-  const [today] = useState(() => new Date().toISOString().slice(0, 10))
   return (
     <Card title="Position plan" aside={isBuy ? <LabelBadge label={label} /> : <Badge tone="neutral">For reference only</Badge>}>
       {!isBuy && <p className="mb-2 text-sm text-slate-600 dark:text-zinc-400">This stock is not a BUY today. The plan shows what the rules would do if it became one.</p>}
       <label className="block text-sm font-medium">
-        Your account value (stored only in this browser)
+        Your account value in euros (not stored)
         <input
           type="number"
           inputMode="decimal"
           min="0"
           value={equityInput}
           onChange={(e) => setEquityInput(e.target.value)}
-          onBlur={() => equity && setPortfolio({ ...portfolio, equity })}
           placeholder="e.g. 10000"
           className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base dark:border-zinc-600 dark:bg-zinc-800"
         />
@@ -398,8 +390,14 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
             <Row label={<Tip content={`0.75% of your account × tier ÷ risk per share, capped by ¼-Kelly on the lower-bound chance, 10% of your account and 1% of daily volume. Binding limit: ${sizing.binding}.`}>Shares</Tip>}>
               <span className="text-lg font-semibold">{sizing.shares.toLocaleString('en-US')}</span>
             </Row>
-            <Row label="Position value">{formatMoney(sizing.shares * p.entry)}</Row>
-            <Row label="Money at risk to the planned exit">{formatMoney(sizing.shares * sizing.riskPerShare)}</Row>
+            <Row label="Position value">
+              {formatMoney(sizing.shares * p.entry)}
+              {fx ? ` ≈ ${formatEur((sizing.shares * p.entry) / fx.rate, 0)}` : ''}
+            </Row>
+            <Row label="Money at risk to the planned exit">
+              {formatMoney(sizing.shares * sizing.riskPerShare)}
+              {fx ? ` ≈ ${formatEur((sizing.shares * sizing.riskPerShare) / fx.rate, 0)}` : ''}
+            </Row>
           </>
         ) : (
           <Row label="Shares">{equity ? <Missing reason="Needs a chance and payoff estimate for this stock." /> : 'Enter your account value'}</Row>
@@ -417,11 +415,12 @@ export function PlanCard({ p, ticker, label, sector }: { p: PlanSection; ticker:
           ))}
         </ul>
       )}
-      {sizing && sizing.shares > 0 && !held && (
-        <button type="button" onClick={add} className="mt-3 min-h-11 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
-          Add {sizing.shares} shares to My portfolio
-        </button>
-      )}
+      <Link
+        to={`/portfolio?tab=log&t=${encodeURIComponent(ticker)}${sizing && sizing.shares > 0 ? `&shares=${sizing.shares}` : ''}`}
+        className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {held ? 'Log a trade in my journal' : 'Log this buy in my journal'}
+      </Link>
       {held && (
         <p className="mt-3 text-sm">
           In <Link to="/portfolio" className="underline">your portfolio</Link>

@@ -1,6 +1,8 @@
-// "My portfolio": stored only in this browser (localStorage). Export/import as JSON.
-import { useCallback, useEffect, useState } from 'react'
+// Holding rules (HOLD / ROTATE / SELL), portfolio limits and the drawdown brake. Your holdings come
+// from the trade journal (lib/journal.ts), stored only in this browser.
 import type { ScreenerRow } from '../types'
+import { useFx } from './fx'
+import { fifo, MIGRATION_FX, useJournal, type Journal } from './journal'
 
 export interface Holding {
   ticker: string
@@ -23,19 +25,9 @@ export interface PortfolioState {
   holdings: Holding[]
 }
 
-const KEY = 'ca-portfolio'
 const EMPTY: PortfolioState = { version: 1, equity: null, peakEquity: null, holdings: [] }
 
-export function loadPortfolio(): PortfolioState {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return EMPTY
-    return parsePortfolio(JSON.parse(raw) as unknown)
-  } catch {
-    return EMPTY
-  }
-}
-
+/** The old dollar portfolio file (still read by the journal once, to move its holdings over). */
 export function parsePortfolio(v: unknown): PortfolioState {
   if (!v || typeof v !== 'object') throw new Error('Not a portfolio file')
   const o = v as Partial<PortfolioState>
@@ -44,33 +36,37 @@ export function parsePortfolio(v: unknown): PortfolioState {
     .filter((h): h is Holding => !!h && typeof h.ticker === 'string' && Number.isFinite(h.shares) && Number.isFinite(h.entryPrice))
     .map((h) => ({ ...h, ticker: h.ticker.toUpperCase() }))
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
-  return { version: 1, equity: num(o.equity), peakEquity: num(o.peakEquity), holdings: clean }
+  return { ...EMPTY, equity: num(o.equity), peakEquity: num(o.peakEquity), holdings: clean }
 }
 
-function save(p: PortfolioState): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(p))
-  } catch {
-    // Storage blocked: changes last for this visit only.
-  }
-}
-
-export function usePortfolio(): [PortfolioState, (p: PortfolioState) => void] {
-  const [state, setState] = useState<PortfolioState>(loadPortfolio)
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) setState(loadPortfolio())
+/** Your open positions from the journal, in the shape the holding rules use (prices in dollars,
+ * from what the app knew when you bought). */
+export function journalHoldings(j: Journal, fx: number | null): Holding[] {
+  const book = fifo(j.trades)
+  const byId = new Map(j.trades.map((t) => [t.id, t]))
+  return [...book.open.entries()].map(([ticker, lots]) => {
+    const first = lots[0]
+    const buy = first ? byId.get(first.tradeId) : undefined
+    const shares = lots.reduce((s, l) => s + l.shares, 0)
+    const costEur = lots.reduce((s, l) => s + l.costEur, 0)
+    const rate = buy?.snapshot?.fx ?? fx ?? MIGRATION_FX
+    return {
+      ticker,
+      shares,
+      entryPrice: buy?.snapshot?.price_usd ?? (shares > 0 ? (costEur / shares) * rate : 0),
+      entryDate: first?.date ?? '',
+      exitLevel: buy?.snapshot?.planned_exit_usd ?? null,
+      atrAtEntry: buy?.snapshot?.atr_usd ?? null,
+      p25MonthAtEntry: buy?.snapshot?.p25_1m ?? null,
     }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
-  const set = useCallback((p: PortfolioState) => {
-    const peak = p.equity !== null ? Math.max(p.equity, p.peakEquity ?? p.equity) : p.peakEquity
-    const next = { ...p, peakEquity: peak }
-    setState(next)
-    save(next)
-  }, [])
-  return [state, set]
+  })
+}
+
+/** Read-only view of your holdings for Today and the stock pages. */
+export function usePortfolioView(): PortfolioState {
+  const [j] = useJournal()
+  const fx = useFx()
+  return { ...EMPTY, holdings: journalHoldings(j, fx?.rate ?? null) }
 }
 
 /** Drawdown throttle: −10% from the peak -> half risk; −15% -> no new buys. */
