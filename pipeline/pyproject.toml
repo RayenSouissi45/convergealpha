@@ -36,6 +36,7 @@ packages = ["src/convergealpha"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # tests share helpers (tests.test_paper) however pytest is started
 addopts = "-q"
 
 [tool.ruff]
