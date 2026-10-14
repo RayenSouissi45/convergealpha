@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from convergealpha.run import RunContext as RunContextT
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+log = logutil.get(__name__)
 
 
 def _paths(args: argparse.Namespace) -> Paths:
@@ -136,6 +137,47 @@ def _cmd_backfill(args: argparse.Namespace) -> int:
     return run_backfill(_paths(args), datetime.now(UTC), args.shard, args.shards, dict(os.environ))
 
 
+def _cmd_research_rules(args: argparse.Namespace) -> int:
+    """Sell rules and entry timing on 2016-2023, once per protocol (research/rules.py)."""
+    import pandas as pd
+
+    from convergealpha.ledger import experiments as X
+    from convergealpha.research import rules as R
+    from convergealpha.sources import prices as P
+    from convergealpha.util.io import write_json
+
+    data = Path(args.data)
+    digest = R.protocol_digest()
+    if X.already_run(data, R.PROTOCOL_ID, digest) and not args.repeat_for_audit:
+        log.error("protocol %s (%s) already ran: a protocol is tested once", R.PROTOCOL_ID, digest)
+        return 1
+    oos = pd.read_parquet(Path(args.models) / "oos_devval.parquet")
+    sig = R.signals(oos)
+    panel = P.build_panel(P.load_rows(data, sorted(set(sig["ticker"]))))
+    ps = R.paths(sig, panel.open, panel.high, panel.low, panel.close)
+    res = R.evaluate(ps)
+    write_json(res, data / "validation" / "rules_research.json", pretty=True)
+    if not args.repeat_for_audit:
+        X.record(
+            data,
+            {
+                "experiment": "sell rules and entry timing",
+                "question": (
+                    "Which exit rule and entry method give the best trade-off between losses, "
+                    "missed recoveries and costs?"
+                ),
+                "protocol_id": R.PROTOCOL_ID,
+                "protocol_digest": digest,
+                "period": res["period"],
+                "status": "done",
+                "summary": {k: res["exits"]["model"][k]["score"] for k in res["exits"]["model"]},
+                "decision": res["decision"],
+            },
+        )
+    log.info("research rules: %s", res["decision"])
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv(REPO_ROOT / ".env")
     logutil.setup()
@@ -203,6 +245,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--models", default="models-out", help="where to write the model bundle")
     p.add_argument("--no-validation", action="store_true")
     p.set_defaults(func=_cmd_weekly)
+
+    p = sub.add_parser(
+        "research-rules", help="test sell rules and entry timing on 2016-2023 (once)"
+    )
+    common(p)
+    p.add_argument("--models", default="models-out", help="model bundle with oos_devval.parquet")
+    p.add_argument("--repeat-for-audit", action="store_true", help="re-run without recording (checks reproducibility)")  # fmt: skip
+    p.set_defaults(func=_cmd_research_rules)
 
     p = sub.add_parser("universe", help="refresh the stock universe only")
     common(p)
