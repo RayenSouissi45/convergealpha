@@ -125,11 +125,13 @@ def _cmd_live_loop(args: argparse.Namespace) -> int:
     from convergealpha.paper import live
 
     key = secret("FINNHUB_API_KEY")
+    publisher = live.GitPublisher(Path(args.publish))
     more = live.loop(
         Path(args.out),
-        live.git_publisher(Path(args.publish)),
+        publisher,
         args.minutes,
         fallback=live.finnhub_quotes(key) if key else None,
+        day_over=publisher.finish,
     )
     if out := os.environ.get("GITHUB_OUTPUT"):
         with open(out, "a", encoding="utf-8") as fh:

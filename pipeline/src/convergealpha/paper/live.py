@@ -324,35 +324,73 @@ def remembered(source: QuoteSource, opens: dict[str, float]) -> QuoteSource:
     return get
 
 
-def git_publisher(work: Path, branch: str = "live") -> Callable[[Path], None]:
-    """Publish a file as the only content of a one-commit branch of `work`'s origin. Each push
-    replaces the branch, so the repository history does not grow by a commit a minute."""
-    import shutil
-    import subprocess
+TAG_PREFIX = "live-"
 
-    def git(*args: str) -> str:
-        r = subprocess.run(["git", "-C", str(work), *args], check=True, capture_output=True, text=True)  # fmt: skip
+
+def minute_tag(at: datetime) -> str:
+    """live-20261015-1353: the tag of one minute's values (UTC), as the page builds it."""
+    return TAG_PREFIX + at.astimezone(UTC).strftime("%Y%m%d-%H%M")
+
+
+class GitPublisher:
+    """Publish the live file to `work`'s origin, as the only content of a one-commit commit:
+    - the `live` branch is replaced each minute (repository history does not grow), but GitHub's
+      raw file server keeps a branch's old content for up to 5 minutes;
+    - so the same commit also gets a tag named after its minute (live-20261015-1353): a name never
+      asked for before is never stale, and the page asks for the last few minutes' names.
+    Tags older than `keep` are deleted as the day goes on, and all of them after the close."""
+
+    def __init__(self, work: Path, branch: str = "live", keep: timedelta = timedelta(minutes=15)) -> None:  # fmt: skip
+        self.work, self.branch, self.keep = work, branch, keep
+        self.tags: dict[str, datetime] = {}
+        # Tags left by an earlier run (another run of today, or a day that ended early).
+        for line in self._git("ls-remote", "--tags", "origin", f"refs/tags/{TAG_PREFIX}*").splitlines():  # fmt: skip
+            name = line.split("refs/tags/", 1)[-1]
+            try:
+                at = datetime.strptime(name, TAG_PREFIX + "%Y%m%d-%H%M").replace(tzinfo=UTC)
+            except ValueError:
+                continue
+            self.tags[name] = at
+
+    def _git(self, *args: str, check: bool = True) -> str:
+        import subprocess
+
+        r = subprocess.run(["git", "-C", str(self.work), *args], check=check, capture_output=True, text=True)  # fmt: skip
         return r.stdout.strip()
 
-    def publish(src: Path) -> None:
-        shutil.copyfile(src, work / src.name)
-        git("add", src.name)
-        stamp = datetime.now(UTC).isoformat(timespec="seconds")
-        commit = git("commit-tree", git("write-tree"), "-m", f"live strategy values {stamp}")
-        git("push", "-q", "-f", "origin", f"{commit}:refs/heads/{branch}")
+    def _delete(self, names: list[str]) -> None:
+        if names:  # best effort: a tag already gone must not block the next minute
+            self._git("push", "-q", "origin", *(f":refs/tags/{n}" for n in names), check=False)
+            for n in names:
+                self.tags.pop(n, None)
 
-    return publish
+    def __call__(self, src: Path, at: datetime) -> None:
+        import shutil
+
+        shutil.copyfile(src, self.work / src.name)
+        self._git("add", src.name)
+        stamp = at.astimezone(UTC).isoformat(timespec="seconds")
+        commit = self._git("commit-tree", self._git("write-tree"), "-m", f"live strategy values {stamp}")  # fmt: skip
+        tag = minute_tag(at)
+        self._git("push", "-q", "-f", "origin", f"{commit}:refs/heads/{self.branch}", f"{commit}:refs/tags/{tag}")  # fmt: skip
+        self.tags[tag] = at
+        self._delete([n for n, t in self.tags.items() if at - t > self.keep])
+
+    def finish(self) -> None:
+        """After the close: the branch alone is enough (its 5-minute delay no longer matters)."""
+        self._delete(list(self.tags))
 
 
 def loop(
     site_dir: Path,
-    publish: Callable[[Path], None],
+    publish: Callable[[Path, datetime], None],
     minutes: float,
     quote_source: QuoteSource = yahoo_quotes,
     fallback: QuoteSource | None = None,
     every: float = 60.0,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     sleep: Callable[[float], None] = _sleep,
+    day_over: Callable[[], None] | None = None,
 ) -> bool:
     """Write and publish the live estimate every `every` seconds while New York trades, until a few
     minutes after the close or for at most `minutes`. Returns True when the trading day is not over
@@ -367,6 +405,8 @@ def loop(
         ny = now.astimezone(NEW_YORK)
         if not is_trading_day(ny.date()) or ny.time() >= LAST_LOOK:
             log.info("live loop: trading day over, %d updates published", published)
+            if day_over is not None:
+                day_over()
             return False
         if now >= end:
             log.info("live loop: time is up, %d updates published; another run continues", published)  # fmt: skip
@@ -374,7 +414,7 @@ def loop(
         if ny.time() >= OPEN:
             try:
                 if run(site_dir, now, source, backup) is not None:
-                    publish(site_dir / "strategies_live.json")
+                    publish(site_dir / "strategies_live.json", now)
                     published += 1
             except Exception:  # one bad minute (a price source, a push) must not end the day
                 log.exception("live update failed; trying again next minute")
@@ -382,13 +422,14 @@ def loop(
 
 
 __all__ = [
+    "GitPublisher",
     "Quote",
     "card_fees",
     "estimate",
     "finnhub_quotes",
-    "git_publisher",
     "loop",
     "market_state",
+    "minute_tag",
     "remembered",
     "run",
     "yahoo_quotes",

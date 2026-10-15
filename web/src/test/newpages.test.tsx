@@ -9,7 +9,7 @@ import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
 import { resetGoal } from '../lib/goalSettings'
-import { byValue, defaultVersion, LIVE_POLL_MS, liveFor, liveOf, newerLive, planned, statusOf, strategyQuery, tradingHours, twinOf, viewOf, withLive } from '../lib/strategies'
+import { byValue, defaultVersion, LIVE_POLL_MS, liveFor, liveOf, minuteTag, newerLive, planned, statusOf, strategyQuery, tradingHours, twinOf, viewOf, withLive } from '../lib/strategies'
 import { AppRoutes } from '../routes'
 import type { Health, OpportunitiesFile, Opportunity, StrategiesFile, StrategiesLiveFile } from '../types'
 import health from './fixtures/health.json'
@@ -430,6 +430,8 @@ describe('live strategies during US trading hours', () => {
     expect(newerLive(live, later)).toBe(later)
     expect(newerLive(later, live)).toBe(later)
     expect(newerLive(null, live)).toBe(live)
+    // The same name the pipeline's minute_tag() gives (tests/test_live.py).
+    expect(minuteTag(new Date('2026-10-15T13:53:31Z'))).toBe('live-20261015-1353')
   })
 
   it('looks for new live values by itself every 30 seconds while New York trades', async () => {

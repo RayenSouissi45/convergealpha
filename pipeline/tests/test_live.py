@@ -230,7 +230,7 @@ def test_the_loop_waits_for_the_open_publishes_every_minute_and_stops_after_the_
     published: list[str] = []
     fails = iter([True])  # the first update fails once (a push, a price source): the loop goes on
 
-    def publish(p: Path) -> None:
+    def publish(p: Path, at: datetime) -> None:
         if next(fails, False):
             raise RuntimeError("push failed")
         published.append(json.loads(p.read_text(encoding="utf-8"))["generated_at"])
@@ -238,9 +238,10 @@ def test_the_loop_waits_for_the_open_publishes_every_minute_and_stops_after_the_
     def quotes(tks: list[str], d: date) -> dict[str, L.Quote]:
         return {t: L.Quote(open=50.0 if t == "AAA" else 660.0, last=51.0, at="x") for t in tks}
 
-    more = L.loop(site, publish, 600, quotes, every=60, clock=clock, sleep=clock.sleep)
+    over: list[int] = []
+    more = L.loop(site, publish, 600, quotes, every=60, clock=clock, sleep=clock.sleep, day_over=lambda: over.append(1))  # fmt: skip
     # 9:30 to 16:09: 400 minutes, the first one failed; nothing before the open
-    assert more is False and len(published) == 399
+    assert more is False and len(published) == 399 and over == [1]
     assert published[0] == "2026-10-14T13:31:00Z" and published[-1] == "2026-10-14T20:09:00Z"
 
 
@@ -249,11 +250,14 @@ def test_the_loop_hands_over_when_its_time_is_up(tmp_path: Path) -> None:
     site = _site(tmp_path, f)
     clock = _Clock(datetime(2026, 10, 14, 14, 0, tzinfo=UTC))
     n: list[int] = []
-    more = L.loop(site, lambda p: n.append(1), 30, lambda t, d: {}, every=60, clock=clock, sleep=clock.sleep)  # fmt: skip
-    assert more is True and len(n) == 30
+    over: list[int] = []
+    more = L.loop(site, lambda p, at: n.append(1), 30, lambda t, d: {}, every=60, clock=clock, sleep=clock.sleep, day_over=lambda: over.append(1))  # fmt: skip
+    assert more is True and len(n) == 30 and over == []  # the next run keeps the minute tags
 
 
-def test_the_live_branch_is_one_commit_replaced_at_each_publish(tmp_path: Path) -> None:
+def test_the_live_branch_is_one_commit_and_each_minute_gets_a_tag_kept_15_minutes(
+    tmp_path: Path,
+) -> None:
     import subprocess
 
     def git(cwd: Path, *a: str) -> str:
@@ -268,9 +272,19 @@ def test_the_live_branch_is_one_commit_replaced_at_each_publish(tmp_path: Path) 
     git(work, "config", "user.name", "t")
     git(work, "config", "user.email", "t@example.com")
     src = tmp_path / "strategies_live.json"
-    publish = L.git_publisher(work)
-    for v in ("1", "2"):
-        src.write_text(f'{{"v": {v}}}', encoding="utf-8")
-        publish(src)
+    publish = L.GitPublisher(work)
+    t0 = datetime(2026, 10, 15, 13, 53, 31, tzinfo=UTC)
+    assert L.minute_tag(t0) == "live-20261015-1353"
+    for i in range(18):  # 13:53 to 14:10
+        src.write_text(f'{{"v": {i}}}', encoding="utf-8")
+        publish(src, t0 + pd.Timedelta(minutes=i).to_pytimedelta())
     assert git(origin, "rev-list", "--count", "live") == "1"
-    assert git(origin, "show", "live:strategies_live.json") == '{"v": 2}'
+    assert git(origin, "show", "live:strategies_live.json") == '{"v": 17}'
+    tags = git(origin, "tag", "--list").split()
+    assert tags[0] == "live-20261015-1355" and tags[-1] == "live-20261015-1410" and len(tags) == 16
+    assert git(origin, "show", "live-20261015-1400:strategies_live.json") == '{"v": 7}'
+    # A new run (a hand-over) finds the tags already there; after the close all of them go.
+    again = L.GitPublisher(work)
+    assert len(again.tags) == 16
+    again.finish()
+    assert git(origin, "tag", "--list") == ""

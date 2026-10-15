@@ -68,7 +68,7 @@ jobs:
         env:
           VITE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           # Live strategy values, pushed every minute by live.yml during US trading hours.
-          VITE_LIVE_URL: https://raw.githubusercontent.com/${{ github.repository }}/live/strategies_live.json
+          VITE_LIVE_RAW: https://raw.githubusercontent.com/${{ github.repository }}
 
       - name: Upload for GitHub Pages
         if: env.TARGET == 'github-pages'

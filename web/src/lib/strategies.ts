@@ -165,9 +165,32 @@ export const nyTime = (iso: string) => NY_TIME.format(new Date(iso))
 /** "5:05 PM" in the reader's own time zone. */
 export const localTime = (iso: string) => LOCAL_TIME.format(new Date(iso))
 
-/** The every-minute live file: the `live` branch of the public code repository (set by the deploy
- * workflow). The site's own copy is refreshed only every 30 minutes. */
-const LIVE_URL = import.meta.env.VITE_LIVE_URL
+/** Where the every-minute live file is pushed: raw files of the public code repository (set by the
+ * deploy workflow). The site's own copy is refreshed only every 30 minutes. */
+const LIVE_RAW = import.meta.env.VITE_LIVE_RAW
+
+/** live-20261015-1353: the tag the live loop gives one minute's values (UTC). */
+export const minuteTag = (d: Date) => `live-${d.toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-')}`
+
+async function rawLive(ref: string, signal: AbortSignal, bust = false): Promise<StrategiesLiveFile | null> {
+  try {
+    const r = await fetch(`${LIVE_RAW}/${ref}/strategies_live.json${bust ? `?t=${Date.now()}` : ''}`, { cache: 'no-store', signal })
+    return r.ok ? ((await r.json()) as StrategiesLiveFile) : null
+  } catch {
+    return null
+  }
+}
+
+/** The newest minute's values. GitHub's raw server keeps a branch's old content for up to 5
+ * minutes, but a tag never asked for before is always fresh: try the last few minutes' tags, then
+ * the `live` branch (after the close the tags are gone and the branch is up to date). */
+async function branchLive(signal: AbortSignal): Promise<StrategiesLiveFile | null> {
+  for (let back = 1; back <= 5; back++) {
+    const v = await rawLive(minuteTag(new Date(Date.now() - back * 60_000)), signal)
+    if (v || signal.aborted) return v
+  }
+  return rawLive('live', signal, true)
+}
 
 /** How often an open page looks for new live values (the file changes once a minute). */
 export const LIVE_POLL_MS = 30_000
@@ -188,12 +211,7 @@ export const newerLive = (a: StrategiesLiveFile | null, b: StrategiesLiveFile | 
 
 async function fetchLive(signal: AbortSignal): Promise<StrategiesLiveFile | null> {
   const site = fetchSiteJson<StrategiesLiveFile>('strategies_live.json', signal).then((r) => (r.state === 'ready' ? r.data : null))
-  // raw.githubusercontent.com caches for 5 minutes; a new address each time gets the latest.
-  const branch = LIVE_URL
-    ? fetch(`${LIVE_URL}?t=${Date.now()}`, { cache: 'no-store', signal })
-        .then((r) => (r.ok ? (r.json() as Promise<StrategiesLiveFile>) : null))
-        .catch(() => null)
-    : Promise.resolve(null)
+  const branch = LIVE_RAW ? branchLive(signal) : Promise.resolve(null)
   const [a, b] = await Promise.all([site, branch])
   return newerLive(a, b)
 }
