@@ -380,6 +380,7 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 143. No automatic challenger configuration yet: switching the model's configuration would make the validation lab evaluate the 2024-2026 holdout again, which is forbidden. The weekly gate and rollback stay; a challenger can be judged on the second exam's period instead.
 144. A challenger model (one alternative fixed in advance: more regularised LightGBM) is trained every Saturday next to the champion, compared on 2016-2023 with cross-fitted calibration in both halves, and forecasts daily in the shadow. It can replace the champion only by the rule registered as challenger-2026-v1 (better on history AND live over 6+ independent periods), so the holdout is never used again.
 145. The first scheduled run with the new checks (15 Oct, 00:45 UTC) found Yahoo serving Oct 14 for only 45% of stocks: paper trading waited and the incident log recorded it. Fixes: the fetch asks again for stocks missing the latest session (up to 2 times, 60 s apart), paper trading now needs 90% of stocks priced (was 50%), and a catch-up run at 03:15 UTC completes such days.
+146. The first real replay (Oct 14) found that the stored inputs wrote the finanzen.net zero yes/no column as text, so the replay saw no buyable stock; the ledger itself was right. The column is now stored as a nullable boolean and older files are read correctly: all 22 strategies replay Oct 14 exactly.
 
 ## Questions for the owner
 

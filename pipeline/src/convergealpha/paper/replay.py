@@ -31,6 +31,7 @@ COLUMNS = (
     "opp", "opp_days", "opp_event",
 )  # fmt: skip
 NAME = "paper_inputs"
+BOOL_COLUMNS = ("zero",)  # yes / no / not sure; the other flags are plain booleans
 IGNORED = ("hash", "prev_hash", "seq", "recorded_at")
 
 
@@ -43,7 +44,10 @@ def save_inputs(data_dir: Path, t: pd.DataFrame, as_of: pd.Timestamp, now: datet
     df.index = df.index.astype(str)
     df.index.name = "ticker"
     for c in df.columns:
-        if df[c].dtype == object:
+        if c in BOOL_COLUMNS:
+            # yes / no / not sure (None): a nullable boolean, never text
+            df[c] = df[c].map(lambda v: None if v is None or (isinstance(v, float) and math.isnan(v)) else bool(v)).astype("boolean")  # fmt: skip
+        elif df[c].dtype == object:
             df[c] = df[c].astype("string")
     day_dir = data_dir / "snapshots" / f"{as_of:%Y}" / f"{as_of:%Y%m%d}"
     path = day_dir / f"{NAME}.parquet"
@@ -54,11 +58,23 @@ def save_inputs(data_dir: Path, t: pd.DataFrame, as_of: pd.Timestamp, now: datet
 
 
 def load_inputs(data_dir: Path, rel: str) -> pd.DataFrame:
+    """The stored table as the engine saw it: text as Python strings or None, yes/no columns as
+    True / False / None (files from 14 Oct 2026 stored them as the text "True"/"False")."""
     df = pd.read_parquet(data_dir / rel).set_index("ticker")
     for c in df.columns:
-        if str(df[c].dtype) == "string":
+        if c in BOOL_COLUMNS:
+            df[c] = df[c].astype(object).map(_bool)
+        elif str(df[c].dtype) in ("string", "str") or df[c].dtype == object:
             df[c] = df[c].astype(object).where(df[c].notna(), None)
     return df
+
+
+def _bool(v: Any) -> bool | None:
+    if v is None or v is pd.NA or (isinstance(v, float) and math.isnan(v)):
+        return None
+    if isinstance(v, str):
+        return {"True": True, "False": False}.get(v)
+    return bool(v)
 
 
 def _same(a: Any, b: Any) -> bool:

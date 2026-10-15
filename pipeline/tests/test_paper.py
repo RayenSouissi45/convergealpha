@@ -635,3 +635,17 @@ def test_a_past_day_replays_exactly_from_the_stored_inputs(tmp_path: Path) -> No
     df.loc[0, "price"] = 1.0
     df.to_parquet(p)
     assert RP.replay_day(tmp_path, pnl, "2026-10-15", specs)["strategies"]["balanced-v1"]["why"].endswith("(SHA-256 differs)")  # fmt: skip
+
+
+def test_stored_inputs_keep_yes_no_and_not_sure(tmp_path: Path) -> None:
+    from convergealpha.paper import replay as RP
+
+    t = table({"AAA": {"zero": True}, "BBB": {"zero": None}, "CCC": {"zero": False}})
+    rel, _ = RP.save_inputs(tmp_path, t, DAYS[8], pd.Timestamp("2026-10-13 21:00"))
+    back = RP.load_inputs(tmp_path, rel)
+    assert back["zero"].tolist() == [True, None, False] and back["name"].tolist() == ["x"] * 3
+    assert list(S.universe(back).index) == ["AAA"]  # "not sure" is not buyable, as in the build
+    # Files of 14 Oct 2026 stored the column as text: read back the same way.
+    legacy = t.assign(zero=["True", None, "False"]).reset_index()
+    legacy.to_parquet(tmp_path / "legacy.parquet")
+    assert RP.load_inputs(tmp_path, "legacy.parquet")["zero"].tolist() == [True, None, False]
