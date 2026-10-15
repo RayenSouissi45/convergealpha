@@ -381,6 +381,7 @@ Plan, opportunity badge and paper strategies (2026-10-13)
 144. A challenger model (one alternative fixed in advance: more regularised LightGBM) is trained every Saturday next to the champion, compared on 2016-2023 with cross-fitted calibration in both halves, and forecasts daily in the shadow. It can replace the champion only by the rule registered as challenger-2026-v1 (better on history AND live over 6+ independent periods), so the holdout is never used again.
 145. The first scheduled run with the new checks (15 Oct, 00:45 UTC) found Yahoo serving Oct 14 for only 45% of stocks: paper trading waited and the incident log recorded it. Fixes: the fetch asks again for stocks missing the latest session (up to 2 times, 60 s apart), paper trading now needs 90% of stocks priced (was 50%), and a catch-up run at 03:15 UTC completes such days.
 146. The first real replay (Oct 14) found that the stored inputs wrote the finanzen.net zero yes/no column as text, so the replay saw no buyable stock; the ledger itself was right. The column is now stored as a nullable boolean and older files are read correctly: all 22 strategies replay Oct 14 exactly.
+147. GitHub ran only 3 of the 17 scheduled live updates on 14 Oct, so the Strategies page looked frozen. Each intraday run now starts the next one about 30 minutes later while New York is between 9:00 and 16:10 (one chain: a newer run cancels an older one), with extra starter times at 13:20 and 13:50 UTC.
 
 ## Questions for the owner
 

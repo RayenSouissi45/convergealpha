@@ -4,10 +4,14 @@ name: intraday
 # (prices, SEC live filings, news) and the live estimate of the paper strategies. Labels and the
 # trade ledger are only written after the close; this only warns and estimates.
 # 13:05-21:05 UTC covers 9:30-16:00 New York in summer (UTC-4) and winter (UTC-5).
+# GitHub skips many scheduled runs under load (14 Oct 2026: 3 of 17 ran), so each run also starts
+# the next one about 30 minutes later while the US market is open: one scheduled run that does
+# start keeps the chain going for the whole session. A newer run cancels an older one (one chain).
 on:
   schedule:
     - cron: '5,35 13-20 * * 1-5'
     - cron: '5 21 * * 1-5'
+    - cron: '20,50 13 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -64,3 +68,31 @@ jobs:
       id-token: write
       deployments: write
     secrets: inherit
+
+  # Keep the live estimate going: wait until about 30 minutes after this run started, then start
+  # the next run while New York is between 9:00 and 16:10 on a weekday.
+  next:
+    needs: deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      actions: write
+    steps:
+      - name: Start the next live update in about 30 minutes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STARTED=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .run_started_at)
+          open=$(python3 - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          ny = datetime.now(ZoneInfo("America/New_York"))
+          m = ny.hour * 60 + ny.minute
+          print(1 if ny.weekday() < 5 and 9 * 60 <= m <= 16 * 60 + 10 else 0)
+          PY
+          )
+          if [ "$open" != "1" ]; then echo "US market closed: the chain stops here"; exit 0; fi
+          wait=$(( $(date -d "$STARTED" +%s) + 1800 - $(date +%s) ))
+          if [ "$wait" -gt 0 ]; then sleep "$wait"; fi
+          gh workflow run intraday.yml --repo "$GITHUB_REPOSITORY" && echo "next live update started"
