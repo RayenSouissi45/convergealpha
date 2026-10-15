@@ -185,7 +185,9 @@ async function rawLive(ref: string, signal: AbortSignal, bust = false): Promise<
  * minutes, but a tag never asked for before is always fresh: try the last few minutes' tags, then
  * the `live` branch (after the close the tags are gone and the branch is up to date). */
 async function branchLive(signal: AbortSignal): Promise<StrategiesLiveFile | null> {
-  for (let back = 1; back <= 5; back++) {
+  // The loop publishes on the minute; asking for this minute before its tag exists would make
+  // GitHub answer "not found" for that name for minutes, so this minute only from second 20.
+  for (let back = new Date().getUTCSeconds() >= 20 ? 0 : 1; back <= 5; back++) {
     const v = await rawLive(minuteTag(new Date(Date.now() - back * 60_000)), signal)
     if (v || signal.aborted) return v
   }

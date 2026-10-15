@@ -418,7 +418,10 @@ def loop(
                     published += 1
             except Exception:  # one bad minute (a price source, a push) must not end the day
                 log.exception("live update failed; trying again next minute")
-        sleep(max(1.0, every - (clock() - now).total_seconds()))
+        # On the minute: each minute's tag is up a few seconds after it starts, and the page asks
+        # for the current minute only from second 20 (a name asked for too early stays "not found"
+        # on GitHub's raw server for minutes).
+        sleep(max(1.0, (math.floor(now.timestamp() / every) + 1) * every - clock().timestamp()))
 
 
 __all__ = [
