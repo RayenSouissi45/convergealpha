@@ -18,8 +18,9 @@ import json
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from time import sleep as _sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -302,12 +303,93 @@ def run(
     return out
 
 
+QuoteSource = Callable[[list[str], date], dict[str, Quote]]
+LAST_LOOK = time(16, 10)  # a few minutes after the close, so the closing prices are in
+
+
+def remembered(source: QuoteSource, opens: dict[str, float]) -> QuoteSource:
+    """The same source, but an opening price seen once today is kept: a stock whose Yahoo open is
+    missing is asked from Finnhub once, not every minute."""
+
+    def get(tickers: list[str], today: date) -> dict[str, Quote]:
+        out: dict[str, Quote] = {}
+        for tk, q in source(tickers, today).items():
+            if q.open is not None:
+                opens[tk] = q.open
+            elif tk in opens:
+                q = Quote(open=opens[tk], last=q.last, at=q.at)
+            out[tk] = q
+        return out
+
+    return get
+
+
+def git_publisher(work: Path, branch: str = "live") -> Callable[[Path], None]:
+    """Publish a file as the only content of a one-commit branch of `work`'s origin. Each push
+    replaces the branch, so the repository history does not grow by a commit a minute."""
+    import shutil
+    import subprocess
+
+    def git(*args: str) -> str:
+        r = subprocess.run(["git", "-C", str(work), *args], check=True, capture_output=True, text=True)  # fmt: skip
+        return r.stdout.strip()
+
+    def publish(src: Path) -> None:
+        shutil.copyfile(src, work / src.name)
+        git("add", src.name)
+        stamp = datetime.now(UTC).isoformat(timespec="seconds")
+        commit = git("commit-tree", git("write-tree"), "-m", f"live strategy values {stamp}")
+        git("push", "-q", "-f", "origin", f"{commit}:refs/heads/{branch}")
+
+    return publish
+
+
+def loop(
+    site_dir: Path,
+    publish: Callable[[Path], None],
+    minutes: float,
+    quote_source: QuoteSource = yahoo_quotes,
+    fallback: QuoteSource | None = None,
+    every: float = 60.0,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    sleep: Callable[[float], None] = _sleep,
+) -> bool:
+    """Write and publish the live estimate every `every` seconds while New York trades, until a few
+    minutes after the close or for at most `minutes`. Returns True when the trading day is not over
+    yet, so the caller starts another run (a GitHub job may last at most 6 hours)."""
+    opens: dict[str, float] = {}
+    source = remembered(quote_source, opens)
+    backup = remembered(fallback, opens) if fallback is not None else None
+    end = clock() + timedelta(minutes=minutes)
+    published = 0
+    while True:
+        now = clock()
+        ny = now.astimezone(NEW_YORK)
+        if not is_trading_day(ny.date()) or ny.time() >= LAST_LOOK:
+            log.info("live loop: trading day over, %d updates published", published)
+            return False
+        if now >= end:
+            log.info("live loop: time is up, %d updates published; another run continues", published)  # fmt: skip
+            return True
+        if ny.time() >= OPEN:
+            try:
+                if run(site_dir, now, source, backup) is not None:
+                    publish(site_dir / "strategies_live.json")
+                    published += 1
+            except Exception:  # one bad minute (a price source, a push) must not end the day
+                log.exception("live update failed; trying again next minute")
+        sleep(max(1.0, every - (clock() - now).total_seconds()))
+
+
 __all__ = [
     "Quote",
     "card_fees",
     "estimate",
     "finnhub_quotes",
+    "git_publisher",
+    "loop",
     "market_state",
+    "remembered",
     "run",
     "yahoo_quotes",
 ]

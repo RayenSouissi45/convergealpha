@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import type { Tone } from '../components/ui'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
+import { fetchSiteJson } from './data'
 import { formatDay } from './format'
 
 /** Which stocks a strategy may buy: only those on finanzen.net zero (the version you can copy),
@@ -155,9 +157,81 @@ export function liveOf(f: StrategiesFile, live: StrategiesLiveFile | null | unde
 }
 
 const NY_TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })
+const LOCAL_TIME = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
 
 /** "11:05 AM" in New York time. */
 export const nyTime = (iso: string) => NY_TIME.format(new Date(iso))
+
+/** "5:05 PM" in the reader's own time zone. */
+export const localTime = (iso: string) => LOCAL_TIME.format(new Date(iso))
+
+/** The every-minute live file: the `live` branch of the public code repository (set by the deploy
+ * workflow). The site's own copy is refreshed only every 30 minutes. */
+const LIVE_URL = import.meta.env.VITE_LIVE_URL
+
+/** How often an open page looks for new live values (the file changes once a minute). */
+export const LIVE_POLL_MS = 30_000
+
+const NY_CLOCK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' })
+
+/** New York is (about to be) trading: a weekday between 9:25 and 16:15. Holidays are rare enough
+ * that looking then costs nothing. */
+export function tradingHours(now: Date): boolean {
+  const parts = Object.fromEntries(NY_CLOCK.formatToParts(now).map((p) => [p.type, p.value]))
+  const m = Number(parts.hour) * 60 + Number(parts.minute)
+  return !['Sat', 'Sun'].includes(parts.weekday ?? '') && m >= 9 * 60 + 25 && m <= 16 * 60 + 15
+}
+
+/** The newer of two live files (by when they were made). */
+export const newerLive = (a: StrategiesLiveFile | null, b: StrategiesLiveFile | null): StrategiesLiveFile | null =>
+  !a ? b : !b ? a : b.generated_at >= a.generated_at ? b : a
+
+async function fetchLive(signal: AbortSignal): Promise<StrategiesLiveFile | null> {
+  const site = fetchSiteJson<StrategiesLiveFile>('strategies_live.json', signal).then((r) => (r.state === 'ready' ? r.data : null))
+  // raw.githubusercontent.com caches for 5 minutes; a new address each time gets the latest.
+  const branch = LIVE_URL
+    ? fetch(`${LIVE_URL}?t=${Date.now()}`, { cache: 'no-store', signal })
+        .then((r) => (r.ok ? (r.json() as Promise<StrategiesLiveFile>) : null))
+        .catch(() => null)
+    : Promise.resolve(null)
+  const [a, b] = await Promise.all([site, branch])
+  return newerLive(a, b)
+}
+
+/** Today's live strategy values, kept up to date while the page is open: looked up again every
+ * 30 seconds during New York trading hours (and at once when the tab comes back into view). */
+export function useLiveStrategies(): StrategiesLiveFile | null {
+  const [live, setLive] = useState<StrategiesLiveFile | null>(null)
+  useEffect(() => {
+    let controller = new AbortController()
+    const load = () => {
+      controller.abort()
+      controller = new AbortController()
+      const { signal } = controller
+      void fetchLive(signal).then((v) => {
+        // A new object even when nothing changed, so lateness is re-checked at each look.
+        if (!signal.aborted && v) {
+          const checked = Date.now()
+          setLive((prev) => ({ ...newerLive(prev, v)!, checked_at: checked }))
+        }
+      })
+    }
+    load()
+    const timer = window.setInterval(() => {
+      if (!document.hidden && tradingHours(new Date())) load()
+    }, LIVE_POLL_MS)
+    const onShow = () => {
+      if (!document.hidden) load()
+    }
+    document.addEventListener('visibilitychange', onShow)
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onShow)
+    }
+  }, [])
+  return live
+}
 
 export type LiveCard = StrategyCard & { live?: boolean }
 

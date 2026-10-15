@@ -9,7 +9,7 @@ import { resetOpportunities } from '../lib/opportunity'
 import { resetScreenerCache } from '../lib/screener'
 import { resetSettings } from '../lib/settings'
 import { resetGoal } from '../lib/goalSettings'
-import { byValue, defaultVersion, liveFor, liveOf, planned, statusOf, strategyQuery, twinOf, viewOf, withLive } from '../lib/strategies'
+import { byValue, defaultVersion, LIVE_POLL_MS, liveFor, liveOf, newerLive, planned, statusOf, strategyQuery, tradingHours, twinOf, viewOf, withLive } from '../lib/strategies'
 import { AppRoutes } from '../routes'
 import type { Health, OpportunitiesFile, Opportunity, StrategiesFile, StrategiesLiveFile } from '../types'
 import health from './fixtures/health.json'
@@ -391,15 +391,63 @@ describe('live strategies during US trading hours', () => {
   })
 
   it('the page says LIVE with the time, and tiles show live values', async () => {
-    stubFetch({ ...FILES(), 'strategies_live.json': live })
-    renderAt('/strategies')
-    const line = await screen.findByText(/Updated .* New York, every 30 minutes/)
-    expect(line).toBeInTheDocument()
-    const board = screen.getByRole('list', { name: 'Strategies by value' })
-    const hr = within(board).getByRole('link', { name: /High risk, high reward/ })
-    expect(within(hr).getByText('€202.72')).toBeInTheDocument()
-    expect(within(hr).getByText('LIVE')).toBeInTheDocument()
-    expect(within(hr).getByText('Invested')).toBeInTheDocument()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-14T15:06:00Z'))
+    try {
+      stubFetch({ ...FILES(), 'strategies_live.json': live })
+      renderAt('/strategies')
+      const line = await screen.findByText(/Prices at 11:05 AM New York \(.* your time\)\. This page updates by itself every minute/)
+      expect(line).toBeInTheDocument()
+      const board = screen.getByRole('list', { name: 'Strategies by value' })
+      const hr = within(board).getByRole('link', { name: /High risk, high reward/ })
+      expect(within(hr).getByText('€202.72')).toBeInTheDocument()
+      expect(within(hr).getByText('LIVE')).toBeInTheDocument()
+      expect(within(hr).getByText('Invested')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says so when the live values stop coming during trading hours', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-14T15:30:00Z'))
+    try {
+      stubFetch({ ...FILES(), 'strategies_live.json': live })
+      renderAt('/strategies')
+      expect(await screen.findByText(/Last update at 11:05 AM New York .*; the next one is late\./)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('knows when New York trades, and keeps the newer of two live files', () => {
+    expect(tradingHours(new Date('2026-10-14T13:20:00Z'))).toBe(false) // Wed 9:20 New York
+    expect(tradingHours(new Date('2026-10-14T13:25:00Z'))).toBe(true)
+    expect(tradingHours(new Date('2026-10-14T20:15:00Z'))).toBe(true) // 16:15
+    expect(tradingHours(new Date('2026-10-14T20:16:00Z'))).toBe(false)
+    expect(tradingHours(new Date('2026-10-17T15:00:00Z'))).toBe(false) // Saturday
+    const later = { ...live, generated_at: '2026-10-14T15:06:00Z' }
+    expect(newerLive(live, later)).toBe(later)
+    expect(newerLive(later, live)).toBe(later)
+    expect(newerLive(null, live)).toBe(live)
+  })
+
+  it('looks for new live values by itself every 30 seconds while New York trades', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(new Date('2026-10-14T15:06:00Z'))
+    try {
+      const files: Record<string, unknown> = { ...FILES(), 'strategies_live.json': live }
+      stubFetch(files)
+      renderAt('/strategies')
+      const board = await screen.findByRole('list', { name: 'Strategies by value' })
+      expect(await within(board).findByText('€202.72')).toBeInTheDocument()
+      const hr = live.strategies['high_risk-v1']!
+      files['strategies_live.json'] = { ...live, generated_at: '2026-10-14T15:06:00Z', strategies: { ...live.strategies, 'high_risk-v1': { ...hr, value: 203.5 } } }
+      vi.advanceTimersByTime(LIVE_POLL_MS)
+      expect(await within(board).findByText('€203.50')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

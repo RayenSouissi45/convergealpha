@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { formatEur } from '../lib/costs'
 import { formatDay, formatPct, signClass } from '../lib/format'
-import { COLORS, nyTime, statusOf, type Universe, type Version } from '../lib/strategies'
+import { COLORS, localTime, nyTime, statusOf, type Universe, type Version } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard } from '../types'
 import { Badge } from './ui'
 
@@ -121,18 +121,25 @@ export function MoneyChips({ s, max = 4 }: { s: StrategyCard; max?: number }) {
   )
 }
 
-/** "LIVE · updated 11:05 AM New York": the values are today's estimate, not the sealed record. */
+/** "LIVE · prices at 11:05 AM New York": the values are today's estimate, not the sealed record. */
 export function LiveLine({ live }: { live: StrategiesLiveFile }) {
   const at = live.prices_at ?? live.generated_at
   const open = live.market === 'open'
+  const late = open && (live.checked_at ?? Date.parse(at)) - Date.parse(at) > 10 * 60_000
+  const when = `${nyTime(at)} New York (${localTime(at)} your time)`
   return (
     <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100" role="status">
       <span className="inline-flex items-center gap-1.5 font-semibold">
-        <span className={`size-2 rounded-full bg-emerald-500 ${open ? 'motion-safe:animate-pulse' : ''}`} aria-hidden="true" />
+        <span className={`size-2 rounded-full bg-emerald-500 ${open && !late ? 'motion-safe:animate-pulse' : ''}`} aria-hidden="true" />
         {open ? 'LIVE' : 'Today, after the close'}
       </span>
       <span>
-        {open ? `Updated ${nyTime(at)} New York, every 30 minutes; prices about 15 minutes delayed.` : `Estimated at ${nyTime(at)} New York.`} The official numbers are written after the close.
+        {!open
+          ? `Estimated at ${when}.`
+          : late
+            ? `Last update at ${when}; the next one is late.`
+            : `Prices at ${when}. This page updates by itself every minute; prices can be up to 15 minutes old.`}{' '}
+        The official numbers are written after the close.
       </span>
     </p>
   )

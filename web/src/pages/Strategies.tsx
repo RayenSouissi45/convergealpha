@@ -11,7 +11,7 @@ import { formatDay, formatPct, signClass } from '../lib/format'
 import { isOpp } from '../lib/opportunity'
 import { evaluate, evaluateSplit, mapPeriod, type Context, type PlanRow, type Verdict } from '../lib/plan'
 import { feesFrom, feeText, useTradeSettings } from '../lib/settings'
-import { byValue, cardsFor, COLORS, linePoints, liveFor, liveOf, strategyQuery, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, useVersion, viewOf, withLive, type LiveCard, type Universe } from '../lib/strategies'
+import { byValue, cardsFor, COLORS, linePoints, liveFor, liveOf, strategyQuery, suggestionsFor, twinOf, UNIVERSE_LABEL, useUniverse, useLiveStrategies, useVersion, viewOf, withLive, type LiveCard, type Universe } from '../lib/strategies'
 import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategySuggestion } from '../types'
 import { OutcomeLines, ValidTag, VerdictBox } from './Plan'
 import type { ChartSeries } from '../components/StrategyChart'
@@ -229,7 +229,7 @@ function GiveMeAStrategy({ f, u }: { f: StrategiesFile; u: Universe }) {
 
 export default function Strategies() {
   const res = useSiteJson<StrategiesFile>('strategies.json')
-  const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
+  const liveData = useLiveStrategies()
   const [u, setU] = useUniverse()
   const [v, setV] = useVersion(res.state === 'ready' ? res.data : null)
   const [show, setShow] = useState(false)
@@ -255,7 +255,7 @@ export default function Strategies() {
   }
   const file = res.data
   const f = viewOf(file, v)
-  const live = liveFor(liveOf(file, liveRes.state === 'ready' ? liveRes.data : null), v)
+  const live = liveFor(liveOf(file, liveData), v)
   const query = strategyQuery(file, u, v)
   const cards = cardsFor(f, u).map((s) => withLive(s, live))
   const bench = f.benchmark ? withLive(f.benchmark, live) : null

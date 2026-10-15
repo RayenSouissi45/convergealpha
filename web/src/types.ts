@@ -444,6 +444,8 @@ export interface StrategiesLiveFile {
   benchmark: LiveEstimate | null
   /** Version 2's S&P 500 yardstick (5,000 €). */
   benchmark_v2?: LiveEstimate | null
+  /** Set by the page, not the pipeline: when the page last looked for new values (ms). */
+  checked_at?: number
 }
 
 export interface StrategySuggestion {

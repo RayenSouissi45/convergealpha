@@ -8,8 +8,8 @@ import { WhenVisible } from '../components/WhenVisible'
 import { formatEur, formatEurSigned, formatShares } from '../lib/costs'
 import { useSiteJson } from '../lib/data'
 import { formatDay, formatPct, formatPrice, signClass } from '../lib/format'
-import { cardsFor, COLORS, investedEur, linePoints, liveFor, liveOf, planned, statusOf, strategyQuery, twinOf, UNIVERSE_LABEL, useUniverse, useVersion, viewOf, withLive, type Universe } from '../lib/strategies'
-import type { StrategiesFile, StrategiesLiveFile, StrategyCard, StrategyEvent } from '../types'
+import { cardsFor, COLORS, investedEur, linePoints, liveFor, liveOf, planned, statusOf, strategyQuery, twinOf, UNIVERSE_LABEL, useUniverse, useLiveStrategies, useVersion, viewOf, withLive, type Universe } from '../lib/strategies'
+import type { StrategiesFile, StrategyCard, StrategyEvent } from '../types'
 import type { ChartSeries } from '../components/StrategyChart'
 
 const StrategyChart = lazy(() => import('../components/StrategyChart'))
@@ -287,7 +287,7 @@ function Rules({ s, f }: { s: StrategyCard; f: StrategiesFile }) {
 export default function StrategyDetail() {
   const { id = '' } = useParams()
   const res = useSiteJson<StrategiesFile>('strategies.json')
-  const liveRes = useSiteJson<StrategiesLiveFile>('strategies_live.json')
+  const liveData = useLiveStrategies()
   const [u, setU] = useUniverse()
   const [v, setV] = useVersion(res.state === 'ready' ? res.data : null)
   const back = (
@@ -305,7 +305,7 @@ export default function StrategyDetail() {
   }
   const file = res.data
   const f = viewOf(file, v)
-  const live = liveFor(liveOf(file, liveRes.state === 'ready' ? liveRes.data : null), v)
+  const live = liveFor(liveOf(file, liveData), v)
   const query = (to: Universe) => strategyQuery(file, to, v)
   const official = cardsFor(f, u).find((x) => x.id === id)
   const s = official ? withLive(official, live) : undefined

@@ -196,3 +196,81 @@ def test_version_2_live_value_uses_its_own_capital_rate_and_free_orders(tmp_path
     assert out is not None and out["benchmark_v2"]["key"] == "sp500-v2"
     assert S.SPECS_V2[0].key in out["strategies"]
     assert out["strategies"][S.SPECS_V2[0].key]["vs_benchmark"] is not None
+
+
+def test_an_opening_price_seen_once_is_kept_for_the_rest_of_the_day() -> None:
+    calls = iter([
+        {"AAA": L.Quote(open=50.5, last=51.0, at="1")},
+        {"AAA": L.Quote(open=None, last=52.0, at="2")},
+    ])  # fmt: skip
+    opens: dict[str, float] = {}
+    src = L.remembered(lambda tks, d: next(calls), opens)
+    assert src(["AAA"], date(2026, 10, 15))["AAA"].open == 50.5
+    q = src(["AAA"], date(2026, 10, 15))["AAA"]
+    assert q.open == 50.5 and q.last == 52.0
+
+
+class _Clock:
+    def __init__(self, start: datetime) -> None:
+        self.now = start
+
+    def __call__(self) -> datetime:
+        return self.now
+
+    def sleep(self, s: float) -> None:
+        self.now += pd.Timedelta(seconds=s).to_pytimedelta()
+
+
+def test_the_loop_waits_for_the_open_publishes_every_minute_and_stops_after_the_close(
+    tmp_path: Path,
+) -> None:
+    f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
+    site = _site(tmp_path, f)
+    clock = _Clock(datetime(2026, 10, 14, 13, 25, tzinfo=UTC))  # 9:25 New York
+    published: list[str] = []
+    fails = iter([True])  # the first update fails once (a push, a price source): the loop goes on
+
+    def publish(p: Path) -> None:
+        if next(fails, False):
+            raise RuntimeError("push failed")
+        published.append(json.loads(p.read_text(encoding="utf-8"))["generated_at"])
+
+    def quotes(tks: list[str], d: date) -> dict[str, L.Quote]:
+        return {t: L.Quote(open=50.0 if t == "AAA" else 660.0, last=51.0, at="x") for t in tks}
+
+    more = L.loop(site, publish, 600, quotes, every=60, clock=clock, sleep=clock.sleep)
+    # 9:30 to 16:09: 400 minutes, the first one failed; nothing before the open
+    assert more is False and len(published) == 399
+    assert published[0] == "2026-10-14T13:31:00Z" and published[-1] == "2026-10-14T20:09:00Z"
+
+
+def test_the_loop_hands_over_when_its_time_is_up(tmp_path: Path) -> None:
+    f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
+    site = _site(tmp_path, f)
+    clock = _Clock(datetime(2026, 10, 14, 14, 0, tzinfo=UTC))
+    n: list[int] = []
+    more = L.loop(site, lambda p: n.append(1), 30, lambda t, d: {}, every=60, clock=clock, sleep=clock.sleep)  # fmt: skip
+    assert more is True and len(n) == 30
+
+
+def test_the_live_branch_is_one_commit_replaced_at_each_publish(tmp_path: Path) -> None:
+    import subprocess
+
+    def git(cwd: Path, *a: str) -> str:
+        return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # fmt: skip
+
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    origin.mkdir()
+    work.mkdir()
+    git(origin, "init", "-q", "--bare")
+    git(work, "init", "-q")
+    git(work, "remote", "add", "origin", str(origin))
+    git(work, "config", "user.name", "t")
+    git(work, "config", "user.email", "t@example.com")
+    src = tmp_path / "strategies_live.json"
+    publish = L.git_publisher(work)
+    for v in ("1", "2"):
+        src.write_text(f'{{"v": {v}}}', encoding="utf-8")
+        publish(src)
+    assert git(origin, "rev-list", "--count", "live") == "1"
+    assert git(origin, "show", "live:strategies_live.json") == '{"v": 2}'

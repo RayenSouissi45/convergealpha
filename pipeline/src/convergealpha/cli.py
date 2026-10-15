@@ -120,6 +120,23 @@ def _cmd_intraday(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_live_loop(args: argparse.Namespace) -> int:
+    from convergealpha.config import secret
+    from convergealpha.paper import live
+
+    key = secret("FINNHUB_API_KEY")
+    more = live.loop(
+        Path(args.out),
+        live.git_publisher(Path(args.publish)),
+        args.minutes,
+        fallback=live.finnhub_quotes(key) if key else None,
+    )
+    if out := os.environ.get("GITHUB_OUTPUT"):
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write(f"more={'true' if more else 'false'}\n")
+    return 0
+
+
 def _cmd_universe(args: argparse.Namespace) -> int:
     from convergealpha.run import step_universe
 
@@ -383,6 +400,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     common(p)
     p.set_defaults(func=_cmd_intraday)
+
+    p = sub.add_parser(
+        "live-loop", help="live strategy values every minute while New York trades (paper money)"
+    )
+    common(p)
+    p.add_argument("--publish", required=True, help="git repository whose origin gets the file")
+    p.add_argument("--minutes", type=float, default=330, help="stop after this long at most")
+    p.set_defaults(func=_cmd_live_loop)
 
     p = sub.add_parser("weekly", help="rebuild the dataset, train and validate the models")
     common(p)
