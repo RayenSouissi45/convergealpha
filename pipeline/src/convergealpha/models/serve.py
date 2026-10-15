@@ -150,6 +150,20 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
         out[f"p10_{name}"] = np.minimum(out[f"p10_{name}"], out[f"median_{name}"])
         out[f"p90_{name}"] = np.maximum(out[f"p90_{name}"], out[f"median_{name}"])
 
+    # The challenger forecasts in the shadow (stored for the live comparison, never shown as advice).
+    if (d / "challenger_fitted.pkl").is_file() and (d / "challenger_calibration.pkl").is_file():
+        try:
+            from convergealpha.models import challenger as CH
+
+            fitted_ch: T.Fitted = T.load(d / "challenger_fitted.pkl")
+            cal_ch: T.Calibration = T.load(d / "challenger_calibration.pkl")
+            raw_ch = T.predict(fitted_ch, f[fitted_ch.cfg.features].astype("float64"))
+            for name in CH.HORIZONS:
+                if name in cal_ch.up:
+                    out[f"p_up_ch_{name}"] = cal_ch.up[name].predict(raw_ch[f"raw_up_{name}"].to_numpy())  # fmt: skip
+        except Exception as e:
+            log.warning("challenger shadow forecasts skipped: %s", e)
+
     # Sector / stock corrections adopted by the one-time research run (corrections-2016-2023-v1).
     corrections = (
         json.loads((d / "corrections.json").read_text(encoding="utf-8"))
@@ -259,6 +273,7 @@ def predict(ctx: RunContext, t: pd.DataFrame, src: Sources) -> tuple[pd.DataFram
             "model_trained_at": meta["trained_at"],
             "model_metrics": meta.get("metrics"),
             "live_calibration": live_cal or None,
+            "challenger": meta.get("challenger"),
             "corrections": {h: sorted(c) for h, c in corrections.items()} or None,
         },
         "version": meta["version"],

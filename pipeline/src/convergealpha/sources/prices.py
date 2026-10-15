@@ -397,6 +397,11 @@ def unexplained_adjustments(
     return bad
 
 
+RETRIES = 2
+RETRY_PAUSE = 60.0
+RETRY_MIN_SHARE = 0.05  # retry only when more than 5% of stocks lack the latest session
+
+
 def update(
     data_dir: Path,
     panel: Panel,
@@ -416,6 +421,20 @@ def update(
     got: set[str] = set()
     if incremental:
         fresh = finalize_rows(download(incremental, today - timedelta(days=lookback_days)), now)
+        # Yahoo sometimes serves the latest session for only part of the stocks (seen on
+        # 15 Oct 2026: 45%). Ask again for the stocks without it, after a pause.
+        for attempt in range(RETRIES):
+            have = fresh.groupby("ticker")["date"].max() if not fresh.empty else pd.Series(dtype="datetime64[ns]")  # fmt: skip
+            behind = [
+                t for t in incremental if have.get(t, pd.Timestamp.min) < pd.Timestamp(session)
+            ]
+            if len(behind) <= RETRY_MIN_SHARE * len(incremental):
+                break
+            log.warning("prices: %d of %d stocks lack %s; asking again (%d)", len(behind), len(incremental), session, attempt + 1)  # fmt: skip
+            time.sleep(RETRY_PAUSE)
+            again = finalize_rows(download(behind, today - timedelta(days=lookback_days), batch_size=60), now)  # fmt: skip
+            if not again.empty:
+                fresh = pd.concat([fresh[~fresh["ticker"].isin(set(again["ticker"]))], again], ignore_index=True)  # fmt: skip
         repaired = unexplained_adjustments(panel, fresh)
         lv = panel.last_valid()
         last_dates = fresh["ticker"].map(lv["last_date"])

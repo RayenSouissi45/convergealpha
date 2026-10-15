@@ -64,8 +64,13 @@ def outcomes(data_dir: Path, tr: pd.DataFrame, as_of: pd.Timestamp, raw: bool = 
             start, end = tr.loc[idx[i], tks], tr.loc[idx[j], tks]
             ret = (end / start - 1).astype(float)
             ret = ret[ret.notna() & np.isfinite(ret)]
-            parts.append(pd.DataFrame({"day": day, "ticker": ret.index.astype(str), "horizon": name, "p_up": p.reindex(ret.index).to_numpy(), "ret": ret.to_numpy()}))  # fmt: skip
-    cols = ["day", "ticker", "horizon", "p_up", "ret"]
+            part = pd.DataFrame({"day": day, "ticker": ret.index.astype(str), "horizon": name, "p_up": p.reindex(ret.index).to_numpy(), "ret": ret.to_numpy()})  # fmt: skip
+            ch = f"p_up_ch_{name}"
+            part["p_ch"] = (
+                snap[ch].astype(float).reindex(ret.index).to_numpy() if ch in snap else np.nan
+            )
+            parts.append(part)
+    cols = ["day", "ticker", "horizon", "p_up", "ret", "p_ch"]
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=cols)
 
 
@@ -129,6 +134,12 @@ def next_results(data_dir: Path) -> dict[str, str | None]:
             d = next_trading_day(d)
         out[name] = d.isoformat()
     return out
+
+
+def _challenger(df: pd.DataFrame) -> dict[str, Any]:
+    from convergealpha.models import challenger as CH
+
+    return CH.live_compare(df)
 
 
 DECAY_MIN_PERIODS = 6  # independent periods before a family can be called "not working live"
@@ -199,6 +210,7 @@ def export(data_dir: Path, tr: pd.DataFrame, as_of: pd.Timestamp, base_up: Mappi
         "horizons": card(df, base_up),
         "first_result": next_results(data_dir),
         "families": family_ic(data_dir, tr, as_of),
+        "challenger": _challenger(df),
         "note": "Every eligible stock of every day counts, losers too. Forecasts on consecutive days overlap in time, so the 95% ranges are too narrow; read them with the number of forecast days.",
     }
 

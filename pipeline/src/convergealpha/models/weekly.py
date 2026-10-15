@@ -129,6 +129,29 @@ def run(ctx: RunContext, out_dir: Path) -> dict[str, Any]:
     pats = PT.run(h, stocks)
     write_json(pats, out_dir / "patterns.json")
 
+    # The challenger: trained and compared the same way; never fails the weekly job.
+    challenger: dict[str, Any] | None = None
+    try:
+        from convergealpha.ledger import experiments as XP
+        from convergealpha.models import challenger as CH
+
+        res = CH.run_weekly(df, years, cfg, oos, trading, out_dir)
+        challenger = {"ahead_on_history": res["ahead_on_history"], "protocol": CH.PROTOCOL_ID}
+        XP.record(
+            ctx.paths.data,
+            {
+                "experiment": "challenger vs champion on 2016-2023 (weekly)",
+                "protocol_id": CH.PROTOCOL_ID,
+                "protocol_digest": res["protocol_digest"],
+                "period": "2016-2023 walk-forward, two halves",
+                "status": "done",
+                "summary": {h: v["challenger_better"] for h, v in res["horizons"].items()},
+                "decision": {"ahead_on_history": res["ahead_on_history"]},
+            },
+        )
+    except Exception:
+        log.exception("challenger training failed; the champion is unaffected")
+
     metrics = quick_metrics(oos, cal)
     version = f"m-{datetime.now(UTC):%Y%m%d}-{cfg.digest()}"
     meta = {
@@ -140,6 +163,7 @@ def run(ctx: RunContext, out_dir: Path) -> dict[str, Any]:
         "oos_years": years,
         "metrics": metrics,
         "patterns_tested": pats.get("tested", 0),
+        "challenger": challenger,
         "seconds": round(time.time() - t0),
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")

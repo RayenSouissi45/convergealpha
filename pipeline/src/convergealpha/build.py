@@ -360,6 +360,10 @@ def commitment(
     }
 
 
+# Paper trading waits for a later run (the catch-up run) when fewer stocks are priced for the day.
+PAPER_MIN_COVERAGE = 0.9
+
+
 def paper_step(
     ctx: RunContext,
     panel: P.Panel,
@@ -421,7 +425,7 @@ def paper_step(
         log.warning("paper trading waits: no EUR/USD rate (FRED DEXUSEU) yet")
         books = PE.replay(LG.read(d / PE.LEDGER), specs)
         status = "waiting for the EUR/USD rate from FRED"
-    elif price_coverage <= 0.5:
+    elif price_coverage < PAPER_MIN_COVERAGE:
         log.warning("paper trading waits: prices for only %.0f%% of stocks", 100 * price_coverage)
         books = PE.replay(LG.read(d / PE.LEDGER), specs)
         status = "waiting for good price data"

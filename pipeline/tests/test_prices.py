@@ -146,3 +146,26 @@ def test_plan_update_routes_stale_and_new_tickers_to_full_download() -> None:
     assert inc == ["FRESH"]
     assert sorted(full) == ["NEW", "STALE"]
     assert not np.isnan(panel.close["FRESH"].iloc[-1])
+
+
+def test_stocks_missing_the_latest_session_are_asked_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # fmt: skip
+    # Stored up to Oct 13; Yahoo first serves Oct 14 for only 1 of 4 stocks, then for all.
+    tks = ["AAA", "BBB", "CCC", "DDD"]
+    stored = pd.concat([rows(t, ["2026-10-12", "2026-10-13"], [10.0, 10.0], "2026-10-13") for t in tks])  # fmt: skip
+    panel = P.build_panel(stored)
+    calls: list[list[str]] = []
+
+    def fake(tickers: list[str], start: date, end: date | None = None, batch_size: int = 120, pause: float = 1.0) -> pd.DataFrame:  # fmt: skip
+        calls.append(list(tickers))
+        days = ["2026-10-13", "2026-10-14"] if len(calls) > 1 or tickers[0] == "AAA" else ["2026-10-13"]  # fmt: skip
+        out = []
+        for t in tickers:
+            d = days if (len(calls) > 1 or t == "AAA") else ["2026-10-13"]
+            out.append(rows(t, d, [10.0] * len(d), "2026-10-14").drop(columns=["basis"]))
+        return pd.concat(out, ignore_index=True)
+
+    monkeypatch.setattr(P, "download", fake)
+    monkeypatch.setattr(P, "RETRY_PAUSE", 0.0)
+    rep = P.update(tmp_path, panel, tks, datetime(2026, 10, 15, 1, 0, tzinfo=UTC))
+    assert calls[1] == ["BBB", "CCC", "DDD"]  # only the stocks still behind are asked again
+    assert rep.new_rows == 4  # Oct 14 for all four

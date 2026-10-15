@@ -6,9 +6,13 @@ name: daily
 #       -> build (features, labels, forecasts, site JSON)  -> deploy
 # Every job writes different paths in the private data repo, so pushes never conflict.
 # 22:30 UTC = 18:30 New York in summer, 17:30 in winter. GitHub may start scheduled runs late.
+# 03:15 UTC (Tue-Sat) is a catch-up run: when Yahoo served the day's prices only in part, the
+# first run waits (paper trading needs 90% of stocks priced) and this one completes the day; on a
+# normal day it is a same-day re-run that adds nothing.
 on:
   schedule:
     - cron: '30 22 * * 1-5'
+    - cron: '15 3 * * 2-6'
   workflow_dispatch:
     inputs:
       tickers:

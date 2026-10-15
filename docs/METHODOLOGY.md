@@ -558,6 +558,9 @@ so a lucky result cannot hide behind unreported tries.
 
 ## 21. Reliability: checks, records and rollbacks
 
+- **Complete days only.** Stocks without the latest session are downloaded again (up to twice, 60 s
+  apart). Paper trading waits unless 90% of stocks are priced for the day; a catch-up run at
+  03:15 UTC completes such days (on a normal day it is a same-day re-run that adds nothing).
 - **Price checks before use (`quality.py`).** Every eligible stock (and every paper holding) is
   checked each day: impossible values (≤ 0, high below low, close more than 1% outside the day's
   range), a move of more than 50% without a recorded split, the same close for 5 days. Up to 55
@@ -605,6 +608,14 @@ so a lucky result cannot hide behind unreported tries.
   of that horizon (the order of stocks never changes). It is fitted on the model's chances before
   the correction (stored as `p_up_raw_*`), so it cannot feed on itself, and only on live forecasts
   (from 12 Oct 2026), never on the holdout.
+- **Challenger model (`models/challenger.py`).** One alternative configuration fixed in advance (more,
+  smaller trees: 500 trees, learning rate 0.03, 15 leaves, 800 stocks per leaf, 70% sampling) is
+  trained every week next to the champion on the pre-holdout years and compared for the 1-month
+  and 6-month chance of rising: in each half of 2016-2023, Brier score after calibrating on the
+  other half, and AUC. It also forecasts every day in the shadow (stored, never shown as advice) and
+  the live report card compares both. Rule `challenger-2026-v1`: it replaces the champion only if it
+  has a lower Brier for both horizons in both halves AND live over at least 6 independent periods of
+  each; the 2024-2026 holdout is never evaluated again for it.
 - **Drift actions.** When 3 or more model inputs drift (PSI above 0.25 against the last two years of
   training data), the position plan sizes new positions at half, and the daily workflow starts the
   weekly retraining early (if the model is more than 3 days old).

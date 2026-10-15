@@ -272,10 +272,13 @@ def _cmd_research_filters(args: argparse.Namespace) -> int:
 
 
 def _cmd_register_exam2(args: argparse.Namespace) -> int:
+    from convergealpha.models import challenger as CH
     from convergealpha.research import exam2 as E2
 
     e = E2.register(Path(args.data))
     log.info("exam 2: %s", "registered" if e else "already registered")
+    c = CH.register(Path(args.data))
+    log.info("challenger: %s", "registered" if c else "already registered")
     return 0
 
 
