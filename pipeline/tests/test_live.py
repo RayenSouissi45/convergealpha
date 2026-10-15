@@ -138,6 +138,40 @@ def test_yahoo_quotes_keep_only_todays_bar(monkeypatch: pytest.MonkeyPatch) -> N
     assert set(q) == {"AAA"} and q["AAA"].open == 50.5 and q["AAA"].last == 51.0
 
 
+def test_a_stale_yahoo_open_is_not_used_and_the_fallback_gives_the_real_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 15 Oct 2026, minutes after the open: Yahoo's bar for today still carried yesterday's open
+    # (HIG 130.47), below everything HIG traded at that morning (133.62 to 134.66).
+    bars = pd.DataFrame({
+        "ticker": ["HIG", "HIG", "CINF"], "date": pd.to_datetime(["2026-10-14", "2026-10-15", "2026-10-15"]),
+        "open": [130.47, 130.47, 169.97], "high": [132.15, 134.66, 170.59],
+        "low": [129.36, 133.62, 169.36], "close": [131.96, 134.32, 170.04],
+    })  # fmt: skip
+    import convergealpha.sources.prices as P
+
+    monkeypatch.setattr(P, "download", lambda *a, **k: bars)
+    q = L.yahoo_quotes(["HIG", "CINF"], date(2026, 10, 15))
+    assert q["HIG"].open is None and q["HIG"].last == 134.32 and q["CINF"].open == 169.97
+
+    # In the live run, an order due today with no Yahoo open takes the fallback's open.
+    f, _ = _card(tmp_path / "d", 8, [50.0] * 12, [50.0] * 12)
+    site = _site(tmp_path, f)
+    asked: list[list[str]] = []
+
+    def yahoo(tks: list[str], d: date) -> dict[str, L.Quote]:
+        return {t: L.Quote(open=None if t == "AAA" else 660.0, last=51.0 if t == "AAA" else 661.0, at="y") for t in tks}  # fmt: skip
+
+    def finnhub(tks: list[str], d: date) -> dict[str, L.Quote]:
+        asked.append(tks)
+        return {t: L.Quote(open=50.5, last=51.0, at="f") for t in tks}
+
+    out = L.run(site, datetime(2026, 10, 14, 15, 0, tzinfo=UTC), quote_source=yahoo, fallback=finnhub)  # fmt: skip
+    assert out is not None and asked == [["AAA"]]
+    est = out["strategies"][S.SPECS[0].key]
+    assert [x["open_usd"] for x in est["filled_today"]] == [50.5] and est["waiting"] == []
+
+
 def test_version_2_live_value_uses_its_own_capital_rate_and_free_orders(tmp_path: Path) -> None:
     from tests.test_paper import FX2
 

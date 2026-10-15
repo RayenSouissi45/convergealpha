@@ -160,8 +160,20 @@ def estimate(card: Mapping[str, Any], quotes: Mapping[str, Quote], fx: float, to
     }
 
 
+def _plausible_open(r: Mapping[str, Any]) -> float | None:
+    """The bar's open, or None when it cannot be today's. Early in the session Yahoo's bar for
+    today can still carry yesterday's open (15 Oct 2026: HIG "opened" at 130.47, yesterday's open,
+    while it traded between 133.62 and 134.66 all morning). A real open lies within the day's range."""
+    op = _f(r.get("open"))
+    lo, hi = _f(r.get("low")), _f(r.get("high"))
+    if op is None or lo is None or hi is None:
+        return op
+    return op if lo * (1 - 1e-4) <= op <= hi * (1 + 1e-4) else None
+
+
 def yahoo_quotes(tickers: list[str], today: date) -> dict[str, Quote]:
-    """Today's open and latest price from Yahoo's daily bar (about 15 minutes delayed)."""
+    """Today's open and latest price from Yahoo's daily bar (about 15 minutes delayed). An open
+    outside the day's range is left out (None), so it is asked from the fallback source."""
     from datetime import timedelta
 
     from convergealpha.sources.prices import download
@@ -180,7 +192,7 @@ def yahoo_quotes(tickers: list[str], today: date) -> dict[str, Quote]:
         last = _f(r["close"])
         if last is None or last <= 0:
             continue
-        out[str(tk)] = Quote(open=_f(r["open"]), last=last, at=stamp)
+        out[str(tk)] = Quote(open=_plausible_open(r), last=last, at=stamp)
     return out
 
 
@@ -263,10 +275,16 @@ def run(
         for t in [*(h["ticker"] for h in c.get("holdings") or []), *(o["ticker"] for o in c.get("pending") or [])]
     })  # fmt: skip
     quotes = quote_source(tickers, today)
-    missing = [t for t in tickers if t not in quotes]
+    # Orders due today need today's opening price; ask the fallback for those Yahoo has no open for.
+    due = {
+        o["ticker"] for c in [*cards, *benches] for o in c.get("pending") or []
+        if str(o.get("fill_on", "")) <= today.isoformat()
+    }  # fmt: skip
+    missing = [t for t in tickers if t not in quotes or (t in due and quotes[t].open is None)]
     if missing and fallback is not None:
-        quotes = {**fallback(missing, today), **quotes}
-        out["source"] += "; Finnhub for the rest"
+        got = fallback(missing, today)
+        quotes = {**quotes, **{t: q for t, q in got.items() if t not in quotes or quotes[t].open is None}}  # fmt: skip
+        out["source"] += "; Finnhub for the rest and for opening prices Yahoo did not have"
     times = sorted(q.at for q in quotes.values())
     out["prices_at"] = times[-1] if times else None
     out["priced"] = f"{len(quotes)} of {len(tickers)} stocks"
