@@ -2,14 +2,16 @@ name: live
 
 # Live values of the paper strategies (version 1 and 2), every minute while New York trades.
 # One run loops for up to 5.5 hours (a GitHub job may last 6) and pushes strategies_live.json as the
-# only file of the `live` branch (one commit, replaced each minute, so history does not grow). The
-# Strategies page reads it from raw.githubusercontent.com every minute while it is open.
-# GitHub skips many scheduled runs under load, so there is a schedule every 20 minutes: a run that
-# starts while another loops waits for it (one at a time) and then exits, because the day is over.
+# only file of the `live` branch (one commit, replaced each minute, so history does not grow) and of
+# a tag per minute (live-20261015-1353, kept 15 minutes: GitHub's raw server serves a branch up to 5
+# minutes late, a new name never). The Strategies pages read it every 30 seconds while open.
+# GitHub skips many scheduled runs under load (most at the top of the hour), so there is a schedule
+# every 20 minutes off the hour, and each intraday run also starts this one when none is running. A
+# run that starts while another loops waits for it (one at a time) and then exits: the day is over.
 # Nothing here is recorded: the trade ledger is written only after the close by the daily run.
 on:
   schedule:
-    - cron: '0,20,40 13-20 * * 1-5'
+    - cron: '7,27,47 13-20 * * 1-5'
   workflow_dispatch:
 
 permissions:

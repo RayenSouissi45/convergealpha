@@ -11,7 +11,7 @@ Everything here is free. Terms and limits were checked on **2026-10-12** (source
 | Website | https://rayensouissi45.github.io/convergealpha/ (GitHub Pages, deployed by Actions) |
 | Secrets | `SEC_USER_AGENT`, `FINNHUB_API_KEY`, `FRED_API_KEY`, `DATA_DEPLOY_KEY` (write access to the data repo only) |
 | Variables | `DATA_REPO = RayenSouissi45/convergealpha-data` |
-| Schedules | daily (Mon–Fri 22:30 UTC), intraday (about every 30 minutes in US market hours), live strategy values (every minute in US market hours; starters every 20 minutes from 13:00 UTC), weekly (Saturday 06:00 UTC) |
+| Schedules | daily (Mon–Fri 22:30 UTC), intraday (about every 30 minutes in US market hours), live strategy values (every minute in US market hours; starters every 20 minutes from 13:07 UTC, and from each intraday run), weekly (Saturday 06:00 UTC) |
 
 Your API keys exist only as GitHub Actions secrets and in your local `.env` (gitignored). They are
 never written to logs, the data repo or the website (the Health page shows only "Set / Not set").

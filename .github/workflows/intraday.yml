@@ -93,6 +93,11 @@ jobs:
           PY
           )
           if [ "$open" != "1" ]; then echo "US market closed: the chain stops here"; exit 0; fi
+          # Backup starter for the every-minute live values (their own schedules may be skipped).
+          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow live.yml --limit 5 --json status             --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$active" = "0" ]; then
+            gh workflow run live.yml --repo "$GITHUB_REPOSITORY" && echo "live values started"
+          fi
           wait=$(( $(date -d "$STARTED" +%s) + 1800 - $(date +%s) ))
           if [ "$wait" -gt 0 ]; then sleep "$wait"; fi
           gh workflow run intraday.yml --repo "$GITHUB_REPOSITORY" && echo "next live update started"
